@@ -1,0 +1,268 @@
+"use client";
+
+import type { ModerationQueueResponse } from "@saudavo/contracts";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { useAppContext } from "../../components/locale-provider";
+import {
+  ApiClientError,
+  approveListingModeration,
+  approveSellerModeration,
+  fetchModerationQueue,
+  rejectListingModeration,
+  rejectSellerModeration,
+  verifyAdminMfa
+} from "../../lib/api-client";
+import { formatPkrFromPaisa } from "../../lib/money";
+
+export default function AdminConsolePage() {
+  const { locale, user, refreshUser } = useAppContext();
+
+  const [queue, setQueue] = useState<ModerationQueueResponse["data"] | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [rejectReason, setRejectReason] = useState(
+    "Insufficient store information for Mianwali closed beta."
+  );
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const loadQueue = useCallback(async () => {
+    if (!user || !user.mfaVerified) return;
+    setErrorMsg(null);
+    try {
+      const res = await fetchModerationQueue();
+      setQueue(res.data);
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : "Access restricted."
+      );
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadQueue();
+  }, [loadQueue]);
+
+  const handleMfa = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    try {
+      await verifyAdminMfa(mfaCode.trim());
+      await refreshUser();
+      await loadQueue();
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : "Invalid MFA code."
+      );
+    }
+  };
+
+  if (!user) {
+    return (
+      <main className="mx-auto max-w-4xl px-4 py-10 text-center">
+        <Link
+          href="/auth"
+          className="inline-block rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white"
+        >
+          Sign In as Staff
+        </Link>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-ink-primary">
+          Saudavo Trust & Moderation Console
+        </h1>
+        <span className="rounded-full bg-brand-primary-soft px-3.5 py-1 text-xs font-semibold text-brand-primary">
+          {user.mfaVerified
+            ? "Staff TOTP MFA Verified • Audit Logging Active"
+            : "MFA Verification Required"}
+        </span>
+      </div>
+
+      {errorMsg && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errorMsg}
+        </div>
+      )}
+
+      {!user.mfaVerified ? (
+        <form
+          onSubmit={handleMfa}
+          className="max-w-md space-y-3 rounded-2xl border border-border-subtle bg-surface-card p-6"
+        >
+          <h2 className="text-base font-bold text-ink-primary">
+            Verify Staff TOTP MFA (PQ-06)
+          </h2>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="\d{6}"
+            required
+            placeholder="6-digit code"
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value)}
+            className="w-full rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            className="w-full rounded-xl bg-brand-primary py-2.5 text-sm font-semibold text-white"
+          >
+            Verify & Unlock Review Queue
+          </button>
+        </form>
+      ) : (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-border-subtle bg-surface-card p-5">
+            <label className="block text-xs font-semibold text-ink-secondary">
+              Mandatory Rejection Reason (Used when rejecting sellers/listings)
+            </label>
+            <input
+              type="text"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+            />
+          </div>
+
+          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">
+            <h2 className="text-lg font-bold text-ink-primary">
+              Pending Sellers ({queue?.sellers.length ?? 0})
+            </h2>
+            <div className="mt-4 space-y-3">
+              {(queue?.sellers ?? []).map((seller) => (
+                <div
+                  key={seller.sellerProfileId}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle p-4"
+                >
+                  <div>
+                    <p dir="auto" className="text-sm font-bold text-ink-primary">
+                      {seller.store?.displayName ?? seller.sellerProfileId} (
+                      {seller.sellerType})
+                    </p>
+                    <p className="text-xs text-ink-secondary">
+                      Status: {seller.verificationStatus} • No CNIC stored (PQ-07)
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void approveSellerModeration(seller.sellerProfileId, {
+                          notes: "Approved from Admin Console"
+                        }).then(loadQueue)
+                      }
+                      className="rounded-lg bg-brand-primary px-3.5 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void rejectSellerModeration(seller.sellerProfileId, {
+                          reason: rejectReason
+                        }).then(loadQueue)
+                      }
+                      className="rounded-lg bg-red-50 px-3.5 py-1.5 text-xs font-semibold text-red-700"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">
+            <h2 className="text-lg font-bold text-ink-primary">
+              Pending Listings (
+              {(queue?.products.length ?? 0) + (queue?.services.length ?? 0)})
+            </h2>
+            <div className="mt-4 space-y-3">
+              {(queue?.products ?? []).map((prod) => (
+                <div
+                  key={prod.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle p-4"
+                >
+                  <div>
+                    <p dir="auto" className="text-sm font-bold text-ink-primary">
+                      [PRODUCT] {prod.title}
+                    </p>
+                    <p className="text-xs text-ink-secondary">
+                      {formatPkrFromPaisa(prod.basePricePaisa, locale)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void approveListingModeration(prod.id, {
+                          listingType: "PRODUCT"
+                        }).then(loadQueue)
+                      }
+                      className="rounded-lg bg-brand-primary px-3.5 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void rejectListingModeration(prod.id, {
+                          listingType: "PRODUCT",
+                          reason: rejectReason
+                        }).then(loadQueue)
+                      }
+                      className="rounded-lg bg-red-50 px-3.5 py-1.5 text-xs font-semibold text-red-700"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {(queue?.services ?? []).map((svc) => (
+                <div
+                  key={svc.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle p-4"
+                >
+                  <div>
+                    <p dir="auto" className="text-sm font-bold text-ink-primary">
+                      [SERVICE • {svc.serviceMode}] {svc.title}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void approveListingModeration(svc.id, {
+                          listingType: "SERVICE"
+                        }).then(loadQueue)
+                      }
+                      className="rounded-lg bg-brand-primary px-3.5 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void rejectListingModeration(svc.id, {
+                          listingType: "SERVICE",
+                          reason: rejectReason
+                        }).then(loadQueue)
+                      }
+                      className="rounded-lg bg-red-50 px-3.5 py-1.5 text-xs font-semibold text-red-700"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+    </main>
+  );
+}

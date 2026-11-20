@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --saudavo-primary: #0f6b52;
+  --saudavo-primary-hover: #0b5440;
+  --saudavo-primary-soft: #e7f4ef;
+  --saudavo-accent: #d96b27;
+  --saudavo-accent-soft: #fcefe6;
+  --saudavo-canvas: #f8faf9;
+  --saudavo-card: #ffffff;
+  --saudavo-border: #dde5e2;
+  --saudavo-ink: #111827;
+  --saudavo-ink-muted: #4b5563;
+}
+
+body {
+  background-color: var(--saudavo-canvas);
+  color: var(--saudavo-ink);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+html[lang="ur"] body {
+  font-family: "Noto Sans Arabic", "Inter", system-ui, -apple-system, sans-serif;
+}

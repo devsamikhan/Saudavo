@@ -1,0 +1,18 @@
+{
+  "name": "saudavo-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Saudavo local commerce marketplace SaaS monorepo (Mianwali District pilot)",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm --filter @saudavo/contracts build && pnpm -r typecheck",
+    "test": "pnpm --filter @saudavo/contracts build && pnpm -r test",
+    "build": "pnpm -r build"
+  }
+}
