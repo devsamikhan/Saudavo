@@ -14,5 +14,14 @@
     "typecheck": "pnpm --filter @saudavo/contracts build && pnpm -r typecheck",
     "test": "pnpm --filter @saudavo/contracts build && pnpm -r test",
     "build": "pnpm -r build"
+  },
+  "pnpm": {
+    "overrides": {
+      "body-parser": "^1.20.9",
+      "multer": "^2.5.0",
+      "postcss": "^8.5.23",
+      "qs": "^6.16.1",
+      "effect": "^3.22.1"
+    }
   }
 }

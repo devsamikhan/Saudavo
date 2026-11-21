@@ -104,9 +104,19 @@ export class MediaService {
 
     this.s3Presigner.assertValidMagicBytes(mimeType, dto.magicBytesHex);
 
+    let verifiedSizeBytes = asset.sizeBytes;
+    if (this.s3Presigner.shouldInspectRemoteObject()) {
+      const inspected = await this.s3Presigner.verifyAndSanitizeUploadedObject({
+        objectKey: asset.objectKey,
+        mimeType
+      });
+      verifiedSizeBytes = inspected.verifiedSizeBytes;
+    }
+
     const updated = await this.prisma.mediaAsset.update({
       where: { id: asset.id },
       data: {
+        sizeBytes: verifiedSizeBytes,
         exifStripped: true,
         status: "READY"
       }

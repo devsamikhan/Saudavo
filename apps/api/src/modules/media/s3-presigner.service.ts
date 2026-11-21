@@ -2,9 +2,82 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import type { MediaMimeType } from "@saudavo/contracts";
 import { createHash, createHmac } from "node:crypto";
 import { DomainException } from "../../common/errors/domain.exception";
+import { sanitizeImageBuffer } from "./image-sanitizer.util";
+
+const MAX_OBJECT_BYTES = 5 * 1024 * 1024;
+const SANITIZE_URL_TTL_SECONDS = 120;
 
 @Injectable()
 export class S3PresignerService {
+  /**
+   * Returns whether real remote S3 object inspection must execute during confirmation.
+   */
+  shouldInspectRemoteObject(): boolean {
+    return (
+      process.env.NODE_ENV === "production" ||
+      Boolean(process.env.S3_ENDPOINT?.trim())
+    );
+  }
+
+  /**
+   * Downloads the uploaded S3 object, validates binary signature & size, strips EXIF/XMP metadata,
+   * and overwrites the S3 object if metadata segments were removed.
+   */
+  async verifyAndSanitizeUploadedObject(input: {
+    objectKey: string;
+    mimeType: MediaMimeType;
+  }): Promise<{ verifiedSizeBytes: number; strippedMetadata: boolean }> {
+    const readUrl = this.createPresignedUrl({
+      method: "GET",
+      objectKey: input.objectKey,
+      expiresInSeconds: SANITIZE_URL_TTL_SECONDS
+    });
+
+    const getRes = await fetch(readUrl, { method: "GET" });
+    if (!getRes.ok) {
+      throw new DomainException(
+        "VALIDATION_ERROR",
+        HttpStatus.BAD_REQUEST,
+        "Uploaded media object could not be retrieved from storage for verification."
+      );
+    }
+
+    const rawBuffer = Buffer.from(await getRes.arrayBuffer());
+    if (rawBuffer.length === 0 || rawBuffer.length > MAX_OBJECT_BYTES) {
+      throw new DomainException(
+        "VALIDATION_ERROR",
+        HttpStatus.BAD_REQUEST,
+        "Uploaded image size is empty or exceeds the 5 MB limit."
+      );
+    }
+
+    const sanitized = sanitizeImageBuffer(rawBuffer, input.mimeType);
+    if (sanitized.strippedMetadata) {
+      const putUrl = this.createPresignedUrl({
+        method: "PUT",
+        objectKey: input.objectKey,
+        expiresInSeconds: SANITIZE_URL_TTL_SECONDS
+      });
+      const putRes = await fetch(putUrl, {
+        method: "PUT",
+        headers: { "Content-Type": input.mimeType },
+        body: new Uint8Array(sanitized.cleanBuffer)
+      });
+      if (!putRes.ok) {
+        throw new DomainException(
+          "INTERNAL_SERVER_ERROR",
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          "Failed to persist EXIF-stripped image to object storage."
+        );
+      }
+    }
+
+    return {
+      verifiedSizeBytes: sanitized.cleanBuffer.length,
+      strippedMetadata: sanitized.strippedMetadata
+    };
+  }
+
   /**
    * Validates that uploaded image magic bytes match the declared MIME type.
    */
