@@ -385,6 +385,9 @@ export class OpenApiController {
         },
         "/admin/disputes/{id}/resolve": {
           post: { tags: ["Trust Admin"], summary: "Resolve dispute, record refund, and post immutable CommissionLedger reversal/adjustment", security: [{ cookieAuth: [], csrfHeader: [] }], responses: { "200": { description: "Dispute resolved" } } }
+        },
+        "/admin/orders/auto-complete-services": {
+          post: { tags: ["Orders Admin"], summary: "PQ-10 (D-036): Auto-complete service orders 7 days after DELIVERY_SUBMITTED with COLLECTED payment", security: [{ cookieAuth: [], csrfHeader: [] }], responses: { "200": { description: "Sweep execution summary" } } }
         }
       }
     };

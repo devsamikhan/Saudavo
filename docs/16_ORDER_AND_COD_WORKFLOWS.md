@@ -125,7 +125,7 @@ Service orders snapshot the selected `ServicePackage` and `service_mode_snapshot
 - **`HYBRID` services** (e.g., in-person measurement/handoff + work delivery): snapshot `service_address_snapshot_json` when an in-person visit or local drop-off occurs; cash is collected on handoff (`COD`).
 - **`REMOTE` services** (`PQ-14`, `D-019` — purely digital/remote delivery, `service_address_snapshot_json = NULL`): have **no physical `Delivery` record**. Payment is arranged directly offline with the seller (`Payment.payment_method = MANUAL_OFFLINE`). The seller manually confirms offline payment receipt (`POST /seller/orders/:id/manual-payment-confirmation`), recording confirmation timestamp (`collected_at`), confirming user (`confirmed_by_id`), optional `manual_payment_method_desc`, and `PaymentEvent` audit metadata.
   - **Independence Safeguards:** Seller payment confirmation does **not** automatically mark a service delivered or completed! `ServiceOrderDetails.customer_accepted_at` tracks customer acknowledgement separately from `Payment.status = COLLECTED`. Transition to `COMPLETED` requires **both** (`customer_accepted_at IS NOT NULL` **AND** `Payment.status = COLLECTED`). Thus, confirming upfront offline payment during `CONFIRMED`/`IN_PROGRESS` leaves the order in its active service workflow until delivery is submitted and accepted. This confirmation must never be represented as independent platform verification (no online gateway/wallet/escrow). Customer-facing wording, evidence requirements, and dispute rules remain `OPEN` before Milestone 5 build.
-- **Cancellation & Auto-Completion (`PQ-10`):** Customers may self-cancel only while `PENDING_CONFIRMATION`. After `CONFIRMED`, cancellation requires seller agreement or Admin dispute resolution. Proposed 7-day auto-completion after `DELIVERY_SUBMITTED` (if no revision or dispute is raised) remains `OPEN` for final confirmation before Milestone 5.
+- **Cancellation & Auto-Completion (`PQ-10`, `D-036` — APPROVED):** Customers may self-cancel only while `PENDING_CONFIRMATION`. After `CONFIRMED`, cancellation requires seller agreement or Admin dispute resolution. Service orders remaining in `DELIVERY_SUBMITTED` for **7 days** with `Payment.status = COLLECTED` and no open revision or dispute auto-complete to `COMPLETED`.
 
 ```mermaid
 stateDiagram-v2
@@ -141,7 +141,7 @@ stateDiagram-v2
     REVISION_REQUESTED --> IN_PROGRESS : "Seller resumes for revision"
     REVISION_REQUESTED --> DELIVERY_SUBMITTED : "Seller resubmits updated delivery"
 
-    DELIVERY_SUBMITTED --> COMPLETED : "Customer accepts (customer_accepted_at) AND Payment COLLECTED"
+    DELIVERY_SUBMITTED --> COMPLETED : "Customer accepts (customer_accepted_at) OR 7-day auto-complete (PQ-10), AND Payment COLLECTED"
     DELIVERY_SUBMITTED --> DISPUTED : "Customer or Seller opens dispute"
     IN_PROGRESS --> DISPUTED : "Delay/scope or payment dispute"
     COMPLETED --> DISPUTED : "Post-completion payment/service dispute"

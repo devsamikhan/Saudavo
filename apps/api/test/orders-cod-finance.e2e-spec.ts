@@ -729,4 +729,180 @@ describe("Cart, Single-Seller COD Checkout, Service Orders, Messaging & Commissi
     expect(summary.outstandingCommissionOwedPaisa).toBe(4_000);
     expect(summary.accountingDisclaimer).toContain("not a withdrawable wallet");
   });
+
+  it("PQ-10 (D-036): auto-completes DELIVERY_SUBMITTED service orders after 7 days when payment is COLLECTED", async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+    const district = fakePrisma.districts[0]!;
+    const zone = district.areaZones[0]!;
+    const serviceCat = fakePrisma.categories.find(
+      (c) => c.slug === "design-digital-services"
+    )!;
+
+    const autoBuyer = await registerUser(
+      server,
+      "autobuyer@saudavo.pk",
+      "Auto Buyer"
+    );
+    const autoSeller = await registerUser(
+      server,
+      "autoseller@saudavo.pk",
+      "Auto Seller"
+    );
+    const opsAdmin = await registerUser(
+      server,
+      "opsadmin@saudavo.pk",
+      "Ops Admin"
+    );
+
+    const adminSecret = totpService.generateBase32Secret();
+    fakePrisma.grantRole(opsAdmin.userId, "ADMIN");
+    fakePrisma.setMfaSecret(opsAdmin.userId, encryptMfaSecret(adminSecret));
+    await request(server)
+      .post("/api/v1/auth/admin/mfa/verify")
+      .set("Cookie", opsAdmin.cookie)
+      .set("X-CSRF-Token", opsAdmin.csrfToken)
+      .send({ code: totpService.generateCode(adminSecret) })
+      .expect(200);
+
+    const onboardRes = await request(server)
+      .post("/api/v1/seller/onboarding")
+      .set("Cookie", autoSeller.cookie)
+      .set("X-CSRF-Token", autoSeller.csrfToken)
+      .send({
+        sellerType: "SERVICE_PROVIDER",
+        store: {
+          displayName: "Mianwali Auto Studio",
+          slug: "mianwali-auto-studio",
+          districtId: district.id,
+          serviceAreaZoneIds: [zone.id],
+          defaultDeliveryFeePaisa: 0
+        }
+      })
+      .expect(201);
+
+    await request(server)
+      .post(`/api/v1/admin/sellers/${onboardRes.body.data.sellerProfileId}/approve`)
+      .set("Cookie", opsAdmin.cookie)
+      .set("X-CSRF-Token", opsAdmin.csrfToken)
+      .send({})
+      .expect(200);
+
+    const svcRes = await request(server)
+      .post("/api/v1/seller/services")
+      .set("Cookie", autoSeller.cookie)
+      .set("X-CSRF-Token", autoSeller.csrfToken)
+      .send({
+        categoryId: serviceCat.id,
+        title: "Shop Banner Design",
+        description: "Bilingual shop signage banner design for Mianwali stores.",
+        serviceMode: "REMOTE",
+        packages: [
+          {
+            tierName: "Standard",
+            description: "Print-ready bilingual signage banner",
+            pricePaisa: 120_000,
+            deliveryEstimateDays: 2,
+            maxRevisions: 1
+          }
+        ]
+      })
+      .expect(201);
+    const listingId = svcRes.body.data.id as string;
+    const pkgId = svcRes.body.data.packages[0].id as string;
+
+    await request(server)
+      .post(`/api/v1/admin/listings/${listingId}/approve`)
+      .set("Cookie", opsAdmin.cookie)
+      .set("X-CSRF-Token", opsAdmin.csrfToken)
+      .send({ listingType: "SERVICE" })
+      .expect(200);
+
+    const orderRes = await request(server)
+      .post("/api/v1/orders/services")
+      .set("Cookie", autoBuyer.cookie)
+      .set("X-CSRF-Token", autoBuyer.csrfToken)
+      .set("Idempotency-Key", "idem_autocomplete_svc_1")
+      .send({
+        serviceListingId: listingId,
+        servicePackageId: pkgId,
+        customerRequirements: "Need Urdu + English banner design."
+      })
+      .expect(201);
+    const orderId = orderRes.body.data.orderId as string;
+
+    await request(server)
+      .post(`/api/v1/seller/orders/${orderId}/confirm`)
+      .set("Cookie", autoSeller.cookie)
+      .set("X-CSRF-Token", autoSeller.csrfToken)
+      .send({})
+      .expect(200);
+
+    await request(server)
+      .post(`/api/v1/seller/orders/${orderId}/manual-payment-confirmation`)
+      .set("Cookie", autoSeller.cookie)
+      .set("X-CSRF-Token", autoSeller.csrfToken)
+      .set("Idempotency-Key", "idem_autocomplete_pay_1")
+      .send({
+        collectionStatus: "COLLECTED",
+        collectedAmountPaisa: 120_000,
+        manualPaymentMethodDesc: "JazzCash manual transfer"
+      })
+      .expect(200);
+
+    await request(server)
+      .post(`/api/v1/seller/orders/${orderId}/status`)
+      .set("Cookie", autoSeller.cookie)
+      .set("X-CSRF-Token", autoSeller.csrfToken)
+      .send({ toStatus: "IN_PROGRESS" })
+      .expect(200);
+
+    await request(server)
+      .post(`/api/v1/seller/orders/${orderId}/status`)
+      .set("Cookie", autoSeller.cookie)
+      .set("X-CSRF-Token", autoSeller.csrfToken)
+      .send({
+        toStatus: "DELIVERY_SUBMITTED",
+        deliverySummary: "Final PNG & PDF delivered."
+      })
+      .expect(200);
+
+    // 1. Freshly delivered (< 7 days) must NOT auto-complete
+    const sweepTooEarly = await request(server)
+      .post("/api/v1/admin/orders/auto-complete-services")
+      .set("Cookie", opsAdmin.cookie)
+      .set("X-CSRF-Token", opsAdmin.csrfToken)
+      .send({})
+      .expect(200);
+    expect(sweepTooEarly.body.data.completedOrderIds).not.toContain(orderId);
+
+    // 2. Backdate deliverySubmittedAt to 8 days ago -> sweep auto-completes it
+    const details = fakePrisma.serviceOrderDetailsList.find(
+      (d) => d.orderId === orderId
+    )!;
+    details.deliverySubmittedAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+
+    const sweepMature = await request(server)
+      .post("/api/v1/admin/orders/auto-complete-services")
+      .set("Cookie", opsAdmin.cookie)
+      .set("X-CSRF-Token", opsAdmin.csrfToken)
+      .send({})
+      .expect(200);
+    expect(sweepMature.body.data.completedOrderIds).toEqual([orderId]);
+
+    const orderAfter = await request(server)
+      .get(`/api/v1/orders/${orderId}`)
+      .set("Cookie", autoBuyer.cookie)
+      .expect(200);
+    expect(orderAfter.body.data.status).toBe("COMPLETED");
+    expect(orderAfter.body.data.serviceOrderDetails.customerAcceptedAt).not.toBeNull();
+
+    // 3. Re-running sweep is idempotent
+    const sweepAgain = await request(server)
+      .post("/api/v1/admin/orders/auto-complete-services")
+      .set("Cookie", opsAdmin.cookie)
+      .set("X-CSRF-Token", opsAdmin.csrfToken)
+      .send({})
+      .expect(200);
+    expect(sweepAgain.body.data.completedOrderIds).toEqual([]);
+  });
 });

@@ -2203,6 +2203,7 @@ export class InMemoryPrismaService {
       where: {
         customerId?: string;
         storeId?: string;
+        orderType?: string;
         status?: string;
         codCollectionStatus?: string;
       };
@@ -2213,6 +2214,8 @@ export class InMemoryPrismaService {
             (args.where.customerId === undefined ||
               o.customerId === args.where.customerId) &&
             (args.where.storeId === undefined || o.storeId === args.where.storeId) &&
+            (args.where.orderType === undefined ||
+              o.orderType === args.where.orderType) &&
             (args.where.status === undefined || o.status === args.where.status) &&
             (args.where.codCollectionStatus === undefined ||
               o.codCollectionStatus === args.where.codCollectionStatus)

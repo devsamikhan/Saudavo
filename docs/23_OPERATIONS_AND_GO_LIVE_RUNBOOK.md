@@ -96,10 +96,17 @@ Ensure all required variables from `.env.example` are injected via the hosting p
 
 ---
 
-## 7. Open Founder Sign-Offs Required Before Public Transactions
-Per `docs/19_PHASE_2_OPEN_QUESTIONS.md`, engineering will **not** assume business rules without explicit founder confirmation:
-1. **`PQ-03` (`D-022`):** Post-beta commission settlement cadence (**Monthly vs. Biweekly**), grace period, and overdue listing-pause threshold (currently `0%` promotional beta active per `PQ-01`).
-2. **`PQ-08` (`D-026`):** Final founder-approved Mianwali `AreaZone` locality list & `Category` taxonomy beyond the starter tehsil/category seed in `apps/api/prisma/seed.ts`.
-3. **`PQ-10` (`D-027`):** Explicit founder confirmation of **7 days** as the final service `DELIVERY_SUBMITTED -> COMPLETED` auto-completion window.
-4. **`PQ-14` (`D-019`):** Final buyer-facing copy & evidence/dispute rules for `REMOTE` manual offline service payments.
-5. **`Gate F`:** Pakistani legal/tax/terms review (Terms of Service, Privacy Policy, Seller Terms).
+## 7. Scheduled Background Operations & Founder Sign-Off Status
+### Scheduled Sweeps
+- **7-Day Service Auto-Completion (`PQ-10`, `D-036`):** Run `POST /api/v1/admin/orders/auto-complete-services` daily via trusted scheduled job/Admin ops to auto-complete `DELIVERY_SUBMITTED` service orders older than 7 days with `COLLECTED` payment and no open revision/dispute.
+
+### Approved vs. Remaining Open Pre-Public Items
+Locked by Founder (`2026-11-21`):
+- **`PQ-03` (`D-034`):** Post-beta commission settlement cadence locked as **Monthly** (specific grace period & overdue threshold to be finalized before exiting `0%` promotional beta).
+- **`PQ-08` (`D-035`):** Closed Beta uses seeded tehsils (`Mianwali`, `Isakhel`, `Piplan`) and `6` starter categories (`apps/api/prisma/seed.ts`); sub-zone/category expansion post-beta.
+- **`PQ-10` (`D-036`):** Service auto-completion locked at **7 days** after `DELIVERY_SUBMITTED`.
+
+Remaining items before full public transactions beyond Closed Beta:
+1. **`PQ-03` thresholds:** Grace period days & overdue listing-pause threshold (needed before enabling non-zero commissions).
+2. **`PQ-14` (`D-019`):** Final buyer-facing copy & evidence/dispute rules for `REMOTE` manual offline service payments.
+3. **`Gate F`:** Pakistani legal/tax/terms review (Terms of Service, Privacy Policy, Seller Terms).

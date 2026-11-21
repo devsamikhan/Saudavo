@@ -42,6 +42,7 @@ import {
 } from "./orders.mapper";
 
 const STAFF_ROLE_SET = new Set<RoleCode>(STAFF_ROLES);
+export const SERVICE_AUTO_COMPLETE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class OrdersService {
@@ -672,62 +673,35 @@ export class OrdersService {
       order.payments.some((p) => p.status === "COLLECTED");
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.serviceOrderDetails.update({
-        where: { id: order.serviceOrderDetails!.id },
-        data: { customerAcceptedAt: now }
-      });
-
-      const nextStatus = isPaymentCollected ? "COMPLETED" : "DELIVERY_SUBMITTED";
       if (isPaymentCollected) {
-        const res = await tx.order.updateMany({
-          where: { id: order.id, status: "DELIVERY_SUBMITTED" },
-          data: {
-            status: "COMPLETED",
-            completedAt: now
-          }
-        });
-        if (res.count === 0) {
+        const completed = await this.completeServiceOrderInsideTx(
+          {
+            order,
+            now,
+            actorId: userId,
+            actorRole: "CUSTOMER",
+            commissionActorId: userId,
+            reason: "Customer accepted service delivery and payment already collected."
+          },
+          tx
+        );
+        if (!completed) {
           throw new DomainException(
             "INVALID_STATE_TRANSITION",
             HttpStatus.CONFLICT,
             "Order status changed concurrently."
           );
         }
-
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: order.id,
-            fromStatus: "DELIVERY_SUBMITTED",
-            toStatus: "COMPLETED",
-            actorId: userId,
-            actorRole: "CUSTOMER",
-            reason: "Customer accepted service delivery and payment already collected."
-          }
-        });
-
-        await this.financeService.postCommissionAccrualIfEligible(
-          {
-            id: order.id,
-            storeId: order.storeId,
-            status: "COMPLETED",
-            codCollectionStatus: "COLLECTED",
-            subtotalPaisa: order.subtotalPaisa,
-            discountPaisa: order.discountPaisa,
-            totalPaisa: order.totalPaisa,
-            commissionRuleId: order.commissionRuleId,
-            commissionRateBps: order.commissionRateBps,
-            commissionAmountPaisa: order.commissionAmountPaisa,
-            sellerNetEntitlementPaisa: order.sellerNetEntitlementPaisa
-          },
-          userId,
-          tx
-        );
       } else {
+        await tx.serviceOrderDetails.update({
+          where: { id: order.serviceOrderDetails!.id },
+          data: { customerAcceptedAt: now }
+        });
         await tx.orderStatusHistory.create({
           data: {
             orderId: order.id,
             fromStatus: "DELIVERY_SUBMITTED",
-            toStatus: nextStatus,
+            toStatus: "DELIVERY_SUBMITTED",
             actorId: userId,
             actorRole: "CUSTOMER",
             reason:
@@ -746,6 +720,163 @@ export class OrdersService {
       data: toOrderDetailDto(updated!, { revealPickupInstructions: false }),
       meta: { requestId }
     };
+  }
+
+  /**
+   * PQ-10 (D-036): Auto-completes service orders 7 days after DELIVERY_SUBMITTED
+   * when payment is COLLECTED and no revision or dispute is open.
+   */
+  async autoCompleteExpiredServiceOrders(input?: {
+    actorId?: string | null;
+    actorRole?: RoleCode | string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    now?: Date;
+  }): Promise<{ checkedCount: number; completedOrderIds: string[] }> {
+    const now = input?.now ?? new Date();
+    const actorId = input?.actorId ?? null;
+
+    const candidates = await this.prisma.order.findMany({
+      where: {
+        orderType: "SERVICE",
+        status: "DELIVERY_SUBMITTED",
+        codCollectionStatus: "COLLECTED"
+      },
+      include: {
+        ...ORDER_WITH_DETAILS_INCLUDE,
+        payments: true
+      }
+    });
+
+    const eligible = candidates.filter((order) => {
+      const details = order.serviceOrderDetails;
+      if (!details || details.customerAcceptedAt !== null || !details.deliverySubmittedAt) {
+        return false;
+      }
+      const elapsedMs = now.getTime() - details.deliverySubmittedAt.getTime();
+      if (elapsedMs < SERVICE_AUTO_COMPLETE_WINDOW_MS) {
+        return false;
+      }
+      return order.payments.some((p) => p.status === "COLLECTED");
+    });
+
+    const completedOrderIds: string[] = [];
+    for (const order of eligible) {
+      const completed = await this.prisma.$transaction((tx) =>
+        this.completeServiceOrderInsideTx(
+          {
+            order,
+            now,
+            actorId,
+            actorRole: actorId ? "ADMIN" : "SYSTEM",
+            commissionActorId: actorId ?? order.customerId,
+            reason:
+              "PQ-10 (D-036): Auto-completed 7 days after DELIVERY_SUBMITTED with no open revision or dispute."
+          },
+          tx
+        )
+      );
+      if (completed) {
+        completedOrderIds.push(order.id);
+      }
+    }
+
+    const firstCompletedId = completedOrderIds[0];
+    if (actorId && firstCompletedId) {
+      await this.auditService.record({
+        actorId,
+        actorRole: input?.actorRole ?? "ADMIN",
+        action: "SERVICE_AUTO_COMPLETE_SWEEP",
+        targetType: "Order",
+        targetId: firstCompletedId,
+        reason: "PQ-10 (D-036): 7-day service auto-completion sweep.",
+        afterJson: {
+          checkedCount: candidates.length,
+          completedCount: completedOrderIds.length,
+          completedOrderIds
+        },
+        ipAddress: input?.ipAddress ?? null,
+        userAgent: input?.userAgent ?? null
+      });
+    }
+
+    return {
+      checkedCount: candidates.length,
+      completedOrderIds
+    };
+  }
+
+  private async completeServiceOrderInsideTx(
+    input: {
+      order: {
+        id: string;
+        storeId: string;
+        subtotalPaisa: bigint;
+        discountPaisa: bigint;
+        totalPaisa: bigint;
+        commissionRuleId: string;
+        commissionRateBps: number;
+        commissionAmountPaisa: bigint;
+        sellerNetEntitlementPaisa: bigint;
+        serviceOrderDetails: { id: string } | null;
+      };
+      now: Date;
+      actorId: string | null;
+      actorRole: "CUSTOMER" | "ADMIN" | "SYSTEM";
+      commissionActorId: string;
+      reason: string;
+    },
+    tx: Prisma.TransactionClient
+  ): Promise<boolean> {
+    if (!input.order.serviceOrderDetails) {
+      return false;
+    }
+    const res = await tx.order.updateMany({
+      where: { id: input.order.id, status: "DELIVERY_SUBMITTED" },
+      data: {
+        status: "COMPLETED",
+        completedAt: input.now
+      }
+    });
+    if (res.count !== 1) {
+      return false;
+    }
+
+    await tx.serviceOrderDetails.update({
+      where: { id: input.order.serviceOrderDetails.id },
+      data: { customerAcceptedAt: input.now }
+    });
+
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId: input.order.id,
+        fromStatus: "DELIVERY_SUBMITTED",
+        toStatus: "COMPLETED",
+        actorId: input.actorId,
+        actorRole: input.actorRole,
+        reason: input.reason
+      }
+    });
+
+    await this.financeService.postCommissionAccrualIfEligible(
+      {
+        id: input.order.id,
+        storeId: input.order.storeId,
+        status: "COMPLETED",
+        codCollectionStatus: "COLLECTED",
+        subtotalPaisa: input.order.subtotalPaisa,
+        discountPaisa: input.order.discountPaisa,
+        totalPaisa: input.order.totalPaisa,
+        commissionRuleId: input.order.commissionRuleId,
+        commissionRateBps: input.order.commissionRateBps,
+        commissionAmountPaisa: input.order.commissionAmountPaisa,
+        sellerNetEntitlementPaisa: input.order.sellerNetEntitlementPaisa
+      },
+      input.commissionActorId,
+      tx
+    );
+
+    return true;
   }
 
   async requestServiceRevision(

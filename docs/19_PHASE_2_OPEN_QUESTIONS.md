@@ -22,14 +22,13 @@
 - **Founder Selected Policy:** **Exclude delivery fees from platform commission calculation (`include_delivery_fee = false`).**
 - **Technical Implications:** `commissionable_base_paisa = subtotal_paisa - discount_paisa`; delivery fee is excluded from commission across checkout quotes, order snapshots, and `commission_ledger`.
 
-### PQ-03: COD Commission Collection & Remittance Cadence (`D-022`) — **APPROVED (Framework) / OPEN (Operational Parameters)**
+### PQ-03: COD Commission Collection & Remittance Cadence (`D-022`, `D-034`) — **APPROVED (Monthly Cadence) / OPEN (Grace Period)**
 - **Question:** How and how often will sellers remit owed platform commissions after COD collection, and what overdue rules apply?
-- **Founder's Written Intent:** **Monthly or biweekly settlement.**
-- **Option-Label Correction:** The source document labeled monthly/biweekly offline settlement as **Option A** (and 0% pilot as Option B). The founder's written intent (**Option A**) governs post-beta settlement, harmonized with `PQ-01` (0% beta):
+- **Founder Selected Policy (`2026-11-21`, `D-034`):** **Monthly** settlement cadence after 0% promotional beta ends.
+- **Technical Implications:**
   - During the 0% promotional closed beta (`PQ-01`), **no commission remittance is due**.
-  - After non-zero commission activation, the platform uses **monthly or biweekly** seller statements and offline `SellerSettlementRecord` recording (`SELLER_TO_PLATFORM`).
-- **Remaining `OPEN` Details (Must resolve before non-zero commission activation in Milestone 6):**
-  - Final choice between **monthly vs. biweekly** settlement cadence.
+  - After non-zero commission activation, the platform uses **Monthly** seller statements and offline `SellerSettlementRecord` recording (`SELLER_TO_PLATFORM`).
+- **Remaining `OPEN` Details (Must resolve before non-zero commission activation post-beta):**
   - **Grace period**, **overdue balance threshold**, and **listing-pause enforcement rules**.
 
 ### PQ-04: COD Confirmation Authority & Delivery Operator Role (`D-023`) — **APPROVED**
@@ -63,11 +62,10 @@
 
 ## 3. Order, Catalog & Communication Policy Decisions
 
-### PQ-08: Mianwali District Sub-Zones & Initial Categories (`D-026`) — **APPROVED (Structure) / OPEN (Exact Seed Lists)**
+### PQ-08: Mianwali District Sub-Zones & Initial Categories (`D-026`, `D-035`) — **APPROVED**
 - **Question:** Use curated `AreaZone` records vs. free-text neighbourhoods, and what exact zones/categories should be seeded?
-- **Founder Selected Policy:** **Curated tehsil-level zones and important localities (`Option A`).**
-- **Technical Implications:** Use structured `AreaZone` records (`Mianwali`, `Isakhel`, `Piplan`, and founder-approved localities); never use unrestricted free-text neighbourhoods as the primary delivery/service-area filter.
-- **Remaining `OPEN` Details (Required before Milestone 4/8 pilot seeding):** Exact Mianwali `AreaZone` locality list and initial `Category` taxonomy.
+- **Founder Selected Policy (`2026-11-21`, `D-035`):** Launch Closed Beta using the existing seeded tehsil `AreaZone` records (`Mianwali`, `Isakhel`, `Piplan`) and starter categories in `apps/api/prisma/seed.ts`; expand sub-localities and additional categories after initial rollout.
+- **Technical Implications:** Structured `AreaZone` (`Mianwali`, `Isakhel`, `Piplan`) and 6 starter `Category` rows remain the locked Closed Beta baseline; never use unrestricted free-text neighbourhoods as the primary delivery/service-area filter.
 
 ### PQ-09: Buyer–Seller Pre-Order / Active-Order Communication Without Real-Time Chat (`D-021`) — **APPROVED**
 - **Question:** Is an order-scoped REST message thread (`order_messages`) needed in the first pilot?
@@ -77,13 +75,12 @@
   - Text-only in MVP (no attachments); strict `customer_id`/`store_id` ownership checks; audited `SUPPORT`/`ADMIN` access.
   - Freeze messaging after terminal order closure (`COMPLETED` or `CANCELLED`), subject to documented Support/Dispute exceptions; display PII warnings against sharing residential addresses or private phone numbers; apply retention rules.
 
-### PQ-10: Customer Cancellation Window & Service Auto-Completion Rules (`D-027`) — **APPROVED (Cancellation) / OPEN (7-Day Auto-Complete Confirmation)**
+### PQ-10: Customer Cancellation Window & Service Auto-Completion Rules (`D-027`, `D-036`) — **APPROVED**
 - **Question:** Up to which status can a customer self-cancel, and should services auto-complete after 7 days?
-- **Founder Selected Policy:** **Option A.**
+- **Founder Selected Policy (`2026-11-21`, `D-036`):** **Option A (Approved — 7-day auto-completion finalized).**
 - **Technical Implications:**
   - Customer may self-cancel freely **only while `status = PENDING_CONFIRMATION`**. After `CONFIRMED`, cancellation requires seller approval or Admin dispute handling.
-  - Service auto-completion after **7 days** following `DELIVERY_SUBMITTED` (only if no revision or dispute is raised) is designed in workflow docs.
-- **Remaining `OPEN` Detail (Required before Milestone 5):** Explicit founder confirmation that **7 days** is the final auto-complete cutoff.
+  - Service orders in `DELIVERY_SUBMITTED` with `Payment.status = COLLECTED` and no open revision or dispute **auto-complete 7 days after `delivery_submitted_at`**, enforced by `OrdersService.autoCompleteExpiredServiceOrders` and `POST /api/v1/admin/orders/auto-complete-services`.
 
 ### PQ-11: Bilingual Listing Content Model & Urdu Typography (`D-028`) — **APPROVED (Content Model) / OPEN (Final Font at Gate D)**
 - **Question:** Single-language seller listings vs. dual Urdu/English fields, and which Urdu font?
@@ -145,9 +142,9 @@ Per `docs/05_UX_DESIGN_BRIEF.md` and `D-005`, the founder owns all visual design
 
 | ID / Gate | Remaining Open Question | Status | Why Still Open / Reason | Milestone Required By |
 |---|---|---|---|---|
-| **PQ-03** (`D-022`) | Choose **monthly vs. biweekly** post-beta settlement cadence; define **grace period** and **overdue/listing-pause threshold** | `OPEN` | Promotional beta is `0%` (`PQ-01`), so no remittance occurs in beta; operational collection rules needed before activating non-zero commissions | **Milestone 6** (before post-beta commission activation) |
-| **PQ-08** (`D-026`) | Supply exact **Mianwali `AreaZone` locality list** and **initial `Category` taxonomy** | `OPEN` | Curated zone architecture is approved; specific local town/category names are product data owned by founder | **Milestone 4 / Milestone 8** (placeholder dev seeds acceptable in M2 scaffold) |
-| **PQ-10** (`D-027`) | Confirm whether **7-day service auto-completion** after `DELIVERY_SUBMITTED` is final | `OPEN` | Self-cancellation (`PENDING_CONFIRMATION`) is locked; exact auto-complete day count needs explicit confirmation | **Milestone 5** (before service scheduler build) |
+| **PQ-03** (`D-022`, `D-034`) | **Monthly** cadence finalized; define post-beta **grace period** and **overdue/listing-pause threshold** | `APPROVED (Cadence) / OPEN (Thresholds)` | Monthly cadence finalized 2026-11-21; `0%` promotional beta active now, thresholds needed before non-zero commission activation | Before non-zero commission activation |
+| **PQ-08** (`D-026`, `D-035`) | Closed Beta Mianwali `AreaZone` tehsils (`Mianwali`, `Isakhel`, `Piplan`) and 6 starter categories | `APPROVED` | Founder finalized starter tehsils & categories (`seed.ts`) for Closed Beta on 2026-11-21; expand later | Resolved |
+| **PQ-10** (`D-027`, `D-036`) | **7-day service auto-completion** after `DELIVERY_SUBMITTED` | `APPROVED` | Founder finalized 7-day auto-completion on 2026-11-21 (`D-036`) when no revision/dispute is open | Resolved |
 | **PQ-11** (`D-028`) | Final **Urdu font family** and typography scale | `OPEN` | Content model is locked; visual typography belongs to founder-owned design tokens | **Milestone 3 (`Gate D`)** |
 | **PQ-14** (`D-019`) | Exact **customer-facing wording**, **evidence handling**, and **dispute process** for `REMOTE` manual offline payment confirmation | `OPEN` | Core `REMOTE` support is approved; consumer expectations and dispute evidence rules require founder product sign-off | **Milestone 5** (before service checkout & disputes UI/rules) |
 | **Gate D** (`D-005`) | Founder-provided **Figma frames, design tokens, RTL mirroring rules, and mobile/desktop specs** | `OPEN` | Founder owns UI/UX; agents must not invent visual design | **Milestone 3** |
