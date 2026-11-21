@@ -4,13 +4,18 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
-  Logger
+  Logger,
+  Optional
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import type { ApiErrorCode, ApiErrorDetail, ApiErrorEnvelope } from "@saudavo/contracts";
 import type { Response } from "express";
 import { randomUUID } from "node:crypto";
 import { DomainException } from "../errors/domain.exception";
+import {
+  ErrorReporterService,
+  redactSensitiveText
+} from "../monitoring/error-reporter.service";
 import type { AppRequest } from "../request-context";
 
 function mapStatusToErrorCode(status: HttpStatus): ApiErrorCode {
@@ -39,6 +44,10 @@ function mapStatusToErrorCode(status: HttpStatus): ApiErrorCode {
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
+
+  constructor(
+    @Optional() private readonly errorReporter?: ErrorReporterService
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -84,11 +93,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
       code = "CONFLICT";
       message = "A record with this unique identifier already exists.";
     } else {
-      const safeErrorMsg =
-        exception instanceof Error ? exception.message : "Unknown non-Error exception";
-      this.logger.error(
-        `[${requestId}] Unhandled error on ${req.method} ${req.url}: ${safeErrorMsg}`
-      );
+      if (this.errorReporter) {
+        this.errorReporter.reportUnhandledException({
+          requestId,
+          method: req.method,
+          url: req.url,
+          error: exception
+        });
+      } else {
+        const safeErrorMsg = redactSensitiveText(
+          exception instanceof Error ? exception.message : "Unknown non-Error exception"
+        );
+        this.logger.error(
+          `[${requestId}] Unhandled error on ${req.method} ${req.url.split("?")[0]}: ${safeErrorMsg}`
+        );
+      }
     }
 
     const payload: ApiErrorEnvelope = {

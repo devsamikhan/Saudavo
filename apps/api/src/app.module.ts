@@ -7,6 +7,7 @@ import { SessionAuthGuard } from "./common/auth/guards/session-auth.guard";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { IdempotencyModule } from "./common/idempotency/idempotency.module";
 import { RequestIdInterceptor } from "./common/interceptors/request-id.interceptor";
+import { ErrorReporterService } from "./common/monitoring/error-reporter.service";
 import { PrismaModule } from "./common/prisma/prisma.module";
 import { RateLimitGuard } from "./common/rate-limit/rate-limit.guard";
 import { HealthController } from "./health/health.controller";
@@ -50,6 +51,7 @@ import { UsersModule } from "./modules/users/users.module";
   controllers: [HealthController],
   providers: [
     HealthService,
+    ErrorReporterService,
     RateLimitGuard,
     {
       provide: APP_INTERCEPTOR,
