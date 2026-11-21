@@ -89,7 +89,8 @@ export class OpenApiController {
         "/auth/me": {
           get: {
             tags: ["Auth"],
-            summary: "Read current authenticated session user",
+            summary:
+              "Read current authenticated session user and optionally rotate cross-tab CSRF token via X-CSRF-Sync: 1",
             security: [{ cookieAuth: [] }],
             responses: { "200": { description: "Authenticated user summary" } }
           }

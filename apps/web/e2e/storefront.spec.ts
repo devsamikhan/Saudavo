@@ -152,11 +152,15 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
     await expect(page.getByText("سوداو")).toBeVisible();
     await expect(page.getByText("3,500 روپے")).toBeVisible();
 
+    // Accessibility check: Skip to main content link works
+    const skipLink = page.getByRole("link", { name: "Skip to main content" });
+    await expect(skipLink).toHaveAttribute("href", "#main-content");
+
     // Navigate to Auth page
     await page.getByRole("link", { name: "لاگ ان" }).click();
     await expect(page).toHaveURL(/\/auth$/);
     await expect(
-      page.getByPlaceholder("name@example.com or 03001234567")
+      page.getByLabel("ای میل یا موبائل نمبر (مثلاً 03001234567)")
     ).toBeVisible();
   });
 });

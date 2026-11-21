@@ -32,6 +32,7 @@ import type { AuthContext } from "../../common/auth/auth.types";
 import { CurrentUser } from "../../common/auth/decorators";
 import { DomainException } from "../../common/errors/domain.exception";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { RateLimit } from "../../common/rate-limit/rate-limit.guard";
 import { type AppRequest, getRequestId } from "../../common/request-context";
 import type { ClientMetadata } from "../auth/auth.service";
 import { OrdersService } from "./orders.service";
@@ -40,6 +41,7 @@ import { OrdersService } from "./orders.service";
 export class CustomerOrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
+  @RateLimit({ limit: 30, windowMs: 60_000, keyPrefix: "checkout_quote" })
   @HttpCode(HttpStatus.OK)
   @Post("checkout/quote")
   async quoteCheckout(
@@ -55,6 +57,7 @@ export class CustomerOrdersController {
     );
   }
 
+  @RateLimit({ limit: 15, windowMs: 60_000, keyPrefix: "order_create_physical" })
   @Post("orders")
   async createPhysicalOrder(
     @CurrentUser() auth: AuthContext | undefined,
@@ -71,6 +74,7 @@ export class CustomerOrdersController {
     );
   }
 
+  @RateLimit({ limit: 15, windowMs: 60_000, keyPrefix: "order_create_service" })
   @Post("orders/services")
   async createServiceOrder(
     @CurrentUser() auth: AuthContext | undefined,

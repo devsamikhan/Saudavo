@@ -11,8 +11,8 @@ import {
 import {
   AdminMfaVerify,
   AdminMfaVerifySchema,
+  AuthMeResponse,
   AuthSessionResponse,
-  AuthUser,
   LoginRequest,
   LoginRequestSchema,
   PasswordResetConfirm,
@@ -150,9 +150,10 @@ export class AuthController {
   getMe(
     @CurrentUser() auth: AuthContext | undefined,
     @Req() req: AppRequest
-  ): { data: { user: AuthUser }; meta: { requestId: string } } {
+  ): Promise<AuthMeResponse> {
     const authenticated = this.requireAuthContext(auth);
-    return this.authService.getMe(authenticated, getRequestId(req));
+    const syncCsrf = req.header("x-csrf-sync") === "1";
+    return this.authService.getMe(authenticated, getRequestId(req), syncCsrf);
   }
 
   private requireAuthContext(auth: AuthContext | undefined): AuthContext {

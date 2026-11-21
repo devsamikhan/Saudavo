@@ -119,3 +119,14 @@ export const AuthSessionResponseSchema = z.object({
   })
 });
 export type AuthSessionResponse = z.infer<typeof AuthSessionResponseSchema>;
+
+export const AuthMeResponseSchema = z.object({
+  data: z.object({
+    user: AuthUserSchema,
+    csrfToken: z.string().min(1).optional()
+  }),
+  meta: z.object({
+    requestId: z.string().min(1)
+  })
+});
+export type AuthMeResponse = z.infer<typeof AuthMeResponseSchema>;

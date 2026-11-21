@@ -1,10 +1,10 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
   AdminMfaVerify,
+  AuthMeResponse,
+  AuthMeResponseSchema,
   AuthSessionResponse,
   AuthSessionResponseSchema,
-  AuthUser,
-  AuthUserSchema,
   LocaleCode,
   LocaleCodeSchema,
   LoginRequest,
@@ -19,6 +19,7 @@ import * as argon2 from "argon2";
 import type { AuthContext } from "../../common/auth/auth.types";
 import {
   decryptMfaSecret,
+  encryptSensitiveToken,
   generateOpaqueToken,
   sha256Hex
 } from "../../common/auth/crypto.util";
@@ -169,7 +170,7 @@ export class AuthService {
               payloadJson: {
                 userId: user.id,
                 deliveryChannel: "EMAIL",
-                resetToken: rawToken,
+                resetTokenEncrypted: encryptSensitiveToken(rawToken),
                 expiresAt: expiresAt.toISOString()
               }
             },
@@ -231,10 +232,17 @@ export class AuthService {
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.authToken.update({
-        where: { id: tokenRecord.id },
+      const consumed = await tx.authToken.updateMany({
+        where: { id: tokenRecord.id, usedAt: null },
         data: { usedAt: now }
       });
+      if (consumed.count !== 1) {
+        throw new DomainException(
+          "INVALID_OR_EXPIRED_TOKEN",
+          HttpStatus.BAD_REQUEST,
+          "The password reset token is invalid or has expired."
+        );
+      }
 
       await tx.user.update({
         where: { id: tokenRecord.userId },
@@ -331,28 +339,36 @@ export class AuthService {
     };
   }
 
-  getMe(
+  async getMe(
     auth: AuthContext,
-    requestId: string
-  ): {
-    data: { user: AuthUser };
-    meta: { requestId: string };
-  } {
-    const user = AuthUserSchema.parse({
-      id: auth.userId,
-      displayName: auth.displayName,
-      preferredLocale: auth.preferredLocale,
-      roles: auth.roles,
-      emailVerified: auth.emailVerified,
-      phoneVerified: auth.phoneVerified,
-      mfaRequired: auth.roles.some((role) => STAFF_ROLE_SET.has(role)),
-      mfaVerified: auth.mfaVerified
-    });
+    requestId: string,
+    syncCsrf = false
+  ): Promise<AuthMeResponse> {
+    let csrfToken: string | undefined;
+    if (syncCsrf) {
+      csrfToken = generateOpaqueToken(32);
+      await this.prisma.userSession.update({
+        where: { id: auth.sessionId },
+        data: { csrfTokenHash: sha256Hex(csrfToken) }
+      });
+    }
 
-    return {
-      data: { user },
+    return AuthMeResponseSchema.parse({
+      data: {
+        user: {
+          id: auth.userId,
+          displayName: auth.displayName,
+          preferredLocale: auth.preferredLocale,
+          roles: auth.roles,
+          emailVerified: auth.emailVerified,
+          phoneVerified: auth.phoneVerified,
+          mfaRequired: auth.roles.some((role) => STAFF_ROLE_SET.has(role)),
+          mfaVerified: auth.mfaVerified
+        },
+        ...(csrfToken ? { csrfToken } : {})
+      },
       meta: { requestId }
-    };
+    });
   }
 
   private async issueSessionForUser(

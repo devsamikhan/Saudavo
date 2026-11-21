@@ -144,12 +144,16 @@ export default function AuthPage() {
         {mode === "LOGIN" ? (
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-ink-secondary">
+              <label
+                htmlFor="auth-login-identifier"
+                className="block text-xs font-semibold text-ink-secondary"
+              >
                 {locale === "ur"
                   ? "ای میل یا موبائل نمبر (مثلاً 03001234567)"
                   : "Email or Pakistani Mobile Number (PQ-05)"}
               </label>
               <input
+                id="auth-login-identifier"
                 type="text"
                 required
                 value={identifier}
@@ -160,10 +164,14 @@ export default function AuthPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-ink-secondary">
+              <label
+                htmlFor="auth-login-password"
+                className="block text-xs font-semibold text-ink-secondary"
+              >
                 {locale === "ur" ? "پاس ورڈ" : "Password"}
               </label>
               <input
+                id="auth-login-password"
                 type="password"
                 required
                 value={password}
@@ -193,10 +201,14 @@ export default function AuthPage() {
             </p>
 
             <div>
-              <label className="block text-xs font-semibold text-ink-secondary">
+              <label
+                htmlFor="auth-reg-display-name"
+                className="block text-xs font-semibold text-ink-secondary"
+              >
                 {locale === "ur" ? "مکمل نام" : "Display Name"}
               </label>
               <input
+                id="auth-reg-display-name"
                 type="text"
                 required
                 minLength={2}
@@ -208,10 +220,14 @@ export default function AuthPage() {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-xs font-semibold text-ink-secondary">
+                <label
+                  htmlFor="auth-reg-email"
+                  className="block text-xs font-semibold text-ink-secondary"
+                >
                   Email (Optional)
                 </label>
                 <input
+                  id="auth-reg-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -220,10 +236,14 @@ export default function AuthPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-ink-secondary">
+                <label
+                  htmlFor="auth-reg-phone"
+                  className="block text-xs font-semibold text-ink-secondary"
+                >
                   Mobile Phone (Optional)
                 </label>
                 <input
+                  id="auth-reg-phone"
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -234,10 +254,14 @@ export default function AuthPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-ink-secondary">
+              <label
+                htmlFor="auth-reg-password"
+                className="block text-xs font-semibold text-ink-secondary"
+              >
                 Password (min 8 chars)
               </label>
               <input
+                id="auth-reg-password"
                 type="password"
                 required
                 minLength={8}
@@ -248,10 +272,14 @@ export default function AuthPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-ink-secondary">
+              <label
+                htmlFor="auth-reg-locale"
+                className="block text-xs font-semibold text-ink-secondary"
+              >
                 Preferred Language
               </label>
               <select
+                id="auth-reg-locale"
                 value={preferredLocale}
                 onChange={(e) =>
                   setPreferredLocale(e.target.value === "ur" ? "ur" : "en")
@@ -285,7 +313,14 @@ export default function AuthPage() {
             <h2 className="text-sm font-bold text-brand-primary">
               Staff TOTP MFA Verification Required (PQ-06)
             </h2>
+            <label
+              htmlFor="auth-mfa-code"
+              className="block text-xs font-semibold text-ink-secondary"
+            >
+              6-Digit Authenticator Code
+            </label>
             <input
+              id="auth-mfa-code"
               type="text"
               inputMode="numeric"
               pattern="\d{6}"

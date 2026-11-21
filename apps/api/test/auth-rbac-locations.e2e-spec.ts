@@ -3,13 +3,17 @@ import { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import {
   ApiErrorEnvelopeSchema,
+  AuthMeResponseSchema,
   AuthSessionResponseSchema,
   DistrictsResponseSchema
 } from "@saudavo/contracts";
 import cookieParser from "cookie-parser";
 import request, { type Response as SupertestResponse } from "supertest";
 import { AppModule } from "../src/app.module";
-import { encryptMfaSecret } from "../src/common/auth/crypto.util";
+import {
+  decryptSensitiveToken,
+  encryptMfaSecret
+} from "../src/common/auth/crypto.util";
 import { PrismaService } from "../src/common/prisma/prisma.service";
 import { RateLimitGuard } from "../src/common/rate-limit/rate-limit.guard";
 import { TotpService } from "../src/modules/auth/totp.service";
@@ -263,7 +267,12 @@ describe("Auth, CSRF, RBAC, MFA, RateLimit & Locations (e2e)", () => {
       .reverse()
       .find((e) => e.eventType === "AUTH_PASSWORD_RESET_REQUESTED");
     expect(outboxReset).toBeDefined();
-    const rawToken = (outboxReset?.payloadJson as { resetToken: string }).resetToken;
+    const outboxPayload = outboxReset?.payloadJson as {
+      resetToken?: string;
+      resetTokenEncrypted: string;
+    };
+    expect(outboxPayload.resetToken).toBeUndefined();
+    const rawToken = decryptSensitiveToken(outboxPayload.resetTokenEncrypted);
 
     // Wrong token -> 400 INVALID_OR_EXPIRED_TOKEN
     const badConfirm = await request(server)
@@ -422,6 +431,61 @@ describe("Auth, CSRF, RBAC, MFA, RateLimit & Locations (e2e)", () => {
       .send({ identifier: "rate@saudavo.pk" })
       .expect(429);
     expect(ApiErrorEnvelopeSchema.parse(blocked.body).error.code).toBe(
+      "RATE_LIMIT_EXCEEDED"
+    );
+  });
+
+  it("supports cross-tab CSRF rotation via GET /auth/me (X-CSRF-Sync: 1) and rate limits /search", async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+
+    const regRes = await request(server)
+      .post("/api/v1/auth/register")
+      .send({
+        email: "crosstab@saudavo.pk",
+        password: "StrongPassword!1",
+        displayName: "Cross Tab"
+      })
+      .expect(201);
+    const cookie = extractCookiePair(regRes, "saudavo_sid");
+    const oldCsrf = AuthSessionResponseSchema.parse(regRes.body).data.csrfToken;
+
+    // Plain /auth/me does not return csrfToken
+    const mePlain = await request(server)
+      .get("/api/v1/auth/me")
+      .set("Cookie", cookie)
+      .expect(200);
+    expect(AuthMeResponseSchema.parse(mePlain.body).data.csrfToken).toBeUndefined();
+
+    // /auth/me with X-CSRF-Sync: 1 rotates and returns fresh csrfToken
+    const meSync = await request(server)
+      .get("/api/v1/auth/me")
+      .set("Cookie", cookie)
+      .set("X-CSRF-Sync", "1")
+      .expect(200);
+    const rotatedCsrf = AuthMeResponseSchema.parse(meSync.body).data.csrfToken;
+    expect(rotatedCsrf).toBeDefined();
+    expect(rotatedCsrf).not.toBe(oldCsrf);
+
+    // Old CSRF token rejected after rotation
+    await request(server)
+      .post("/api/v1/auth/logout")
+      .set("Cookie", cookie)
+      .set("X-CSRF-Token", oldCsrf)
+      .expect(403);
+
+    // Rotated CSRF token accepted
+    await request(server)
+      .post("/api/v1/auth/logout")
+      .set("Cookie", cookie)
+      .set("X-CSRF-Token", rotatedCsrf ?? "")
+      .expect(200);
+
+    // Public search rate limiting (60/min)
+    for (let i = 0; i < 60; i += 1) {
+      await request(server).get("/api/v1/search").expect(200);
+    }
+    const blockedSearch = await request(server).get("/api/v1/search").expect(429);
+    expect(ApiErrorEnvelopeSchema.parse(blockedSearch.body).error.code).toBe(
       "RATE_LIMIT_EXCEEDED"
     );
   });

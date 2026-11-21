@@ -887,7 +887,7 @@ export class InMemoryPrismaService {
 
     update: async (args: {
       where: { id: string };
-      data: { mfaVerifiedAt?: Date };
+      data: { mfaVerifiedAt?: Date; csrfTokenHash?: string };
     }): Promise<FakeSessionRecord> => {
       const session = this.userSessions.find((s) => s.id === args.where.id);
       if (!session) {
@@ -895,6 +895,9 @@ export class InMemoryPrismaService {
       }
       if (args.data.mfaVerifiedAt !== undefined) {
         session.mfaVerifiedAt = args.data.mfaVerifiedAt;
+      }
+      if (args.data.csrfTokenHash !== undefined) {
+        session.csrfTokenHash = args.data.csrfTokenHash;
       }
       return session;
     },
@@ -961,6 +964,24 @@ export class InMemoryPrismaService {
       }
       token.usedAt = args.data.usedAt;
       return token;
+    },
+
+    updateMany: async (args: {
+      where: { id?: string; usedAt?: Date | null };
+      data: { usedAt: Date };
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const token of this.authTokens) {
+        if (args.where.id !== undefined && token.id !== args.where.id) {
+          continue;
+        }
+        if (args.where.usedAt === null && token.usedAt !== null) {
+          continue;
+        }
+        token.usedAt = args.data.usedAt;
+        count += 1;
+      }
+      return { count };
     }
   };
 

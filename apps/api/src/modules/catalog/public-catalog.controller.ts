@@ -10,6 +10,7 @@ import {
 } from "@saudavo/contracts";
 import { Public } from "../../common/auth/decorators";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { RateLimit } from "../../common/rate-limit/rate-limit.guard";
 import { type AppRequest, getRequestId } from "../../common/request-context";
 import { CatalogService } from "./catalog.service";
 
@@ -54,6 +55,7 @@ export class PublicCatalogController {
     return this.catalogService.getPublicServiceBySlug(slug, getRequestId(req));
   }
 
+  @RateLimit({ limit: 60, windowMs: 60_000, keyPrefix: "catalog_search" })
   @Get("search")
   async search(
     @Query(new ZodValidationPipe(SearchQuerySchema)) query: SearchQuery,

@@ -15,9 +15,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <body className="flex min-h-screen flex-col bg-surface-canvas text-ink-primary antialiased">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-brand-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+        >
+          Skip to main content
+        </a>
         <LocaleAndAuthProvider>
           <SiteHeader />
-          <div className="flex-1">{children}</div>
+          <div id="main-content" tabIndex={-1} className="flex-1 outline-none">
+            {children}
+          </div>
           <SiteFooter />
         </LocaleAndAuthProvider>
       </body>

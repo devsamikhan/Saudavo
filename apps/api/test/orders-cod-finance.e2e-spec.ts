@@ -540,6 +540,22 @@ describe("Cart, Single-Seller COD Checkout, Service Orders, Messaging & Commissi
     expect(manualPay.body.data.paymentStatus).toBe("COLLECTED");
     expect(manualPay.body.data.verificationSource).toBe("SELLER_REPORTED");
 
+    // Repeating manual-payment-confirmation with a new Idempotency-Key must be rejected (409)
+    const repeatManualPay = await request(server)
+      .post(`/api/v1/seller/orders/${svcOrderId}/manual-payment-confirmation`)
+      .set("Cookie", sellerB.cookie)
+      .set("X-CSRF-Token", sellerB.csrfToken)
+      .set("Idempotency-Key", "idem_manual_pay_duplicate")
+      .send({
+        collectionStatus: "COLLECTED",
+        collectedAmountPaisa: 250_000,
+        manualPaymentMethodDesc: "Direct bank transfer"
+      })
+      .expect(409);
+    expect(ApiErrorEnvelopeSchema.parse(repeatManualPay.body).error.code).toBe(
+      "INVALID_STATE_TRANSITION"
+    );
+
     // PQ-09: Messaging between parties & outsider rejection
     await request(server)
       .post(`/api/v1/orders/${svcOrderId}/messages`)

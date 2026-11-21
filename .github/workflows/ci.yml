@@ -54,6 +54,18 @@ jobs:
           pnpm --filter @saudavo/api exec prisma migrate deploy
           pnpm --filter @saudavo/api prisma:seed
 
+      - name: Security Checks (Tracked Secrets, Unsafe Sinks, Prod Audit)
+        run: |
+          if git ls-files | grep -E '(^|/)(\.env($|\.)|.*\.pem$|id_rsa)' | grep -v '\.env\.example$'; then
+            echo "ERROR: Sensitive env or key file tracked in git!"
+            exit 1
+          fi
+          if grep -rnE 'dangerouslySetInnerHTML|\$queryRawUnsafe|\$executeRawUnsafe|\beval\(|new Function' apps/api/src apps/web/src packages/contracts/src; then
+            echo "ERROR: Unsafe sink pattern detected!"
+            exit 1
+          fi
+          pnpm audit --prod --audit-level=critical
+
       - name: Lint
         run: pnpm lint
 
@@ -65,3 +77,8 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Install Playwright Chromium & Run Web E2E
+        run: |
+          pnpm --filter @saudavo/web exec playwright install chromium
+          pnpm --filter @saudavo/web test:e2e

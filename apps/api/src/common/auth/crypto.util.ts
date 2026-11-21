@@ -35,41 +35,50 @@ export function safeHexEqual(aHex: string, bHex: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-function resolveMfaCipherKey(): Buffer {
-  const raw = process.env.MFA_ENCRYPTION_KEY;
+function resolveCipherKey(envVarName: string, devFallbackSeed: string): Buffer {
+  const raw = process.env[envVarName];
   if (!raw) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("MFA_ENCRYPTION_KEY is required in production");
+      throw new Error(`${envVarName} is required in production`);
     }
-    return createHash("sha256")
-      .update("saudavo-dev-only-mfa-encryption-key-do-not-use-in-prod", "utf8")
-      .digest();
+    return createHash("sha256").update(devFallbackSeed, "utf8").digest();
   }
   return createHash("sha256").update(raw, "utf8").digest();
 }
 
-export function encryptMfaSecret(secretBase32: string): string {
-  const key = resolveMfaCipherKey();
+function resolveMfaCipherKey(): Buffer {
+  return resolveCipherKey(
+    "MFA_ENCRYPTION_KEY",
+    "saudavo-dev-only-mfa-encryption-key-do-not-use-in-prod"
+  );
+}
+
+function resolveOutboxCipherKey(): Buffer {
+  if (process.env.OUTBOX_ENCRYPTION_KEY) {
+    return createHash("sha256")
+      .update(process.env.OUTBOX_ENCRYPTION_KEY, "utf8")
+      .digest();
+  }
+  return resolveMfaCipherKey();
+}
+
+function encryptAesGcm(plaintext: string, key: Buffer): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([
-    cipher.update(secretBase32, "utf8"),
-    cipher.final()
-  ]);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
   return `${iv.toString("base64url")}.${authTag.toString("base64url")}.${encrypted.toString("base64url")}`;
 }
 
-export function decryptMfaSecret(payload: string): string {
+function decryptAesGcm(payload: string, key: Buffer): string {
   const parts = payload.split(".");
   if (parts.length !== 3) {
-    throw new Error("Invalid encrypted MFA secret format");
+    throw new Error("Invalid encrypted secret format");
   }
   const [ivB64, tagB64, dataB64] = parts;
   if (!ivB64 || !tagB64 || !dataB64) {
-    throw new Error("Invalid encrypted MFA secret components");
+    throw new Error("Invalid encrypted secret components");
   }
-  const key = resolveMfaCipherKey();
   const iv = Buffer.from(ivB64, "base64url");
   const authTag = Buffer.from(tagB64, "base64url");
   const encrypted = Buffer.from(dataB64, "base64url");
@@ -78,4 +87,26 @@ export function decryptMfaSecret(payload: string): string {
   decipher.setAuthTag(authTag);
   const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
   return decrypted.toString("utf8");
+}
+
+export function encryptMfaSecret(secretBase32: string): string {
+  return encryptAesGcm(secretBase32, resolveMfaCipherKey());
+}
+
+export function decryptMfaSecret(payload: string): string {
+  return decryptAesGcm(payload, resolveMfaCipherKey());
+}
+
+/**
+ * Encrypts sensitive transient tokens before storing them inside internal outbox payloads.
+ */
+export function encryptSensitiveToken(rawToken: string): string {
+  return encryptAesGcm(rawToken, resolveOutboxCipherKey());
+}
+
+/**
+ * Decrypts sensitive transient tokens stored inside internal outbox payloads.
+ */
+export function decryptSensitiveToken(payload: string): string {
+  return decryptAesGcm(payload, resolveOutboxCipherKey());
 }

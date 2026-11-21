@@ -4,8 +4,8 @@ import {
   ApiErrorEnvelopeSchema,
   type ApproveDecisionRequest,
   type ApproveListingRequest,
+  type AuthMeResponse,
   type AuthSessionResponse,
-  type AuthUser,
   type CancelOrderRequest,
   type CartsResponse,
   type CategoriesResponse,
@@ -82,8 +82,16 @@ export function getStoredCsrfToken(): string | null {
   }
   if (typeof window !== "undefined") {
     try {
-      memoryCsrfToken = window.sessionStorage.getItem(CSRF_STORAGE_KEY);
-      return memoryCsrfToken;
+      const fromLocal = window.localStorage?.getItem(CSRF_STORAGE_KEY);
+      if (fromLocal) {
+        memoryCsrfToken = fromLocal;
+        return fromLocal;
+      }
+      const fromSession = window.sessionStorage?.getItem(CSRF_STORAGE_KEY);
+      if (fromSession) {
+        memoryCsrfToken = fromSession;
+        return fromSession;
+      }
     } catch {
       return null;
     }
@@ -96,9 +104,11 @@ export function setStoredCsrfToken(token: string | null): void {
   if (typeof window !== "undefined") {
     try {
       if (token) {
-        window.sessionStorage.setItem(CSRF_STORAGE_KEY, token);
+        window.localStorage?.setItem(CSRF_STORAGE_KEY, token);
+        window.sessionStorage?.setItem(CSRF_STORAGE_KEY, token);
       } else {
-        window.sessionStorage.removeItem(CSRF_STORAGE_KEY);
+        window.localStorage?.removeItem(CSRF_STORAGE_KEY);
+        window.sessionStorage?.removeItem(CSRF_STORAGE_KEY);
       }
     } catch {
       // Ignore storage access errors in restricted modes
@@ -151,10 +161,12 @@ async function apiRequest<T>(
     method?: "GET" | "POST" | "PATCH" | "DELETE";
     body?: unknown;
     idempotencyKey?: string;
+    headers?: Record<string, string>;
+    _retriedCsrf?: boolean;
   } = {}
 ): Promise<T> {
   const method = options.method ?? "GET";
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(options.headers ?? {}) };
   if (options.body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
@@ -175,7 +187,23 @@ async function apiRequest<T>(
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {})
   });
 
-  return parseApiResponse<T>(res);
+  try {
+    return await parseApiResponse<T>(res);
+  } catch (err: unknown) {
+    if (
+      err instanceof ApiClientError &&
+      err.status === 403 &&
+      err.code === "CSRF_INVALID" &&
+      method !== "GET" &&
+      !options._retriedCsrf
+    ) {
+      const synced = await fetchCurrentUser({ syncCsrf: true }).catch(() => null);
+      if (synced?.data.csrfToken) {
+        return apiRequest<T>(path, { ...options, _retriedCsrf: true });
+      }
+    }
+    throw err;
+  }
 }
 
 // Public Discovery
@@ -261,8 +289,16 @@ export async function logoutAccount(): Promise<void> {
   setStoredCsrfToken(null);
 }
 
-export function fetchCurrentUser(): Promise<{ data: { user: AuthUser } }> {
-  return apiRequest("/auth/me");
+export async function fetchCurrentUser(options?: {
+  syncCsrf?: boolean;
+}): Promise<AuthMeResponse> {
+  const res = await apiRequest<AuthMeResponse>("/auth/me", {
+    headers: options?.syncCsrf ? { "X-CSRF-Sync": "1" } : undefined
+  });
+  if (res.data.csrfToken) {
+    setStoredCsrfToken(res.data.csrfToken);
+  }
+  return res;
 }
 
 export function verifyAdminMfa(

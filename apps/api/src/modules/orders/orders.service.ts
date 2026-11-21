@@ -1191,6 +1191,8 @@ export class OrdersService {
           );
         }
 
+        this.assertPaymentNotAlreadyCollected(order);
+
         if (order.orderType === "PHYSICAL" && order.status !== "DELIVERED") {
           throw new DomainException(
             "INVALID_STATE_TRANSITION",
@@ -1405,6 +1407,8 @@ export class OrdersService {
             "Cancelled orders cannot confirm payment."
           );
         }
+
+        this.assertPaymentNotAlreadyCollected(order);
 
         const expectedTotal = bigIntToSafeNumber(order.totalPaisa, "totalPaisa");
         if (
@@ -1853,5 +1857,21 @@ export class OrdersService {
       deliveryFeePaisa,
       itemCount
     };
+  }
+
+  private assertPaymentNotAlreadyCollected(order: {
+    codCollectionStatus: string;
+    payments: Array<{ status: string }>;
+  }): void {
+    if (
+      order.codCollectionStatus === "COLLECTED" ||
+      order.payments.some((payment) => payment.status === "COLLECTED")
+    ) {
+      throw new DomainException(
+        "INVALID_STATE_TRANSITION",
+        HttpStatus.CONFLICT,
+        "Payment has already been confirmed as collected for this order."
+      );
+    }
   }
 }

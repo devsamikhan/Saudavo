@@ -15,7 +15,12 @@ import {
   getLocaleDirection,
   type UiDictionary
 } from "../i18n/dictionaries";
-import { fetchCurrentUser, logoutAccount } from "../lib/api-client";
+import {
+  fetchCurrentUser,
+  getStoredCsrfToken,
+  logoutAccount,
+  setStoredCsrfToken
+} from "../lib/api-client";
 
 interface AppContextValue {
   locale: LocaleCode;
@@ -62,10 +67,13 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     setAuthLoading(true);
     try {
-      const res = await fetchCurrentUser();
+      const res = await fetchCurrentUser({
+        syncCsrf: !getStoredCsrfToken()
+      });
       setUser(res.data.user);
     } catch {
       setUser(null);
+      setStoredCsrfToken(null);
     } finally {
       setAuthLoading(false);
     }

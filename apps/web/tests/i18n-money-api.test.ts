@@ -1,7 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DICTIONARIES, getLocaleDirection } from "../src/i18n/dictionaries";
-import { ApiClientError, parseApiResponse } from "../src/lib/api-client";
+import {
+  ApiClientError,
+  logoutAccount,
+  parseApiResponse,
+  setStoredCsrfToken
+} from "../src/lib/api-client";
 import { formatPkrFromPaisa } from "../src/lib/money";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  setStoredCsrfToken(null);
+});
 
 describe("@saudavo/web i18n, integer PKR formatting, and API client", () => {
   it("formats integer paisa values cleanly in English and Urdu without float precision loss", () => {
@@ -50,6 +60,66 @@ describe("@saudavo/web i18n, integer PKR formatting, and API client", () => {
     expect(parsed.data.ok).toBe(true);
     expect(new ApiClientError(400, "VALIDATION_ERROR", "Bad input").code).toBe(
       "VALIDATION_ERROR"
+    );
+  });
+
+  it("auto-resyncs CSRF token via GET /auth/me (X-CSRF-Sync: 1) and retries once on 403 CSRF_INVALID", async () => {
+    setStoredCsrfToken("stale_tab_csrf");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "CSRF_INVALID",
+              message: "Invalid CSRF token.",
+              requestId: "req_csrf_1"
+            }
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              user: {
+                id: "0193a8b2-1000-7000-8000-000000000001",
+                displayName: "Ali Khan",
+                preferredLocale: "en",
+                roles: ["CUSTOMER"],
+                emailVerified: true,
+                phoneVerified: false,
+                mfaRequired: false,
+                mfaVerified: false
+              },
+              csrfToken: "fresh_synced_csrf"
+            },
+            meta: { requestId: "req_csrf_2" }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: { loggedOut: true },
+            meta: { requestId: "req_csrf_3" }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+
+    await logoutAccount();
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const secondCallInit = fetchMock.mock.calls[1]?.[1];
+    expect((secondCallInit?.headers as Record<string, string>)["X-CSRF-Sync"]).toBe(
+      "1"
+    );
+    const thirdCallInit = fetchMock.mock.calls[2]?.[1];
+    expect((thirdCallInit?.headers as Record<string, string>)["X-CSRF-Token"]).toBe(
+      "fresh_synced_csrf"
     );
   });
 });
