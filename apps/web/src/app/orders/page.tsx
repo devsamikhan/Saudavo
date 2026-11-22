@@ -132,6 +132,13 @@ export default function OrdersPage() {
                       <strong>{order.paymentMethod}</strong> (
                       {order.codCollectionStatus})
                     </p>
+                    {order.paymentMethod === "MANUAL_OFFLINE" && (
+                      <p className="mt-1 text-[11px] text-brand-accent">
+                        {locale === "ur"
+                          ? "PQ-14: ادائیگی براہِ راست سیلر کے ساتھ آف لائن طے ہوگی؛ کسی تنازعے کی صورت میں رسید محفوظ رکھیں۔"
+                          : "PQ-14: Offline payment is arranged directly with the seller (no platform escrow). Keep transfer proof if raising a dispute."}
+                      </p>
+                    )}
                   </div>
                   <span className="text-lg font-bold text-brand-primary">
                     {formatPkrFromPaisa(order.totalPaisa, locale)}

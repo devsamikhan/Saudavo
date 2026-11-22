@@ -105,9 +105,23 @@ export const AuthUserSchema = z.object({
   emailVerified: z.boolean(),
   phoneVerified: z.boolean(),
   mfaRequired: z.boolean(),
+  mfaEnrolled: z.boolean().default(false),
   mfaVerified: z.boolean()
 });
 export type AuthUser = z.infer<typeof AuthUserSchema>;
+
+export const AdminMfaEnrollResponseSchema = z.object({
+  data: z.object({
+    secretBase32: z.string().min(16),
+    otpauthUri: z.string().min(20),
+    issuer: z.string(),
+    accountLabel: z.string()
+  }),
+  meta: z.object({
+    requestId: z.string().min(1)
+  })
+});
+export type AdminMfaEnrollResponse = z.infer<typeof AdminMfaEnrollResponseSchema>;
 
 export const AuthSessionResponseSchema = z.object({
   data: z.object({

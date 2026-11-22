@@ -266,6 +266,21 @@ describe("Media Presigned Upload, Reviews, Reports, Disputes & Commission Revers
       })
       .expect(201);
 
+    // Other seller cannot attach Seller's READY mediaAsset -> 400
+    await request(server)
+      .post("/api/v1/seller/products")
+      .set("Cookie", otherSeller.cookie)
+      .set("X-CSRF-Token", otherSeller.csrfToken)
+      .send({
+        categoryId: productCat.id,
+        title: "Hijacked Image Item",
+        description: "Attempt to link another store asset.",
+        basePricePaisa: 100_000,
+        stockQuantity: 1,
+        mediaAssetIds: [uploadPayload.asset.id]
+      })
+      .expect(400);
+
     const prodRes = await request(server)
       .post("/api/v1/seller/products")
       .set("Cookie", seller.cookie)
@@ -275,9 +290,20 @@ describe("Media Presigned Upload, Reviews, Reports, Disputes & Commission Revers
         title: "Embroidered Cotton Rug",
         description: "Handwoven local rug from Mianwali weavers.",
         basePricePaisa: 200_000,
-        stockQuantity: 5
+        stockQuantity: 5,
+        mediaAssetIds: [uploadPayload.asset.id]
       })
       .expect(201);
+    expect(prodRes.body.data.images).toHaveLength(1);
+    expect(prodRes.body.data.images[0].mediaAssetId).toBe(uploadPayload.asset.id);
+    expect(prodRes.body.data.images[0].isPrimary).toBe(true);
+
+    // Public image URL blocked while product is still PENDING_REVIEW -> 404
+    await request(server)
+      .get(
+        `/api/v1/products/${prodRes.body.data.slug}/images/${uploadPayload.asset.id}/signed-url`
+      )
+      .expect(404);
 
     await request(server)
       .post(`/api/v1/admin/listings/${prodRes.body.data.id}/approve`)
@@ -285,6 +311,14 @@ describe("Media Presigned Upload, Reviews, Reports, Disputes & Commission Revers
       .set("X-CSRF-Token", moderator.csrfToken)
       .send({ listingType: "PRODUCT" })
       .expect(200);
+
+    // Public image URL succeeds once approved ACTIVE -> 200
+    const publicImgRes = await request(server)
+      .get(
+        `/api/v1/products/${prodRes.body.data.slug}/images/${uploadPayload.asset.id}/signed-url`
+      )
+      .expect(200);
+    expect(publicImgRes.body.data.readUrl).toContain("X-Amz-Signature=");
 
     const addrRes = await request(server)
       .post("/api/v1/customer/addresses")

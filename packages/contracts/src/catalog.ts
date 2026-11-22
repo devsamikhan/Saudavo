@@ -66,7 +66,8 @@ export const CreateProductRequestSchema = z.object({
   deliveryEnabled: z.boolean().default(true),
   pickupEnabled: z.boolean().default(true),
   initialStatus: z.enum(["DRAFT", "PENDING_REVIEW"]).default("PENDING_REVIEW"),
-  variants: z.array(ProductVariantInputSchema).max(50).optional()
+  variants: z.array(ProductVariantInputSchema).max(50).optional(),
+  mediaAssetIds: z.array(z.string().uuid()).max(6).optional()
 });
 export type CreateProductRequest = z.infer<typeof CreateProductRequestSchema>;
 
@@ -94,6 +95,15 @@ export const ProductVariantDtoSchema = z.object({
 });
 export type ProductVariantDto = z.infer<typeof ProductVariantDtoSchema>;
 
+export const ProductImageDtoSchema = z.object({
+  id: z.string().uuid(),
+  mediaAssetId: z.string().uuid(),
+  sortOrder: z.number().int().nonnegative(),
+  isPrimary: z.boolean(),
+  altText: z.string().nullable()
+});
+export type ProductImageDto = z.infer<typeof ProductImageDtoSchema>;
+
 export const ProductDtoSchema = z.object({
   id: z.string().uuid(),
   storeId: z.string().uuid(),
@@ -110,6 +120,7 @@ export const ProductDtoSchema = z.object({
   status: ListingStatusSchema,
   rejectionReason: z.string().nullable(),
   variants: z.array(ProductVariantDtoSchema),
+  images: z.array(ProductImageDtoSchema).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 });

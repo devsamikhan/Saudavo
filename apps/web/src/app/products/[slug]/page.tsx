@@ -8,7 +8,8 @@ import { useAppContext } from "../../../components/locale-provider";
 import {
   addCartItem,
   ApiClientError,
-  fetchPublicProduct
+  fetchPublicProduct,
+  fetchPublicProductImageSignedUrl
 } from "../../../lib/api-client";
 import { formatPkrFromPaisa } from "../../../lib/money";
 
@@ -18,6 +19,7 @@ export default function ProductDetailPage() {
   const { locale, t, user } = useAppContext();
 
   const [product, setProduct] = useState<PublicProductDetailDto | null>(null);
+  const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -28,12 +30,24 @@ export default function ProductDetailPage() {
     let active = true;
     async function load() {
       setLoading(true);
+      setPrimaryImageUrl(null);
       try {
         const res = await fetchPublicProduct(params.slug);
         if (!active) return;
         setProduct(res.data);
         if (res.data.variants.length > 0) {
           setSelectedVariantId(res.data.variants[0]?.id ?? "");
+        }
+        const primary =
+          res.data.images.find((img) => img.isPrimary) ?? res.data.images[0];
+        if (primary) {
+          const urlRes = await fetchPublicProductImageSignedUrl(
+            res.data.slug,
+            primary.mediaAssetId
+          ).catch(() => null);
+          if (active && urlRes?.data.readUrl) {
+            setPrimaryImageUrl(urlRes.data.readUrl);
+          }
         }
       } catch (err: unknown) {
         if (!active) return;
@@ -102,8 +116,17 @@ export default function ProductDetailPage() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="grid grid-cols-1 gap-8 rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 lg:grid-cols-2">
-        <div className="flex h-72 items-center justify-center rounded-2xl bg-brand-primary-soft text-sm font-semibold text-brand-primary lg:h-96">
-          {product.category.nameEn}
+        <div className="flex h-72 items-center justify-center overflow-hidden rounded-2xl bg-brand-primary-soft text-sm font-semibold text-brand-primary lg:h-96">
+          {primaryImageUrl ? (
+            <img
+              src={primaryImageUrl}
+              alt={product.title}
+              onError={() => setPrimaryImageUrl(null)}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            product.category.nameEn
+          )}
         </div>
 
         <div className="space-y-4">

@@ -4,6 +4,7 @@ import type {
   CategoryDto,
   CommissionSummaryDto,
   DistrictDto,
+  MediaAssetDto,
   OrderDetailDto,
   PrivateStoreDto,
   ProductDto,
@@ -28,6 +29,7 @@ import {
   submitSellerOnboarding,
   updateSellerOrderStatus
 } from "../../lib/api-client";
+import { uploadImageAssetToS3 } from "../../lib/media-upload";
 import { formatPkrFromPaisa } from "../../lib/money";
 
 export default function SellerStudioPage() {
@@ -53,6 +55,8 @@ export default function SellerStudioPage() {
   const [prodPricePaisa, setProdPricePaisa] = useState(150_000);
   const [prodStock, setProdStock] = useState(5);
   const [prodDesc, setProdDesc] = useState("");
+  const [uploadedAssets, setUploadedAssets] = useState<MediaAssetDto[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -129,6 +133,32 @@ export default function SellerStudioPage() {
     }
   };
 
+  const handleProductPhotoUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (uploadedAssets.length >= 6) {
+      setErrorMsg("Maximum 6 product images allowed.");
+      return;
+    }
+    setErrorMsg(null);
+    setUploadingMedia(true);
+    try {
+      const asset = await uploadImageAssetToS3(file, "PRODUCT_IMAGE");
+      setUploadedAssets((prev) => [...prev, asset]);
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError || err instanceof Error
+          ? err.message
+          : "Photo upload failed."
+      );
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
+
   const handleCreateProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -141,10 +171,14 @@ export default function SellerStudioPage() {
         stockQuantity: prodStock,
         deliveryEnabled: true,
         pickupEnabled: true,
-        initialStatus: "PENDING_REVIEW"
+        initialStatus: "PENDING_REVIEW",
+        ...(uploadedAssets.length > 0
+          ? { mediaAssetIds: uploadedAssets.map((a) => a.id) }
+          : {})
       });
       setProdTitle("");
       setProdDesc("");
+      setUploadedAssets([]);
       await loadSellerWorkspace();
     } catch (err: unknown) {
       setErrorMsg(
@@ -456,9 +490,55 @@ export default function SellerStudioPage() {
                 onChange={(e) => setProdDesc(e.target.value)}
                 className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm sm:col-span-2"
               />
+              <div className="space-y-2 rounded-xl border border-dashed border-border-subtle bg-surface-muted/50 p-3.5 sm:col-span-2">
+                <label
+                  htmlFor="seller-product-photo"
+                  className="block text-xs font-semibold text-ink-secondary"
+                >
+                  Product Photos (JPEG/PNG/WebP, max 5 MB — EXIF GPS auto-stripped)
+                </label>
+                <input
+                  id="seller-product-photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={uploadingMedia || uploadedAssets.length >= 6}
+                  onChange={(e) => void handleProductPhotoUpload(e)}
+                  className="block w-full text-xs text-ink-secondary"
+                />
+                {uploadingMedia && (
+                  <p className="text-xs font-medium text-brand-primary">
+                    Stripping EXIF & uploading privately to S3...
+                  </p>
+                )}
+                {uploadedAssets.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {uploadedAssets.map((asset, idx) => (
+                      <span
+                        key={asset.id}
+                        className="inline-flex items-center gap-2 rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-semibold text-brand-primary"
+                      >
+                        Photo {idx + 1} ({Math.max(1, Math.round(asset.sizeBytes / 1024))} KB • EXIF Stripped)
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setUploadedAssets((prev) =>
+                              prev.filter((item) => item.id !== asset.id)
+                            )
+                          }
+                          aria-label={`Remove photo ${idx + 1}`}
+                          className="text-red-700 hover:underline"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="submit"
-                className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white sm:w-fit"
+                disabled={uploadingMedia}
+                className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 sm:w-fit"
               >
                 Submit Product for Review
               </button>

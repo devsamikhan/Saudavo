@@ -203,6 +203,15 @@ export interface FakeProductVariantRecord {
   deletedAt: Date | null;
 }
 
+export interface FakeProductImageRecord {
+  id: string;
+  productId: string;
+  mediaAssetId: string;
+  sortOrder: number;
+  isPrimary: boolean;
+  altText: string | null;
+}
+
 export interface FakeServiceListingRecord {
   id: string;
   storeId: string;
@@ -539,6 +548,7 @@ export class InMemoryPrismaService {
   readonly categories: FakeCategoryRecord[] = [];
   readonly products: FakeProductRecord[] = [];
   readonly productVariants: FakeProductVariantRecord[] = [];
+  readonly productImages: FakeProductImageRecord[] = [];
   readonly serviceListings: FakeServiceListingRecord[] = [];
   readonly servicePackages: FakeServicePackageRecord[] = [];
   readonly addresses: FakeAddressRecord[] = [];
@@ -827,7 +837,11 @@ export class InMemoryPrismaService {
 
     update: async (args: {
       where: { id: string };
-      data: { passwordHash?: string };
+      data: {
+        passwordHash?: string;
+        mfaEnabled?: boolean;
+        mfaSecretEncrypted?: string | null;
+      };
     }) => {
       const target = this.users.find((u) => u.id === args.where.id);
       if (!target) {
@@ -835,6 +849,12 @@ export class InMemoryPrismaService {
       }
       if (args.data.passwordHash !== undefined) {
         target.passwordHash = args.data.passwordHash;
+      }
+      if (args.data.mfaEnabled !== undefined) {
+        target.mfaEnabled = args.data.mfaEnabled;
+      }
+      if (args.data.mfaSecretEncrypted !== undefined) {
+        target.mfaSecretEncrypted = args.data.mfaSecretEncrypted;
       }
       target.updatedAt = new Date();
       return this.hydrateUser(target);
@@ -1548,6 +1568,14 @@ export class InMemoryPrismaService {
             isActive: boolean;
           }>;
         };
+        images?: {
+          create: Array<{
+            mediaAssetId: string;
+            sortOrder: number;
+            isPrimary: boolean;
+            altText: string | null;
+          }>;
+        };
       };
     }) => {
       const now = new Date();
@@ -1585,6 +1613,17 @@ export class InMemoryPrismaService {
           createdAt: now,
           updatedAt: now,
           deletedAt: null
+        });
+      }
+
+      for (const img of args.data.images?.create ?? []) {
+        this.productImages.push({
+          id: randomUUID(),
+          productId: created.id,
+          mediaAssetId: img.mediaAssetId,
+          sortOrder: img.sortOrder,
+          isPrimary: img.isPrimary,
+          altText: img.altText
         });
       }
 
@@ -2714,6 +2753,24 @@ export class InMemoryPrismaService {
       );
     },
 
+    findMany: async (args: {
+      where: {
+        id?: { in: string[] };
+        storeId?: string;
+        status?: string;
+        exifStripped?: boolean;
+      };
+    }): Promise<FakeMediaAssetRecord[]> => {
+      return this.mediaAssets.filter(
+        (m) =>
+          (args.where.id?.in === undefined || args.where.id.in.includes(m.id)) &&
+          (args.where.storeId === undefined || m.storeId === args.where.storeId) &&
+          (args.where.status === undefined || m.status === args.where.status) &&
+          (args.where.exifStripped === undefined ||
+            m.exifStripped === args.where.exifStripped)
+      );
+    },
+
     update: async (args: {
       where: { id: string };
       data: Partial<FakeMediaAssetRecord>;
@@ -2967,9 +3024,13 @@ export class InMemoryPrismaService {
     const variants = this.productVariants.filter(
       (v) => v.productId === product.id && v.deletedAt === null
     );
+    const images = this.productImages
+      .filter((img) => img.productId === product.id)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
     return {
       ...product,
       variants,
+      images,
       category,
       store: this.hydrateStore(store)
     };

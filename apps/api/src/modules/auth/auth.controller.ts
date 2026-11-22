@@ -9,6 +9,7 @@ import {
   Res
 } from "@nestjs/common";
 import {
+  AdminMfaEnrollResponse,
   AdminMfaVerify,
   AdminMfaVerifySchema,
   AuthMeResponse,
@@ -125,6 +126,23 @@ export class AuthController {
     @Req() req: AppRequest
   ): Promise<{ data: { reset: true }; meta: { requestId: string } }> {
     return this.authService.confirmPasswordReset(body, getRequestId(req));
+  }
+
+  @Roles("MODERATOR", "SUPPORT", "ADMIN", "SUPER_ADMIN")
+  @AllowUnverifiedMfa()
+  @RateLimit({ limit: 5, windowMs: 60_000, keyPrefix: "auth_mfa_enroll" })
+  @HttpCode(HttpStatus.OK)
+  @Post("admin/mfa/enroll")
+  async enrollAdminMfa(
+    @CurrentUser() auth: AuthContext | undefined,
+    @Req() req: AppRequest
+  ): Promise<AdminMfaEnrollResponse> {
+    const authenticated = this.requireAuthContext(auth);
+    return this.authService.enrollAdminMfa(
+      authenticated,
+      this.extractClientMetadata(req),
+      getRequestId(req)
+    );
   }
 
   @Roles("MODERATOR", "SUPPORT", "ADMIN", "SUPER_ADMIN")

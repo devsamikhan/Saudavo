@@ -124,10 +124,13 @@ export default function ServiceDetailPage() {
         </p>
 
         {isRemote && (
-          <div className="mt-4 rounded-xl bg-brand-accent-soft px-4 py-3 text-xs text-brand-accent">
-            PQ-14 Manual Offline Service: No shipping delivery record is created.
-            Payment is settled offline directly with the seller and verified separately
-            from your final delivery acceptance.
+          <div
+            dir={locale === "ur" ? "rtl" : "ltr"}
+            className="mt-4 rounded-xl bg-brand-accent-soft px-4 py-3 text-xs leading-relaxed text-brand-accent"
+          >
+            {locale === "ur"
+              ? "ریموٹ آف لائن سروس (PQ-14): اس سروس کے لیے کوئی فزیکل ڈلیوری نہیں بنے گی۔ ادائیگی براہِ راست سیلر کے ساتھ آف لائن طے ہوگی (کیش، بینک ٹرانسفر، جیز کیش/ایزی پیسہ)۔ سوداو آن لائن پیمنٹ گیٹ وے، والیٹ یا ایسکرو نہیں چلاتا — کسی تنازعے کی صورت میں اپنی ادائیگی کی رسید محفوظ رکھیں۔"
+              : "Remote Offline Service (PQ-14): No shipping delivery record is created. Payment is arranged directly with the seller offline (Cash, Bank Transfer, JazzCash/Easypaisa). Saudavo does not hold funds, wallets, or escrow — keep your transfer receipt in case of a dispute."}
           </div>
         )}
 

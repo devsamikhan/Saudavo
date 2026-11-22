@@ -8,6 +8,7 @@ import {
   ApiClientError,
   approveListingModeration,
   approveSellerModeration,
+  enrollAdminMfa,
   fetchModerationQueue,
   rejectListingModeration,
   rejectSellerModeration,
@@ -20,10 +21,35 @@ export default function AdminConsolePage() {
 
   const [queue, setQueue] = useState<ModerationQueueResponse["data"] | null>(null);
   const [mfaCode, setMfaCode] = useState("");
+  const [mfaEnrollment, setMfaEnrollment] = useState<{
+    secretBase32: string;
+    otpauthUri: string;
+    accountLabel: string;
+  } | null>(null);
+  const [enrollingMfa, setEnrollingMfa] = useState(false);
   const [rejectReason, setRejectReason] = useState(
     "Insufficient store information for Mianwali closed beta."
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleEnrollMfa = async () => {
+    setErrorMsg(null);
+    setEnrollingMfa(true);
+    try {
+      const res = await enrollAdminMfa();
+      setMfaEnrollment({
+        secretBase32: res.data.secretBase32,
+        otpauthUri: res.data.otpauthUri,
+        accountLabel: res.data.accountLabel
+      });
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : "Unable to start MFA enrollment."
+      );
+    } finally {
+      setEnrollingMfa(false);
+    }
+  };
 
   const loadQueue = useCallback(async () => {
     if (!user || !user.mfaVerified) return;
@@ -89,30 +115,85 @@ export default function AdminConsolePage() {
       )}
 
       {!user.mfaVerified ? (
-        <form
-          onSubmit={handleMfa}
-          className="max-w-md space-y-3 rounded-2xl border border-border-subtle bg-surface-card p-6"
-        >
-          <h2 className="text-base font-bold text-ink-primary">
-            Verify Staff TOTP MFA (PQ-06)
-          </h2>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="\d{6}"
-            required
-            placeholder="6-digit code"
-            value={mfaCode}
-            onChange={(e) => setMfaCode(e.target.value)}
-            className="w-full rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-brand-primary py-2.5 text-sm font-semibold text-white"
+        <div className="max-w-lg space-y-4">
+          {!user.mfaEnrolled && (
+            <section className="space-y-3 rounded-2xl border border-border-subtle bg-surface-card p-6">
+              <h2 className="text-base font-bold text-ink-primary">
+                First-Time Staff Authenticator Setup (PQ-06)
+              </h2>
+              <p className="text-xs text-ink-secondary">
+                {locale === "ur"
+                  ? "ایڈمن اور ماڈریشن ٹولز کھولنے کے لیے اپنی Authenticator ایپ (Google Authenticator / Authy) میں سیکریٹ کی درج کریں۔"
+                  : "Generate a TOTP secret key and add it to your authenticator app (Google Authenticator / Authy / 1Password), then verify your first 6-digit code below."}
+              </p>
+
+              {!mfaEnrollment ? (
+                <button
+                  type="button"
+                  disabled={enrollingMfa}
+                  onClick={() => void handleEnrollMfa()}
+                  className="rounded-xl bg-brand-accent px-4 py-2.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  {enrollingMfa
+                    ? "Generating Secret..."
+                    : "Generate Authenticator Setup Key"}
+                </button>
+              ) : (
+                <div className="space-y-2 rounded-xl border border-brand-primary/30 bg-brand-primary-soft/40 p-4 text-xs">
+                  <p className="font-semibold text-brand-primary">
+                    Account: {mfaEnrollment.accountLabel}
+                  </p>
+                  <div>
+                    <span className="text-ink-secondary">Manual Setup Secret Key (Base32):</span>
+                    <code className="mt-1 block select-all break-all rounded-lg bg-surface-card px-3 py-2 font-mono text-xs font-bold text-ink-primary">
+                      {mfaEnrollment.secretBase32}
+                    </code>
+                  </div>
+                  <div>
+                    <span className="text-ink-secondary">Provisioning URI:</span>
+                    <code className="mt-1 block select-all break-all rounded-lg bg-surface-card px-3 py-1.5 font-mono text-[11px] text-ink-secondary">
+                      {mfaEnrollment.otpauthUri}
+                    </code>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          <form
+            onSubmit={handleMfa}
+            className="space-y-3 rounded-2xl border border-border-subtle bg-surface-card p-6"
           >
-            Verify & Unlock Review Queue
-          </button>
-        </form>
+            <h2 className="text-base font-bold text-ink-primary">
+              Verify Staff TOTP MFA (PQ-06)
+            </h2>
+            <label
+              htmlFor="admin-mfa-code"
+              className="block text-xs font-semibold text-ink-secondary"
+            >
+              6-Digit Authenticator Code
+            </label>
+            <input
+              id="admin-mfa-code"
+              type="text"
+              inputMode="numeric"
+              pattern="\d{6}"
+              required
+              placeholder="6-digit code"
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value)}
+              className="w-full rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-brand-primary py-2.5 text-sm font-semibold text-white"
+            >
+              {user.mfaEnrolled
+                ? "Verify & Unlock Review Queue"
+                : "Activate MFA & Unlock Review Queue"}
+            </button>
+          </form>
+        </div>
       ) : (
         <div className="space-y-6">
           <div className="rounded-2xl border border-border-subtle bg-surface-card p-5">

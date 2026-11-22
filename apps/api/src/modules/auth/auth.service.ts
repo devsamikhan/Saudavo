@@ -1,5 +1,7 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
+  AdminMfaEnrollResponse,
+  AdminMfaEnrollResponseSchema,
   AdminMfaVerify,
   AuthMeResponse,
   AuthMeResponseSchema,
@@ -19,6 +21,7 @@ import * as argon2 from "argon2";
 import type { AuthContext } from "../../common/auth/auth.types";
 import {
   decryptMfaSecret,
+  encryptMfaSecret,
   encryptSensitiveToken,
   generateOpaqueToken,
   sha256Hex
@@ -274,6 +277,70 @@ export class AuthService {
     };
   }
 
+  async enrollAdminMfa(
+    auth: AuthContext,
+    client: ClientMetadata,
+    requestId: string
+  ): Promise<AdminMfaEnrollResponse> {
+    const user = await this.usersService.findByIdWithAuth(auth.userId);
+    const staffRole = auth.roles.find((role) => STAFF_ROLE_SET.has(role));
+
+    if (!user || !staffRole) {
+      throw new DomainException(
+        "FORBIDDEN",
+        HttpStatus.FORBIDDEN,
+        "Staff role is required for MFA enrollment."
+      );
+    }
+
+    if (user.mfaEnabled) {
+      throw new DomainException(
+        "CONFLICT",
+        HttpStatus.CONFLICT,
+        "Staff MFA is already enabled. Contact SUPER_ADMIN for reset."
+      );
+    }
+
+    const secretBase32 = this.totpService.generateBase32Secret();
+    const accountLabel = user.email ?? user.phoneE164 ?? user.displayName;
+    const otpauthUri =
+      `otpauth://totp/Saudavo:${encodeURIComponent(accountLabel)}` +
+      `?secret=${secretBase32}&issuer=Saudavo&algorithm=SHA1&digits=6&period=30`;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          mfaSecretEncrypted: encryptMfaSecret(secretBase32),
+          mfaEnabled: false
+        }
+      });
+
+      await this.auditService.record(
+        {
+          actorId: auth.userId,
+          actorRole: staffRole,
+          action: "STAFF_MFA_ENROLL_STARTED",
+          targetType: "User",
+          targetId: auth.userId,
+          ipAddress: client.ipAddress,
+          userAgent: client.userAgent
+        },
+        tx
+      );
+    });
+
+    return AdminMfaEnrollResponseSchema.parse({
+      data: {
+        secretBase32,
+        otpauthUri,
+        issuer: "Saudavo",
+        accountLabel
+      },
+      meta: { requestId }
+    });
+  }
+
   async verifyAdminMfa(
     auth: AuthContext,
     dto: AdminMfaVerify,
@@ -294,7 +361,7 @@ export class AuthService {
       );
     }
 
-    if (!user.mfaEnabled || !user.mfaSecretEncrypted) {
+    if (!user.mfaSecretEncrypted) {
       throw new DomainException(
         "FORBIDDEN",
         HttpStatus.FORBIDDEN,
@@ -312,8 +379,16 @@ export class AuthService {
       );
     }
 
+    const activatingNow = !user.mfaEnabled;
     const verifiedAt = new Date();
     await this.prisma.$transaction(async (tx) => {
+      if (activatingNow) {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { mfaEnabled: true }
+        });
+      }
+
       await tx.userSession.update({
         where: { id: auth.sessionId },
         data: { mfaVerifiedAt: verifiedAt }
@@ -323,7 +398,9 @@ export class AuthService {
         {
           actorId: auth.userId,
           actorRole: staffRole,
-          action: "STAFF_MFA_VERIFIED",
+          action: activatingNow
+            ? "STAFF_MFA_ENROLLED_AND_VERIFIED"
+            : "STAFF_MFA_VERIFIED",
           targetType: "UserSession",
           targetId: auth.sessionId,
           ipAddress: client.ipAddress,
@@ -363,6 +440,7 @@ export class AuthService {
           emailVerified: auth.emailVerified,
           phoneVerified: auth.phoneVerified,
           mfaRequired: auth.roles.some((role) => STAFF_ROLE_SET.has(role)),
+          mfaEnrolled: auth.mfaEnabled,
           mfaVerified: auth.mfaVerified
         },
         ...(csrfToken ? { csrfToken } : {})
@@ -413,6 +491,7 @@ export class AuthService {
           emailVerified: user.emailVerifiedAt !== null,
           phoneVerified: user.phoneVerifiedAt !== null,
           mfaRequired: roles.some((role) => STAFF_ROLE_SET.has(role)),
+          mfaEnrolled: user.mfaEnabled,
           mfaVerified: false
         },
         csrfToken: rawCsrfToken

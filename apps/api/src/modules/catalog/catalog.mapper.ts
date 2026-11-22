@@ -21,6 +21,9 @@ export const PRODUCT_WITH_VARIANTS_INCLUDE = {
   variants: {
     where: { deletedAt: null },
     orderBy: { createdAt: "asc" }
+  },
+  images: {
+    orderBy: { sortOrder: "asc" }
   }
 } satisfies Prisma.ProductInclude;
 
@@ -28,6 +31,9 @@ export const PUBLIC_PRODUCT_INCLUDE = {
   variants: {
     where: { deletedAt: null, isActive: true },
     orderBy: { createdAt: "asc" }
+  },
+  images: {
+    orderBy: { sortOrder: "asc" }
   },
   category: true,
   store: {
@@ -104,6 +110,13 @@ export function toProductDto(product: ProductWithVariants): ProductDto {
       stockQuantity: variant.stockQuantity,
       isActive: variant.isActive
     })),
+    images: product.images.map((image) => ({
+      id: image.id,
+      mediaAssetId: image.mediaAssetId,
+      sortOrder: image.sortOrder,
+      isPrimary: image.isPrimary,
+      altText: image.altText
+    })),
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString()
   });
@@ -134,6 +147,13 @@ export function toPublicProductDetailDto(
       pricePaisa: bigIntToSafeNumber(variant.pricePaisa, "pricePaisa"),
       stockQuantity: variant.stockQuantity,
       isActive: variant.isActive
+    })),
+    images: product.images.map((image) => ({
+      id: image.id,
+      mediaAssetId: image.mediaAssetId,
+      sortOrder: image.sortOrder,
+      isPrimary: image.isPrimary,
+      altText: image.altText
     })),
     category: toCategoryDto(product.category),
     store: toPublicStoreDto(product.store),

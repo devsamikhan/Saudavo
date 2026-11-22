@@ -109,10 +109,19 @@ export class OpenApiController {
             responses: { "200": { description: "Password reset completed" } }
           }
         },
+        "/auth/admin/mfa/enroll": {
+          post: {
+            tags: ["Auth", "Admin"],
+            summary:
+              "Generate encrypted TOTP secret & otpauth URI for unenrolled staff MFA setup",
+            security: [{ cookieAuth: [], csrfHeader: [] }],
+            responses: { "200": { description: "TOTP secret & otpauth provisioning URI" } }
+          }
+        },
         "/auth/admin/mfa/verify": {
           post: {
             tags: ["Auth", "Admin"],
-            summary: "Verify staff RFC 6238 TOTP MFA code for current session",
+            summary: "Verify staff RFC 6238 TOTP MFA code (activates pending enrollment if needed)",
             security: [{ cookieAuth: [], csrfHeader: [] }],
             responses: { "200": { description: "MFA verified" } }
           }

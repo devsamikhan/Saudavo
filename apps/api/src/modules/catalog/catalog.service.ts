@@ -20,6 +20,7 @@ import {
 import { DomainException } from "../../common/errors/domain.exception";
 import { bigIntToSafeNumber } from "../../common/money.util";
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { S3PresignerService } from "../media/s3-presigner.service";
 import { OutboxService } from "../outbox/outbox.service";
 import {
   STORE_WITH_RELATIONS_INCLUDE,
@@ -43,7 +44,8 @@ export class CatalogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sellerService: SellerService,
-    private readonly outboxService: OutboxService
+    private readonly outboxService: OutboxService,
+    private readonly s3Presigner: S3PresignerService
   ) {}
 
   async listCategories(
@@ -94,6 +96,25 @@ export class CatalogService {
     const baseSlug = dto.slug ?? slugifyTitle(dto.title);
     const uniqueSlug = await this.resolveUniqueActiveSlug("PRODUCT", baseSlug);
     const variants = dto.variants ?? [];
+    const uniqueMediaIds = [...new Set(dto.mediaAssetIds ?? [])];
+
+    if (uniqueMediaIds.length > 0) {
+      const readyAssets = await this.prisma.mediaAsset.findMany({
+        where: {
+          id: { in: uniqueMediaIds },
+          storeId: store.id,
+          status: "READY",
+          exifStripped: true
+        }
+      });
+      if (readyAssets.length !== uniqueMediaIds.length) {
+        throw new DomainException(
+          "VALIDATION_ERROR",
+          HttpStatus.BAD_REQUEST,
+          "All product images must be owned READY EXIF-stripped media assets."
+        );
+      }
+    }
 
     const created = await this.prisma.$transaction(async (tx) => {
       const product = await tx.product.create({
@@ -120,6 +141,18 @@ export class CatalogService {
                     pricePaisa: BigInt(v.pricePaisa),
                     stockQuantity: v.stockQuantity,
                     isActive: v.isActive
+                  }))
+                }
+              }
+            : {}),
+          ...(uniqueMediaIds.length > 0
+            ? {
+                images: {
+                  create: uniqueMediaIds.map((mediaAssetId, index) => ({
+                    mediaAssetId,
+                    sortOrder: index,
+                    isPrimary: index === 0,
+                    altText: dto.title
                   }))
                 }
               }
@@ -497,6 +530,68 @@ export class CatalogService {
 
     return {
       data: toPublicProductDetailDto(product),
+      meta: { requestId }
+    };
+  }
+
+  /**
+   * Issues a short-lived signed read URL only for READY media attached to an ACTIVE public product.
+   */
+  async getPublicProductImageSignedUrl(
+    slug: string,
+    mediaAssetId: string,
+    requestId: string
+  ): Promise<{
+    data: { mediaAssetId: string; readUrl: string; expiresInSeconds: number };
+    meta: { requestId: string };
+  }> {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        slug,
+        status: "ACTIVE",
+        deletedAt: null,
+        store: {
+          status: "ACTIVE",
+          deletedAt: null,
+          sellerProfile: { verificationStatus: "APPROVED" }
+        }
+      },
+      include: PUBLIC_PRODUCT_INCLUDE
+    });
+
+    const linkedImage = product?.images.find(
+      (img) => img.mediaAssetId === mediaAssetId
+    );
+    if (!product || !linkedImage) {
+      throw new DomainException(
+        "NOT_FOUND",
+        HttpStatus.NOT_FOUND,
+        "Public product image not found."
+      );
+    }
+
+    const asset = await this.prisma.mediaAsset.findFirst({
+      where: { id: mediaAssetId, status: "READY" }
+    });
+    if (!asset) {
+      throw new DomainException(
+        "NOT_FOUND",
+        HttpStatus.NOT_FOUND,
+        "Media asset not ready."
+      );
+    }
+
+    const expiresInSeconds = 600;
+    return {
+      data: {
+        mediaAssetId: asset.id,
+        readUrl: this.s3Presigner.createPresignedUrl({
+          method: "GET",
+          objectKey: asset.objectKey,
+          expiresInSeconds
+        }),
+        expiresInSeconds
+      },
       meta: { requestId }
     };
   }

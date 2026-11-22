@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Query, Req } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  Req
+} from "@nestjs/common";
 import {
   CategoriesResponse,
   PublicProductDetailDto,
@@ -45,6 +52,22 @@ export class PublicCatalogController {
     @Req() req: AppRequest
   ): Promise<{ data: PublicProductDetailDto; meta: { requestId: string } }> {
     return this.catalogService.getPublicProductBySlug(slug, getRequestId(req));
+  }
+
+  @Get("products/:slug/images/:mediaAssetId/signed-url")
+  async getProductImageSignedUrl(
+    @Param("slug") slug: string,
+    @Param("mediaAssetId", new ParseUUIDPipe()) mediaAssetId: string,
+    @Req() req: AppRequest
+  ): Promise<{
+    data: { mediaAssetId: string; readUrl: string; expiresInSeconds: number };
+    meta: { requestId: string };
+  }> {
+    return this.catalogService.getPublicProductImageSignedUrl(
+      slug,
+      mediaAssetId,
+      getRequestId(req)
+    );
   }
 
   @Get("services/:slug")

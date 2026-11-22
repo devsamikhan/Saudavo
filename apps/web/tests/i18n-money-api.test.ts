@@ -6,6 +6,7 @@ import {
   parseApiResponse,
   setStoredCsrfToken
 } from "../src/lib/api-client";
+import { bytesToMagicHex, uploadImageAssetToS3 } from "../src/lib/media-upload";
 import { formatPkrFromPaisa } from "../src/lib/money";
 
 afterEach(() => {
@@ -121,5 +122,16 @@ describe("@saudavo/web i18n, integer PKR formatting, and API client", () => {
     expect((thirdCallInit?.headers as Record<string, string>)["X-CSRF-Token"]).toBe(
       "fresh_synced_csrf"
     );
+  });
+
+  it("extracts image magic bytes hex cleanly and rejects unsupported upload MIME types", async () => {
+    expect(
+      bytesToMagicHex(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]))
+    ).toBe("ffd8ffe00010");
+
+    const svgFile = new File(["<svg/>"], "bad.svg", { type: "image/svg+xml" });
+    await expect(
+      uploadImageAssetToS3(svgFile, "PRODUCT_IMAGE")
+    ).rejects.toThrow("Only JPEG, PNG, or WebP images are supported.");
   });
 });

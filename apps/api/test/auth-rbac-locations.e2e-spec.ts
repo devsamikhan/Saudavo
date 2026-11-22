@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import {
+  AdminMfaEnrollResponseSchema,
   ApiErrorEnvelopeSchema,
   AuthMeResponseSchema,
   AuthSessionResponseSchema,
@@ -488,5 +489,62 @@ describe("Auth, CSRF, RBAC, MFA, RateLimit & Locations (e2e)", () => {
     expect(ApiErrorEnvelopeSchema.parse(blockedSearch.body).error.code).toBe(
       "RATE_LIMIT_EXCEEDED"
     );
+  });
+
+  it("enrolls unenrolled staff TOTP MFA via POST /auth/admin/mfa/enroll and activates on first verify", async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+
+    const reg = await request(server)
+      .post("/api/v1/auth/register")
+      .send({
+        email: "newmod@saudavo.pk",
+        password: "ModPassword!1",
+        displayName: "New Moderator"
+      })
+      .expect(201);
+    const parsedReg = AuthSessionResponseSchema.parse(reg.body);
+    const cookie = extractCookiePair(reg, "saudavo_sid");
+    fakePrisma.grantRole(parsedReg.data.user.id, "MODERATOR");
+
+    const meBefore = await request(server)
+      .get("/api/v1/auth/me")
+      .set("Cookie", cookie)
+      .expect(200);
+    expect(AuthMeResponseSchema.parse(meBefore.body).data.user.mfaEnrolled).toBe(
+      false
+    );
+
+    const enrollRes = await request(server)
+      .post("/api/v1/auth/admin/mfa/enroll")
+      .set("Cookie", cookie)
+      .set("X-CSRF-Token", parsedReg.data.csrfToken)
+      .send({})
+      .expect(200);
+    const enrollData = AdminMfaEnrollResponseSchema.parse(enrollRes.body).data;
+    expect(enrollData.otpauthUri).toContain("otpauth://totp/Saudavo:");
+
+    // Confirm first code -> activates mfaEnabled + mfaVerified
+    await request(server)
+      .post("/api/v1/auth/admin/mfa/verify")
+      .set("Cookie", cookie)
+      .set("X-CSRF-Token", parsedReg.data.csrfToken)
+      .send({ code: totpService.generateCode(enrollData.secretBase32) })
+      .expect(200);
+
+    const meAfter = await request(server)
+      .get("/api/v1/auth/me")
+      .set("Cookie", cookie)
+      .expect(200);
+    const userAfter = AuthMeResponseSchema.parse(meAfter.body).data.user;
+    expect(userAfter.mfaEnrolled).toBe(true);
+    expect(userAfter.mfaVerified).toBe(true);
+
+    // Re-enrolling without SUPER_ADMIN reset is rejected -> 409 CONFLICT
+    await request(server)
+      .post("/api/v1/auth/admin/mfa/enroll")
+      .set("Cookie", cookie)
+      .set("X-CSRF-Token", parsedReg.data.csrfToken)
+      .send({})
+      .expect(409);
   });
 });

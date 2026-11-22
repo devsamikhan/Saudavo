@@ -5,6 +5,7 @@
   "description": "Saudavo modular-monolith NestJS REST API (/api/v1)",
   "scripts": {
     "dev": "nest start --watch",
+    "dev:preview": "tsc && node dist/test/helpers/preview-server.js",
     "lint": "eslint src test",
     "typecheck": "tsc --noEmit",
     "test": "jest",

@@ -1,6 +1,7 @@
 import {
   type AddCartItemRequest,
   type AddressDto,
+  type AdminMfaEnrollResponse,
   ApiErrorEnvelopeSchema,
   type ApproveDecisionRequest,
   type ApproveListingRequest,
@@ -13,6 +14,7 @@ import {
   type CheckoutQuoteRequest,
   type CodCollectionRequest,
   type CommissionSummaryDto,
+  type ConfirmMediaUploadRequest,
   type CreateAddressRequest,
   type CreateOrderMessageRequest,
   type CreatePhysicalOrderRequest,
@@ -22,10 +24,12 @@ import {
   type DistrictsResponse,
   type LoginRequest,
   type ManualPaymentConfirmationRequest,
+  type MediaAssetDto,
   type ModerationQueueResponse,
   type OrderCreatedSummary,
   type OrderDetailDto,
   type OrderMessageDto,
+  type PresignedUploadDto,
   type PrivateStoreDto,
   type ProductDto,
   type PublicProductDetailDto,
@@ -34,6 +38,7 @@ import {
   type RegisterRequest,
   type RejectDecisionRequest,
   type RejectListingRequest,
+  type RequestMediaUploadUrlRequest,
   type ReviewDto,
   type SearchResponse,
   type SellerOnboardingRequest,
@@ -255,6 +260,17 @@ export function fetchPublicProduct(
   return apiRequest(`/products/${encodeURIComponent(slug)}`);
 }
 
+export function fetchPublicProductImageSignedUrl(
+  slug: string,
+  mediaAssetId: string
+): Promise<{
+  data: { mediaAssetId: string; readUrl: string; expiresInSeconds: number };
+}> {
+  return apiRequest(
+    `/products/${encodeURIComponent(slug)}/images/${encodeURIComponent(mediaAssetId)}/signed-url`
+  );
+}
+
 export function fetchPublicService(
   slug: string
 ): Promise<{ data: PublicServiceDetailDto }> {
@@ -299,6 +315,13 @@ export async function fetchCurrentUser(options?: {
     setStoredCsrfToken(res.data.csrfToken);
   }
   return res;
+}
+
+export function enrollAdminMfa(): Promise<AdminMfaEnrollResponse> {
+  return apiRequest("/auth/admin/mfa/enroll", {
+    method: "POST",
+    body: {}
+  });
 }
 
 export function verifyAdminMfa(
@@ -433,6 +456,22 @@ export function createSellerProduct(
   body: CreateProductRequest
 ): Promise<{ data: ProductDto }> {
   return apiRequest("/seller/products", { method: "POST", body });
+}
+
+export function requestMediaUploadUrl(
+  body: RequestMediaUploadUrlRequest
+): Promise<{ data: PresignedUploadDto }> {
+  return apiRequest("/media/upload-url", { method: "POST", body });
+}
+
+export function confirmMediaUpload(
+  assetId: string,
+  body: ConfirmMediaUploadRequest
+): Promise<{ data: MediaAssetDto }> {
+  return apiRequest(`/media/${encodeURIComponent(assetId)}/confirm`, {
+    method: "POST",
+    body
+  });
 }
 
 export function fetchSellerServices(): Promise<{ data: ServiceListingDto[] }> {
