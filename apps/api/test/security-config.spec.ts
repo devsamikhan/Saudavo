@@ -1,6 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   applySecurityHeaders,
+  loadLocalEnvFiles,
   resolveTrustProxy,
   resolveWebOrigin
 } from "../src/common/http/security.config";
@@ -62,5 +66,24 @@ describe("API HTTP Security Configuration", () => {
     expect(prodHeaders.get("Strict-Transport-Security")).toContain(
       "max-age=31536000"
     );
+  });
+
+  it("loads local .env files safely without failing when absent", () => {
+    const dir = mkdtempSync(join(tmpdir(), "saudavo-env-test-"));
+    const key = "SAUDAVO_TEST_LOCAL_ENV_KEY";
+    const prev = process.env[key];
+    try {
+      expect(() => loadLocalEnvFiles(dir)).not.toThrow();
+      writeFileSync(join(dir, ".env"), `${key}=loaded_from_local_env\n`, "utf8");
+      loadLocalEnvFiles(dir);
+      expect(process.env[key]).toBe("loaded_from_local_env");
+    } finally {
+      if (prev === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = prev;
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

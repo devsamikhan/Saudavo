@@ -4,11 +4,13 @@ import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import {
   applySecurityHeaders,
+  loadLocalEnvFiles,
   resolveTrustProxy,
   resolveWebOrigin
 } from "./common/http/security.config";
 
 async function bootstrap(): Promise<void> {
+  loadLocalEnvFiles();
   const app = await NestFactory.create(AppModule);
   const expressApp = app.getHttpAdapter().getInstance() as {
     disable?: (setting: string) => void;

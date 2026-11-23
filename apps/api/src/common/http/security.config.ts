@@ -1,4 +1,49 @@
 import type { NextFunction, Request, Response } from "express";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+/**
+ * Loads local `.env` files (package-local `.env`, then monorepo root `../../.env`)
+ * without overriding already-set process environment variables.
+ */
+export function loadLocalEnvFiles(
+  cwd: string = process.cwd(),
+  targetEnv: NodeJS.ProcessEnv = process.env
+): void {
+  const candidates = [resolve(cwd, ".env"), resolve(cwd, "../../.env")];
+  for (const filePath of candidates) {
+    if (!existsSync(filePath)) {
+      continue;
+    }
+    try {
+      const raw = readFileSync(filePath, "utf8");
+      for (const rawLine of raw.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith("#")) {
+          continue;
+        }
+        const eqIdx = line.indexOf("=");
+        if (eqIdx <= 0) {
+          continue;
+        }
+        const key = line.slice(0, eqIdx).trim();
+        let value = line.slice(eqIdx + 1).trim();
+        if (
+          value.length >= 2 &&
+          ((value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'")))
+        ) {
+          value = value.slice(1, -1);
+        }
+        if (key && targetEnv[key] === undefined) {
+          targetEnv[key] = value;
+        }
+      }
+    } catch {
+      // Ignore unreadable local env files on startup
+    }
+  }
+}
 
 /**
  * Resolves the permitted browser origin for CORS, failing closed in production.
