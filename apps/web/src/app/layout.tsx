@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { LocaleAndAuthProvider } from "../components/locale-provider";
+import { MobileBottomNav } from "../components/mobile-bottom-nav";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import "./globals.css";
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             {children}
           </div>
           <SiteFooter />
+          <MobileBottomNav />
         </LocaleAndAuthProvider>
       </body>
     </html>

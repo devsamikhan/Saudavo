@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAppContext } from "../../../components/locale-provider";
+import { ReportListingButton, TrustPill } from "../../../components/ui-primitives";
 import {
   addCartItem,
   ApiClientError,
@@ -19,7 +20,8 @@ export default function ProductDetailPage() {
   const { locale, t, user } = useAppContext();
 
   const [product, setProduct] = useState<PublicProductDetailDto | null>(null);
-  const [primaryImageUrl, setPrimaryImageUrl] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [activeImageId, setActiveImageId] = useState<string>("");
   const [selectedVariantId, setSelectedVariantId] = useState<string>("");
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,8 @@ export default function ProductDetailPage() {
     let active = true;
     async function load() {
       setLoading(true);
-      setPrimaryImageUrl(null);
+      setImageUrls({});
+      setActiveImageId("");
       try {
         const res = await fetchPublicProduct(params.slug);
         if (!active) return;
@@ -41,12 +44,26 @@ export default function ProductDetailPage() {
         const primary =
           res.data.images.find((img) => img.isPrimary) ?? res.data.images[0];
         if (primary) {
-          const urlRes = await fetchPublicProductImageSignedUrl(
-            res.data.slug,
-            primary.mediaAssetId
-          ).catch(() => null);
-          if (active && urlRes?.data.readUrl) {
-            setPrimaryImageUrl(urlRes.data.readUrl);
+          setActiveImageId(primary.mediaAssetId);
+        }
+        if (res.data.images.length > 0) {
+          const signedPairs = await Promise.all(
+            res.data.images.map(async (img) => {
+              const urlRes = await fetchPublicProductImageSignedUrl(
+                res.data.slug,
+                img.mediaAssetId
+              ).catch(() => null);
+              return urlRes?.data.readUrl
+                ? ([img.mediaAssetId, urlRes.data.readUrl] as const)
+                : null;
+            })
+          );
+          if (active) {
+            const urlMap: Record<string, string> = {};
+            for (const pair of signedPairs) {
+              if (pair) urlMap[pair[0]] = pair[1];
+            }
+            setImageUrls(urlMap);
           }
         }
       } catch (err: unknown) {
@@ -112,27 +129,74 @@ export default function ProductDetailPage() {
 
   const activeVariant = product.variants.find((v) => v.id === selectedVariantId);
   const displayPrice = activeVariant?.pricePaisa ?? product.basePricePaisa;
+  const activePhotoUrl = activeImageId ? (imageUrls[activeImageId] ?? null) : null;
+  const isPrivacyProtected =
+    !product.store.publicContactPhone && !product.store.publicBusinessAddress;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="grid grid-cols-1 gap-8 rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 lg:grid-cols-2">
-        <div className="flex h-72 items-center justify-center overflow-hidden rounded-2xl bg-brand-primary-soft text-sm font-semibold text-brand-primary lg:h-96">
-          {primaryImageUrl ? (
-            <img
-              src={primaryImageUrl}
-              alt={product.title}
-              onError={() => setPrimaryImageUrl(null)}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            product.category.nameEn
+        <div className="space-y-3">
+          <div className="flex h-72 items-center justify-center overflow-hidden rounded-2xl bg-brand-primary-soft text-sm font-semibold text-brand-primary lg:h-96">
+            {activePhotoUrl ? (
+              <img
+                src={activePhotoUrl}
+                alt={product.title}
+                onError={() =>
+                  setImageUrls((prev) => {
+                    const next = { ...prev };
+                    delete next[activeImageId];
+                    return next;
+                  })
+                }
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              locale === "ur" ? product.category.nameUr : product.category.nameEn
+            )}
+          </div>
+
+          {product.images.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              {product.images.map((img, idx) => {
+                const thumbUrl = imageUrls[img.mediaAssetId];
+                return (
+                  <button
+                    key={img.id}
+                    type="button"
+                    onClick={() => setActiveImageId(img.mediaAssetId)}
+                    className={`h-14 w-14 overflow-hidden rounded-xl border-2 transition ${
+                      activeImageId === img.mediaAssetId
+                        ? "border-brand-primary"
+                        : "border-border-subtle opacity-75 hover:opacity-100"
+                    }`}
+                    aria-label={`View image ${idx + 1}`}
+                  >
+                    {thumbUrl ? (
+                      <img
+                        src={thumbUrl}
+                        alt={img.altText ?? `${product.title} ${idx + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[10px] font-semibold">#{idx + 1}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
 
         <div className="space-y-4">
-          <span className="inline-block rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-semibold text-brand-primary">
-            {t.codBadge}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-block rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-semibold text-brand-primary">
+              {t.codBadge}
+            </span>
+            {isPrivacyProtected && (
+              <TrustPill label={t.privacyShieldBadge} variant="privacy" />
+            )}
+          </div>
 
           <h1 dir="auto" className="text-2xl font-bold text-ink-primary">
             {product.title}
@@ -143,7 +207,10 @@ export default function ProductDetailPage() {
             dir="auto"
             className="inline-block text-sm font-semibold text-brand-primary hover:underline"
           >
-            {product.store.displayName} • {product.store.districtNameEn}
+            {product.store.displayName} •{" "}
+            {locale === "ur"
+              ? product.store.districtNameUr
+              : product.store.districtNameEn}
           </Link>
 
           <p className="text-3xl font-bold text-brand-primary">
@@ -209,6 +276,8 @@ export default function ProductDetailPage() {
           >
             {t.addToCart}
           </button>
+
+          <ReportListingButton targetType="PRODUCT" targetId={product.id} />
         </div>
       </div>
     </main>

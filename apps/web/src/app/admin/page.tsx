@@ -10,6 +10,7 @@ import type {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../../components/locale-provider";
+import { StatusBadge } from "../../components/ui-primitives";
 import {
   ApiClientError,
   approveListingModeration,
@@ -28,7 +29,7 @@ import {
 import { formatPkrFromPaisa } from "../../lib/money";
 
 export default function AdminConsolePage() {
-  const { locale, user, refreshUser } = useAppContext();
+  const { locale, t, user, refreshUser } = useAppContext();
 
   const [queue, setQueue] = useState<ModerationQueueResponse["data"] | null>(null);
   const [reports, setReports] = useState<ReportDto[]>([]);
@@ -193,7 +194,7 @@ export default function AdminConsolePage() {
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-ink-primary">
-          Saudavo Trust & Moderation Console
+          {t.adminConsoleTitle}
         </h1>
         <span className="rounded-full bg-brand-primary-soft px-3.5 py-1 text-xs font-semibold text-brand-primary">
           {user.mfaVerified
@@ -486,9 +487,7 @@ export default function AdminConsolePage() {
                       <p className="text-sm font-bold text-ink-primary">
                         [{report.targetType}] {report.reasonCode}
                       </p>
-                      <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-semibold text-ink-secondary">
-                        {report.status}
-                      </span>
+                      <StatusBadge status={report.status} />
                     </div>
                     <p dir="auto" className="text-xs text-ink-secondary">
                       {report.details}
@@ -567,9 +566,7 @@ export default function AdminConsolePage() {
                       <p className="text-sm font-bold text-ink-primary">
                         Order {dispute.orderId} • {dispute.disputeType}
                       </p>
-                      <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-semibold text-ink-secondary">
-                        {dispute.status}
-                      </span>
+                      <StatusBadge status={dispute.status} />
                     </div>
                     <p dir="auto" className="text-xs text-ink-secondary">
                       {dispute.description}

@@ -164,6 +164,12 @@ export const OrderStatusHistoryDtoSchema = z.object({
 });
 export type OrderStatusHistoryDto = z.infer<typeof OrderStatusHistoryDtoSchema>;
 
+export const BuyerCodStatsDtoSchema = z.object({
+  completedCodCount: z.number().int().nonnegative(),
+  refusedCodCount: z.number().int().nonnegative()
+});
+export type BuyerCodStatsDto = z.infer<typeof BuyerCodStatsDtoSchema>;
+
 export const OrderDetailDtoSchema = z.object({
   id: z.string().uuid(),
   orderNumber: z.string(),
@@ -190,7 +196,8 @@ export const OrderDetailDtoSchema = z.object({
   items: z.array(OrderItemDtoSchema),
   serviceOrderDetails: ServiceOrderDetailsDtoSchema.nullable(),
   delivery: DeliveryDtoSchema.nullable(),
-  statusHistory: z.array(OrderStatusHistoryDtoSchema)
+  statusHistory: z.array(OrderStatusHistoryDtoSchema),
+  buyerCodStats: BuyerCodStatsDtoSchema.nullable().optional()
 });
 export type OrderDetailDto = z.infer<typeof OrderDetailDtoSchema>;
 

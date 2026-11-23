@@ -8,6 +8,7 @@ import type {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../../components/locale-provider";
+import { StatusBadge } from "../../components/ui-primitives";
 import {
   acceptServiceDelivery,
   ApiClientError,
@@ -22,7 +23,7 @@ import {
 import { formatPkrFromPaisa } from "../../lib/money";
 
 export default function OrdersPage() {
-  const { locale, user } = useAppContext();
+  const { locale, t, user } = useAppContext();
 
   const [orders, setOrders] = useState<OrderDetailDto[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
@@ -190,7 +191,7 @@ export default function OrdersPage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-bold text-ink-primary">
-        My Orders & Order Messages
+        {t.ordersPageTitle}
       </h1>
 
       {errorMsg && (
@@ -206,9 +207,9 @@ export default function OrdersPage() {
       )}
 
       {loading ? (
-        <p className="mt-6 text-sm text-ink-secondary">Loading orders...</p>
+        <p className="mt-6 text-sm text-ink-secondary">{t.loadingText}</p>
       ) : orders.length === 0 ? (
-        <p className="mt-6 text-sm text-ink-secondary">No orders placed yet.</p>
+        <p className="mt-6 text-sm text-ink-secondary">{t.ordersEmpty}</p>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
@@ -223,15 +224,15 @@ export default function OrdersPage() {
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
+                  <div className="space-y-1">
                     <h2 className="text-base font-bold text-ink-primary">
                       #{order.orderNumber} ({order.orderType})
                     </h2>
-                    <p className="text-xs text-ink-secondary">
-                      Status: <strong>{order.status}</strong> • Payment:{" "}
-                      <strong>{order.paymentMethod}</strong> (
-                      {order.codCollectionStatus})
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-secondary">
+                      <StatusBadge status={order.status} />
+                      <span>• {order.paymentMethod}</span>
+                      <StatusBadge status={order.codCollectionStatus} />
+                    </div>
                     {order.paymentMethod === "MANUAL_OFFLINE" && (
                       <p className="mt-1 text-[11px] text-brand-accent">
                         {locale === "ur"

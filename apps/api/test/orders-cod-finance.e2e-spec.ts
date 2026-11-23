@@ -904,5 +904,37 @@ describe("Cart, Single-Seller COD Checkout, Service Orders, Messaging & Commissi
       .send({})
       .expect(200);
     expect(sweepAgain.body.data.completedOrderIds).toEqual([]);
+
+    // Seller receives buyerCodStats on seller orders + in-app notifications with strict IDOR isolation
+    const sellerOrdersRes = await request(server)
+      .get("/api/v1/seller/orders")
+      .set("Cookie", autoSeller.cookie)
+      .expect(200);
+    expect(sellerOrdersRes.body.data[0].buyerCodStats).toEqual({
+      completedCodCount: 0,
+      refusedCodCount: 0
+    });
+
+    const buyerNotifs = await request(server)
+      .get("/api/v1/notifications")
+      .set("Cookie", autoBuyer.cookie)
+      .expect(200);
+    expect(buyerNotifs.body.data.length).toBeGreaterThanOrEqual(1);
+    const notifId = buyerNotifs.body.data[0].id as string;
+
+    // Another user cannot mark autoBuyer's notification as read
+    await request(server)
+      .post(`/api/v1/notifications/${notifId}/read`)
+      .set("Cookie", autoSeller.cookie)
+      .set("X-CSRF-Token", autoSeller.csrfToken)
+      .send({})
+      .expect(404);
+
+    await request(server)
+      .post(`/api/v1/notifications/${notifId}/read`)
+      .set("Cookie", autoBuyer.cookie)
+      .set("X-CSRF-Token", autoBuyer.csrfToken)
+      .send({})
+      .expect(201);
   });
 });

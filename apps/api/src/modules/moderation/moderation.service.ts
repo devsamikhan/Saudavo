@@ -16,6 +16,7 @@ import { bigIntToSafeNumber } from "../../common/money.util";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { ClientMetadata } from "../auth/auth.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { OutboxService } from "../outbox/outbox.service";
 
 const STAFF_ROLE_SET = new Set<RoleCode>(STAFF_ROLES);
@@ -25,7 +26,8 @@ export class ModerationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-    private readonly outboxService: OutboxService
+    private readonly outboxService: OutboxService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async getReviewQueue(requestId: string): Promise<ModerationQueueResponse> {
@@ -191,6 +193,19 @@ export class ModerationService {
         },
         tx
       );
+
+      await this.notificationsService.notify(
+        {
+          userId: profile.userId,
+          eventType: "SELLER_APPROVED",
+          titleKey: "notification.sellerApproved",
+          payloadJson: {
+            sellerProfileId: profile.id,
+            storeId: store?.id ?? null
+          }
+        },
+        tx
+      );
     });
 
     return {
@@ -273,6 +288,19 @@ export class ModerationService {
         },
         tx
       );
+
+      await this.notificationsService.notify(
+        {
+          userId: profile.userId,
+          eventType: "SELLER_REJECTED",
+          titleKey: "notification.sellerRejected",
+          payloadJson: {
+            sellerProfileId: profile.id,
+            reason: dto.reason
+          }
+        },
+        tx
+      );
     });
 
     return {
@@ -335,6 +363,25 @@ export class ModerationService {
         },
         tx
       );
+
+      const ownerStore = await tx.store.findUnique({
+        where: { id: target.storeId },
+        select: { sellerProfile: { select: { userId: true } } }
+      });
+      if (ownerStore?.sellerProfile.userId) {
+        await this.notificationsService.notify(
+          {
+            userId: ownerStore.sellerProfile.userId,
+            eventType: "LISTING_APPROVED",
+            titleKey: "notification.listingApproved",
+            payloadJson: {
+              listingId: target.id,
+              listingType: target.listingType
+            }
+          },
+          tx
+        );
+      }
     });
 
     return {
@@ -402,6 +449,26 @@ export class ModerationService {
         },
         tx
       );
+
+      const ownerStore = await tx.store.findUnique({
+        where: { id: target.storeId },
+        select: { sellerProfile: { select: { userId: true } } }
+      });
+      if (ownerStore?.sellerProfile.userId) {
+        await this.notificationsService.notify(
+          {
+            userId: ownerStore.sellerProfile.userId,
+            eventType: "LISTING_REJECTED",
+            titleKey: "notification.listingRejected",
+            payloadJson: {
+              listingId: target.id,
+              listingType: target.listingType,
+              reason: dto.reason
+            }
+          },
+          tx
+        );
+      }
     });
 
     return {

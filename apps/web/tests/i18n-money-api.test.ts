@@ -2,17 +2,25 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DICTIONARIES, getLocaleDirection } from "../src/i18n/dictionaries";
 import {
   ApiClientError,
+  archiveSellerProduct,
   createOrderDispute,
   createOrderReview,
   fetchAdminDisputes,
   fetchAdminReports,
+  fetchNotifications,
+  fetchPublicStoreCatalog,
   logoutAccount,
+  markAllNotificationsRead,
+  markNotificationRead,
   parseApiResponse,
   requestServiceRevision,
   resolveAdminDispute,
   resolveAdminReport,
+  searchListings,
   setStoredCsrfToken,
-  triggerServiceAutoCompleteSweep
+  triggerServiceAutoCompleteSweep,
+  updateSellerProduct,
+  updateSellerService
 } from "../src/lib/api-client";
 import { bytesToMagicHex, uploadImageAssetToS3 } from "../src/lib/media-upload";
 import { formatPkrFromPaisa } from "../src/lib/money";
@@ -196,6 +204,58 @@ describe("@saudavo/web i18n, integer PKR formatting, and API client", () => {
     );
     expect(String(fetchMock.mock.calls[7]?.[0])).toContain(
       "/admin/orders/auto-complete-services"
+    );
+  });
+
+  it("wires v2 store catalog, search sorting/price filters, seller catalog edits, and notifications", async () => {
+    setStoredCsrfToken("csrf_test_v2");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        new Response(
+          JSON.stringify({ data: {}, meta: { requestId: "req_v2", unreadCount: 0 } }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      );
+
+    const listingId = "0193a8b2-1000-7000-8000-000000000040";
+    const notifId = "0193a8b2-1000-7000-8000-000000000050";
+
+    await searchListings({
+      q: "shawl",
+      minPrice: 10000,
+      maxPrice: 500000,
+      sort: "PRICE_ASC"
+    });
+    await fetchPublicStoreCatalog("mianwali-handloom");
+    await updateSellerProduct(listingId, { stockQuantity: 10 });
+    await archiveSellerProduct(listingId);
+    await updateSellerService(listingId, { status: "PENDING_REVIEW" });
+    await fetchNotifications();
+    await markNotificationRead(notifId);
+    await markAllNotificationsRead();
+
+    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("sort=PRICE_ASC");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("minPrice=10000");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "/stores/mianwali-handloom/listings"
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      `/seller/products/${listingId}`
+    );
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
+      `/seller/services/${listingId}`
+    );
+    expect(String(fetchMock.mock.calls[5]?.[0])).toContain("/notifications");
+    expect(String(fetchMock.mock.calls[6]?.[0])).toContain(
+      `/notifications/${notifId}/read`
+    );
+    expect(String(fetchMock.mock.calls[7]?.[0])).toContain(
+      "/notifications/read-all"
     );
   });
 });

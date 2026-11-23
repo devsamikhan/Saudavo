@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import {
+  BuyerCodStatsDto,
   OrderDetailDto,
   OrderDetailDtoSchema,
   OrderMessageDto,
@@ -22,7 +23,10 @@ export type OrderWithDetails = Prisma.OrderGetPayload<{
 
 export function toOrderDetailDto(
   order: OrderWithDetails,
-  options: { revealPickupInstructions: boolean }
+  options: {
+    revealPickupInstructions: boolean;
+    buyerCodStats?: BuyerCodStatsDto | null;
+  }
 ): OrderDetailDto {
   const showPickup =
     options.revealPickupInstructions &&
@@ -124,7 +128,10 @@ export function toOrderDetailDto(
       actorRole: h.actorRole,
       reason: h.reason,
       createdAt: h.createdAt.toISOString()
-    }))
+    })),
+    ...(options.buyerCodStats !== undefined
+      ? { buyerCodStats: options.buyerCodStats }
+      : {})
   });
 }
 

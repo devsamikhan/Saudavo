@@ -21,6 +21,7 @@ import { FinanceModule } from "./modules/finance/finance.module";
 import { LocationsModule } from "./modules/locations/locations.module";
 import { MediaModule } from "./modules/media/media.module";
 import { ModerationModule } from "./modules/moderation/moderation.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { OpenApiModule } from "./modules/openapi/openapi.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { OutboxModule } from "./modules/outbox/outbox.module";
@@ -46,6 +47,7 @@ import { UsersModule } from "./modules/users/users.module";
     OrdersModule,
     TrustModule,
     ModerationModule,
+    NotificationsModule,
     OpenApiModule
   ],
   controllers: [HealthController],

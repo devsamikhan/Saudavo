@@ -11,3 +11,4 @@ export * from "./orders";
 export * from "./finance";
 export * from "./media";
 export * from "./trust";
+export * from "./notifications";

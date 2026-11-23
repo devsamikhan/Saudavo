@@ -126,6 +126,16 @@ export interface FakeSellerProfileRecord {
   updatedAt: Date;
 }
 
+export interface FakeNotificationRecord {
+  id: string;
+  userId: string;
+  eventType: string;
+  titleKey: string;
+  payloadJson: unknown;
+  readAt: Date | null;
+  createdAt: Date;
+}
+
 export interface FakeStoreRecord {
   id: string;
   sellerProfileId: string;
@@ -571,6 +581,7 @@ export class InMemoryPrismaService {
   readonly reports: FakeReportRecord[] = [];
   readonly disputes: FakeDisputeRecord[] = [];
   readonly refunds: FakeRefundRecord[] = [];
+  readonly notifications: FakeNotificationRecord[] = [];
 
   seedInitialCommissionRule(createdById = randomUUID()): void {
     if (this.commissionRules.length > 0) {
@@ -1030,6 +1041,85 @@ export class InMemoryPrismaService {
       };
       this.outboxEvents.push(created);
       return created;
+    }
+  };
+
+  readonly notification = {
+    create: async (args: {
+      data: {
+        userId: string;
+        eventType: string;
+        titleKey: string;
+        payloadJson: unknown;
+      };
+    }): Promise<FakeNotificationRecord> => {
+      const created: FakeNotificationRecord = {
+        id: randomUUID(),
+        userId: args.data.userId,
+        eventType: args.data.eventType,
+        titleKey: args.data.titleKey,
+        payloadJson: args.data.payloadJson,
+        readAt: null,
+        createdAt: new Date()
+      };
+      this.notifications.push(created);
+      return created;
+    },
+
+    findMany: async (args: {
+      where: { userId: string };
+      take?: number;
+    }): Promise<FakeNotificationRecord[]> => {
+      return this.notifications
+        .filter((n) => n.userId === args.where.userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, args.take ?? 30);
+    },
+
+    count: async (args: {
+      where: { userId: string; readAt?: null };
+    }): Promise<number> => {
+      return this.notifications.filter(
+        (n) =>
+          n.userId === args.where.userId &&
+          (args.where.readAt === undefined || n.readAt === null)
+      ).length;
+    },
+
+    findFirst: async (args: {
+      where: { id: string; userId: string };
+    }): Promise<FakeNotificationRecord | null> => {
+      return (
+        this.notifications.find(
+          (n) => n.id === args.where.id && n.userId === args.where.userId
+        ) ?? null
+      );
+    },
+
+    update: async (args: {
+      where: { id: string };
+      data: { readAt: Date };
+    }): Promise<FakeNotificationRecord> => {
+      const target = this.notifications.find((n) => n.id === args.where.id);
+      if (!target) {
+        throw new Error(`Notification not found: ${args.where.id}`);
+      }
+      target.readAt = args.data.readAt;
+      return target;
+    },
+
+    updateMany: async (args: {
+      where: { userId: string; readAt?: null };
+      data: { readAt: Date };
+    }): Promise<{ count: number }> => {
+      let count = 0;
+      for (const n of this.notifications) {
+        if (n.userId !== args.where.userId) continue;
+        if (args.where.readAt === null && n.readAt !== null) continue;
+        n.readAt = args.data.readAt;
+        count += 1;
+      }
+      return { count };
     }
   };
 
@@ -2342,6 +2432,45 @@ export class InMemoryPrismaService {
         count += 1;
       }
       return { count };
+    },
+
+    groupBy: async (args: {
+      where: {
+        customerId?: { in: string[] };
+        paymentMethod?: string;
+      };
+    }) => {
+      const counts = new Map<
+        string,
+        { customerId: string; codCollectionStatus: string; count: number }
+      >();
+      for (const o of this.orders) {
+        if (
+          args.where.customerId?.in &&
+          !args.where.customerId.in.includes(o.customerId)
+        ) {
+          continue;
+        }
+        if (
+          args.where.paymentMethod !== undefined &&
+          o.paymentMethod !== args.where.paymentMethod
+        ) {
+          continue;
+        }
+        const key = `${o.customerId}::${o.codCollectionStatus}`;
+        const existing = counts.get(key) ?? {
+          customerId: o.customerId,
+          codCollectionStatus: o.codCollectionStatus,
+          count: 0
+        };
+        existing.count += 1;
+        counts.set(key, existing);
+      }
+      return [...counts.values()].map((item) => ({
+        customerId: item.customerId,
+        codCollectionStatus: item.codCollectionStatus,
+        _count: { _all: item.count }
+      }));
     }
   };
 
@@ -2799,12 +2928,15 @@ export class InMemoryPrismaService {
     },
 
     findMany: async (args: {
-      where: { storeId: string; status?: string };
+      where: { storeId: string | { in: string[] }; status?: string };
     }) => {
+      const storeFilter = args.where.storeId;
       return this.reviews
         .filter(
           (r) =>
-            r.storeId === args.where.storeId &&
+            (typeof storeFilter === "string"
+              ? r.storeId === storeFilter
+              : storeFilter.in.includes(r.storeId)) &&
             (args.where.status === undefined || r.status === args.where.status)
         )
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())

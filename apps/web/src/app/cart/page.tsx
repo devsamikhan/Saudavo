@@ -25,7 +25,7 @@ import { formatPkrFromPaisa } from "../../lib/money";
 
 export default function CartPage() {
   const router = useRouter();
-  const { locale, user } = useAppContext();
+  const { locale, t, user } = useAppContext();
 
   const [carts, setCarts] = useState<StoreCartDto[]>([]);
   const [addresses, setAddresses] = useState<AddressDto[]>([]);
@@ -173,10 +173,14 @@ export default function CartPage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-2xl font-bold text-ink-primary">
-        Store-Scoped Carts & Single-Seller COD Checkout (PQ-16 / D-013)
+        {locale === "ur"
+          ? "اسٹور کارٹس اور سنگل سیلر کیش آن ڈلیوری چیک آؤٹ"
+          : "Store-Scoped Carts & Single-Seller COD Checkout"}
       </h1>
       <p className="mt-1 text-sm text-ink-secondary">
-        Each store maintains an independent cart and places its own Cash on Delivery order.
+        {locale === "ur"
+          ? "ہر مقامی اسٹور کا علیحدہ کارٹ اور علیحدہ کیش آن ڈلیوری آرڈر ہوتا ہے۔"
+          : "Each store maintains an independent cart and places its own Cash on Delivery order."}
       </p>
 
       {errorMsg && (
@@ -187,16 +191,22 @@ export default function CartPage() {
 
       {loading ? (
         <div className="mt-6 rounded-2xl border border-border-subtle bg-surface-card p-8 text-sm text-ink-secondary">
-          Loading carts...
+          {t.loadingText}
         </div>
       ) : carts.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-border-subtle bg-surface-card p-8 text-center">
-          <p className="text-sm text-ink-secondary">Your store carts are empty.</p>
+          <p className="text-sm text-ink-secondary">
+            {locale === "ur"
+              ? "آپ کا کوئی اسٹور کارٹ بھرا ہوا نہیں ہے۔"
+              : "Your store carts are empty."}
+          </p>
           <Link
             href="/"
             className="mt-3 inline-block text-sm font-semibold text-brand-primary underline"
           >
-            Browse Mianwali Stores
+            {locale === "ur"
+              ? "میانوالی اسٹورز دیکھیں"
+              : "Browse Mianwali Stores"}
           </Link>
         </div>
       ) : (

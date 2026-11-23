@@ -387,12 +387,33 @@ describe("OpenAPI, Seller Onboarding, Catalog, Public Discovery & Moderation (e2
     expect(pubService.body.data.serviceMode).toBe("REMOTE");
 
     const searchAll = await request(server)
-      .get(`/api/v1/search?districtId=${district!.id}&areaZoneId=${isakhelZone!.id}`)
+      .get(`/api/v1/search?districtId=${district!.id}&areaZoneId=${isakhelZone!.id}&sort=PRICE_ASC&minPrice=100000`)
       .expect(200);
     const parsedSearch = SearchResponseSchema.parse(searchAll.body);
     // Only Seller A serves Isakhel; Seller B only serves Mianwali
     expect(parsedSearch.data).toHaveLength(1);
     expect(parsedSearch.data[0]?.slug).toBe("handmade-phulkari-shawl");
+    expect(parsedSearch.data[0]?.store.privacyProtected).toBe(true);
+
+    // Public Store Catalog endpoint returns store details + active products/services
+    const storeCatalogRes = await request(server)
+      .get("/api/v1/stores/mianwali-handloom/listings")
+      .expect(200);
+    expect(storeCatalogRes.body.data.store.slug).toBe("mianwali-handloom");
+    expect(storeCatalogRes.body.data.products).toHaveLength(1);
+    expect(storeCatalogRes.body.data.services).toHaveLength(0);
+
+    const storeBCatalogRes = await request(server)
+      .get(`/api/v1/stores/${pubService.body.data.store.slug as string}/listings`)
+      .expect(200);
+    expect(storeBCatalogRes.body.data.services).toHaveLength(1);
+
+    // Seller A received real in-app notifications for approval events
+    const sellerNotifs = await request(server)
+      .get("/api/v1/notifications")
+      .set("Cookie", sellerA.cookie)
+      .expect(200);
+    expect(sellerNotifs.body.meta.unreadCount).toBeGreaterThanOrEqual(2);
 
     // Admin suspends Seller A's store -> immediately disappears from public endpoints
     await request(server)

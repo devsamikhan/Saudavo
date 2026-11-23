@@ -14,6 +14,8 @@ import {
   SearchResponseSchema,
   ServiceListingDto,
   slugifyTitle,
+  StoreCatalogResponse,
+  StoreCatalogResponseSchema,
   UpdateProductRequest,
   UpdateServiceListingRequest
 } from "@saudavo/contracts";
@@ -502,6 +504,130 @@ export class CatalogService {
     };
   }
 
+  async getPublicStoreCatalogBySlug(
+    slug: string,
+    requestId: string
+  ): Promise<StoreCatalogResponse> {
+    const store = await this.prisma.store.findFirst({
+      where: {
+        slug,
+        status: "ACTIVE",
+        deletedAt: null,
+        sellerProfile: { verificationStatus: "APPROVED" }
+      },
+      include: STORE_WITH_RELATIONS_INCLUDE
+    });
+
+    if (!store) {
+      throw new DomainException(
+        "NOT_FOUND",
+        HttpStatus.NOT_FOUND,
+        "Store not found."
+      );
+    }
+
+    const [products, services, storeRatings] = await Promise.all([
+      this.prisma.product.findMany({
+        where: { storeId: store.id, status: "ACTIVE", deletedAt: null },
+        include: PUBLIC_PRODUCT_INCLUDE,
+        orderBy: { createdAt: "desc" }
+      }),
+      this.prisma.serviceListing.findMany({
+        where: { storeId: store.id, status: "ACTIVE", deletedAt: null },
+        include: PUBLIC_SERVICE_INCLUDE,
+        orderBy: { createdAt: "desc" }
+      }),
+      this.loadStoreRatingSummaryMap([store.id])
+    ]);
+
+    const ratingSummary = storeRatings.get(store.id) ?? {
+      ratingAvg: null,
+      reviewCount: 0
+    };
+    const thumbnailMap = await this.loadProductThumbnailUrlMap(
+      products
+        .map((p) => (p.images.find((img) => img.isPrimary) ?? p.images[0])?.mediaAssetId)
+        .filter((id): id is string => Boolean(id))
+    );
+
+    const mappedProducts: PublicSearchItem[] = products.map((product) => {
+      const primaryAssetId = (
+        product.images.find((img) => img.isPrimary) ?? product.images[0]
+      )?.mediaAssetId;
+      return {
+        id: product.id,
+        type: "PRODUCT",
+        slug: product.slug,
+        title: product.title,
+        pricePaisa: bigIntToSafeNumber(product.basePricePaisa, "basePricePaisa"),
+        currency: "PKR",
+        serviceMode: null,
+        thumbnailUrl: primaryAssetId ? (thumbnailMap.get(primaryAssetId) ?? null) : null,
+        ratingAvg: ratingSummary.ratingAvg,
+        reviewCount: ratingSummary.reviewCount,
+        store: {
+          id: store.id,
+          slug: store.slug,
+          displayName: store.displayName,
+          districtName: store.district.nameEn,
+          serviceAreas: store.serviceAreas.map((sa) => sa.areaZone.nameEn),
+          privacyProtected: !store.showPublicPhone && !store.showPublicAddress
+        }
+      };
+    });
+
+    const mappedServices: PublicSearchItem[] = [];
+    for (const service of services) {
+      const activePackages = service.packages.filter((p) => p.isActive);
+      const lowestPrice =
+        activePackages.length > 0
+          ? Math.min(
+              ...activePackages.map((p) =>
+                bigIntToSafeNumber(p.pricePaisa, "pricePaisa")
+              )
+            )
+          : 0;
+      if (lowestPrice <= 0) continue;
+
+      mappedServices.push({
+        id: service.id,
+        type: "SERVICE",
+        slug: service.slug,
+        title: service.title,
+        pricePaisa: lowestPrice,
+        currency: "PKR",
+        serviceMode:
+          service.serviceMode === "ON_SITE" ||
+          service.serviceMode === "REMOTE" ||
+          service.serviceMode === "HYBRID"
+            ? service.serviceMode
+            : null,
+        thumbnailUrl: null,
+        ratingAvg: ratingSummary.ratingAvg,
+        reviewCount: ratingSummary.reviewCount,
+        store: {
+          id: store.id,
+          slug: store.slug,
+          displayName: store.displayName,
+          districtName: store.district.nameEn,
+          serviceAreas: store.serviceAreas.map((sa) => sa.areaZone.nameEn),
+          privacyProtected: !store.showPublicPhone && !store.showPublicAddress
+        }
+      });
+    }
+
+    return StoreCatalogResponseSchema.parse({
+      data: {
+        store: toPublicStoreDto(store),
+        ratingAvg: ratingSummary.ratingAvg,
+        reviewCount: ratingSummary.reviewCount,
+        products: mappedProducts,
+        services: mappedServices
+      },
+      meta: { requestId }
+    });
+  }
+
   async getPublicProductBySlug(
     slug: string,
     requestId: string
@@ -643,7 +769,10 @@ export class CatalogService {
         : {})
     };
 
-    const items: PublicSearchItem[] = [];
+    const sortableItems: Array<{ createdAtMs: number; item: PublicSearchItem }> =
+      [];
+    const candidateStoreIds = new Set<string>();
+    const candidateMediaIds: string[] = [];
 
     if (query.type === "ALL" || query.type === "PRODUCT") {
       const products = await this.prisma.product.findMany({
@@ -676,22 +805,39 @@ export class CatalogService {
           continue;
         }
 
-        items.push({
-          id: product.id,
-          type: "PRODUCT",
-          slug: product.slug,
-          title: product.title,
-          pricePaisa,
-          currency: "PKR",
-          serviceMode: null,
-          store: {
-            id: product.store.id,
-            slug: product.store.slug,
-            displayName: product.store.displayName,
-            districtName: product.store.district.nameEn,
-            serviceAreas: product.store.serviceAreas.map(
-              (sa) => sa.areaZone.nameEn
-            )
+        const primaryAssetId = (
+          product.images.find((img) => img.isPrimary) ?? product.images[0]
+        )?.mediaAssetId;
+        if (primaryAssetId) {
+          candidateMediaIds.push(primaryAssetId);
+        }
+        candidateStoreIds.add(product.store.id);
+
+        sortableItems.push({
+          createdAtMs: product.createdAt.getTime(),
+          item: {
+            id: product.id,
+            type: "PRODUCT",
+            slug: product.slug,
+            title: product.title,
+            pricePaisa,
+            currency: "PKR",
+            serviceMode: null,
+            thumbnailUrl: primaryAssetId ?? null,
+            ratingAvg: null,
+            reviewCount: 0,
+            store: {
+              id: product.store.id,
+              slug: product.store.slug,
+              displayName: product.store.displayName,
+              districtName: product.store.district.nameEn,
+              serviceAreas: product.store.serviceAreas.map(
+                (sa) => sa.areaZone.nameEn
+              ),
+              privacyProtected:
+                !product.store.showPublicPhone &&
+                !product.store.showPublicAddress
+            }
           }
         });
       }
@@ -736,31 +882,69 @@ export class CatalogService {
           continue;
         }
 
-        items.push({
-          id: service.id,
-          type: "SERVICE",
-          slug: service.slug,
-          title: service.title,
-          pricePaisa: lowestPrice,
-          currency: "PKR",
-          serviceMode:
-            service.serviceMode === "ON_SITE" ||
-            service.serviceMode === "REMOTE" ||
-            service.serviceMode === "HYBRID"
-              ? service.serviceMode
-              : null,
-          store: {
-            id: service.store.id,
-            slug: service.store.slug,
-            displayName: service.store.displayName,
-            districtName: service.store.district.nameEn,
-            serviceAreas: service.store.serviceAreas.map(
-              (sa) => sa.areaZone.nameEn
-            )
+        candidateStoreIds.add(service.store.id);
+
+        sortableItems.push({
+          createdAtMs: service.createdAt.getTime(),
+          item: {
+            id: service.id,
+            type: "SERVICE",
+            slug: service.slug,
+            title: service.title,
+            pricePaisa: lowestPrice,
+            currency: "PKR",
+            serviceMode:
+              service.serviceMode === "ON_SITE" ||
+              service.serviceMode === "REMOTE" ||
+              service.serviceMode === "HYBRID"
+                ? service.serviceMode
+                : null,
+            thumbnailUrl: null,
+            ratingAvg: null,
+            reviewCount: 0,
+            store: {
+              id: service.store.id,
+              slug: service.store.slug,
+              displayName: service.store.displayName,
+              districtName: service.store.district.nameEn,
+              serviceAreas: service.store.serviceAreas.map(
+                (sa) => sa.areaZone.nameEn
+              ),
+              privacyProtected:
+                !service.store.showPublicPhone &&
+                !service.store.showPublicAddress
+            }
           }
         });
       }
     }
+
+    if (query.sort === "PRICE_ASC") {
+      sortableItems.sort((a, b) => a.item.pricePaisa - b.item.pricePaisa);
+    } else if (query.sort === "PRICE_DESC") {
+      sortableItems.sort((a, b) => b.item.pricePaisa - a.item.pricePaisa);
+    } else {
+      sortableItems.sort((a, b) => b.createdAtMs - a.createdAtMs);
+    }
+
+    const [ratingMap, thumbnailMap] = await Promise.all([
+      this.loadStoreRatingSummaryMap([...candidateStoreIds]),
+      this.loadProductThumbnailUrlMap(candidateMediaIds)
+    ]);
+
+    const items: PublicSearchItem[] = sortableItems.map(({ item }) => {
+      const storeSummary = ratingMap.get(item.store.id);
+      const resolvedThumbnail =
+        item.type === "PRODUCT" && item.thumbnailUrl
+          ? (thumbnailMap.get(item.thumbnailUrl) ?? null)
+          : null;
+      return {
+        ...item,
+        thumbnailUrl: resolvedThumbnail,
+        ratingAvg: storeSummary?.ratingAvg ?? null,
+        reviewCount: storeSummary?.reviewCount ?? 0
+      };
+    });
 
     const startIndex = query.cursor
       ? Math.max(
@@ -838,5 +1022,73 @@ export class CatalogService {
       HttpStatus.CONFLICT,
       "Unable to allocate a unique listing slug."
     );
+  }
+
+  private async loadStoreRatingSummaryMap(
+    storeIds: string[]
+  ): Promise<Map<string, { ratingAvg: number | null; reviewCount: number }>> {
+    const map = new Map<
+      string,
+      { ratingAvg: number | null; reviewCount: number }
+    >();
+    const uniqueIds = [...new Set(storeIds)];
+    if (uniqueIds.length === 0) return map;
+
+    const reviews = await this.prisma.review.findMany({
+      where: {
+        status: "PUBLISHED",
+        storeId: { in: uniqueIds }
+      },
+      select: {
+        rating: true,
+        storeId: true
+      }
+    });
+
+    const totals = new Map<string, { sum: number; count: number }>();
+    for (const review of reviews) {
+      const storeId = review.storeId;
+      const entry = totals.get(storeId) ?? { sum: 0, count: 0 };
+      entry.sum += review.rating;
+      entry.count += 1;
+      totals.set(storeId, entry);
+    }
+
+    for (const [storeId, { sum, count }] of totals.entries()) {
+      map.set(storeId, {
+        ratingAvg: count > 0 ? Math.round((sum / count) * 10) / 10 : null,
+        reviewCount: count
+      });
+    }
+
+    return map;
+  }
+
+  private async loadProductThumbnailUrlMap(
+    mediaAssetIds: string[]
+  ): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    const uniqueIds = [...new Set(mediaAssetIds)];
+    if (uniqueIds.length === 0 || !this.s3Presigner.shouldInspectRemoteObject()) {
+      return map;
+    }
+
+    const assets = await this.prisma.mediaAsset.findMany({
+      where: { id: { in: uniqueIds }, status: "READY" },
+      select: { id: true, objectKey: true }
+    });
+
+    for (const asset of assets) {
+      map.set(
+        asset.id,
+        this.s3Presigner.createPresignedUrl({
+          method: "GET",
+          objectKey: asset.objectKey,
+          expiresInSeconds: 600
+        })
+      );
+    }
+
+    return map;
   }
 }

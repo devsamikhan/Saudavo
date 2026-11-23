@@ -30,6 +30,8 @@ import {
   type ManualPaymentConfirmationRequest,
   type MediaAssetDto,
   type ModerationQueueResponse,
+  type NotificationDto,
+  type NotificationsResponse,
   type OrderCreatedSummary,
   type OrderDetailDto,
   type OrderMessageDto,
@@ -54,7 +56,10 @@ import {
   type SellerProfileDto,
   type ServiceListingDto,
   type StoreCartDto,
+  type StoreCatalogResponse,
+  type UpdateProductRequest,
   type UpdateSellerOrderStatusRequest,
+  type UpdateServiceListingRequest,
   type UpdateStoreRequest
 } from "@saudavo/contracts";
 
@@ -237,6 +242,9 @@ export function searchListings(params: {
   districtId?: string;
   areaZoneId?: string;
   categoryId?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: "NEWEST" | "PRICE_ASC" | "PRICE_DESC";
   limit?: number;
 }): Promise<SearchResponse> {
   const sp = new URLSearchParams();
@@ -245,6 +253,9 @@ export function searchListings(params: {
   if (params.districtId) sp.set("districtId", params.districtId);
   if (params.areaZoneId) sp.set("areaZoneId", params.areaZoneId);
   if (params.categoryId) sp.set("categoryId", params.categoryId);
+  if (params.minPrice !== undefined) sp.set("minPrice", String(params.minPrice));
+  if (params.maxPrice !== undefined) sp.set("maxPrice", String(params.maxPrice));
+  if (params.sort) sp.set("sort", params.sort);
   if (params.limit) sp.set("limit", String(params.limit));
   const qs = sp.toString();
   return apiRequest(`/search${qs ? `?${qs}` : ""}`);
@@ -254,6 +265,12 @@ export function fetchPublicStore(
   slug: string
 ): Promise<{ data: PublicStoreDto }> {
   return apiRequest(`/stores/${encodeURIComponent(slug)}`);
+}
+
+export function fetchPublicStoreCatalog(
+  slug: string
+): Promise<StoreCatalogResponse> {
+  return apiRequest(`/stores/${encodeURIComponent(slug)}/listings`);
 }
 
 export function fetchStoreReviews(
@@ -502,6 +519,24 @@ export function createSellerProduct(
   return apiRequest("/seller/products", { method: "POST", body });
 }
 
+export function updateSellerProduct(
+  productId: string,
+  body: UpdateProductRequest
+): Promise<{ data: ProductDto }> {
+  return apiRequest(`/seller/products/${encodeURIComponent(productId)}`, {
+    method: "PATCH",
+    body
+  });
+}
+
+export function archiveSellerProduct(
+  productId: string
+): Promise<{ data: { archived: true; id: string } }> {
+  return apiRequest(`/seller/products/${encodeURIComponent(productId)}`, {
+    method: "DELETE"
+  });
+}
+
 export function requestMediaUploadUrl(
   body: RequestMediaUploadUrlRequest
 ): Promise<{ data: PresignedUploadDto }> {
@@ -526,6 +561,36 @@ export function createSellerService(
   body: CreateServiceListingRequest
 ): Promise<{ data: ServiceListingDto }> {
   return apiRequest("/seller/services", { method: "POST", body });
+}
+
+export function updateSellerService(
+  serviceId: string,
+  body: UpdateServiceListingRequest
+): Promise<{ data: ServiceListingDto }> {
+  return apiRequest(`/seller/services/${encodeURIComponent(serviceId)}`, {
+    method: "PATCH",
+    body
+  });
+}
+
+// In-App Notifications
+export function fetchNotifications(): Promise<NotificationsResponse> {
+  return apiRequest("/notifications");
+}
+
+export function markNotificationRead(
+  notificationId: string
+): Promise<{ data: NotificationDto }> {
+  return apiRequest(`/notifications/${encodeURIComponent(notificationId)}/read`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function markAllNotificationsRead(): Promise<{
+  data: { markedCount: number };
+}> {
+  return apiRequest("/notifications/read-all", { method: "POST", body: {} });
 }
 
 export function fetchSellerOrders(): Promise<{ data: OrderDetailDto[] }> {

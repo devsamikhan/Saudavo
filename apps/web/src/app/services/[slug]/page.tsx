@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAppContext } from "../../../components/locale-provider";
+import { ReportListingButton, TrustPill } from "../../../components/ui-primitives";
 import {
   ApiClientError,
   createServiceOrder,
@@ -100,33 +101,47 @@ export default function ServiceDetailPage() {
   }
 
   const isRemote = service.serviceMode === "REMOTE";
+  const isPrivacyProtected =
+    !service.store.publicContactPhone && !service.store.publicBusinessAddress;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8">
-        <span className="inline-block rounded-full bg-brand-accent-soft px-3 py-1 text-xs font-semibold text-brand-accent">
-          {isRemote ? t.remoteBadge : t.onSiteBadge}
-        </span>
+      <div className="rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-block rounded-full bg-brand-accent-soft px-3 py-1 text-xs font-semibold text-brand-accent">
+            {isRemote
+              ? t.remoteBadge
+              : service.serviceMode === "HYBRID"
+                ? t.hybridBadge
+                : t.onSiteBadge}
+          </span>
+          {isPrivacyProtected && (
+            <TrustPill label={t.privacyShieldBadge} variant="privacy" />
+          )}
+        </div>
 
-        <h1 dir="auto" className="mt-3 text-2xl font-bold text-ink-primary">
+        <h1 dir="auto" className="text-2xl font-bold text-ink-primary">
           {service.title}
         </h1>
         <Link
           href={`/stores/${service.store.slug}`}
           dir="auto"
-          className="mt-1 inline-block text-sm font-semibold text-brand-primary hover:underline"
+          className="inline-block text-sm font-semibold text-brand-primary hover:underline"
         >
-          {service.store.displayName} • {service.store.districtNameEn}
+          {service.store.displayName} •{" "}
+          {locale === "ur"
+            ? service.store.districtNameUr
+            : service.store.districtNameEn}
         </Link>
 
-        <p dir="auto" className="mt-4 text-sm text-ink-secondary">
+        <p dir="auto" className="text-sm text-ink-secondary">
           {service.description}
         </p>
 
         {isRemote && (
           <div
             dir={locale === "ur" ? "rtl" : "ltr"}
-            className="mt-4 rounded-xl bg-brand-accent-soft px-4 py-3 text-xs leading-relaxed text-brand-accent"
+            className="rounded-xl bg-brand-accent-soft px-4 py-3 text-xs leading-relaxed text-brand-accent"
           >
             {locale === "ur"
               ? "ریموٹ آف لائن سروس (PQ-14): اس سروس کے لیے کوئی فزیکل ڈلیوری نہیں بنے گی۔ ادائیگی براہِ راست سیلر کے ساتھ آف لائن طے ہوگی (کیش، بینک ٹرانسفر، جیز کیش/ایزی پیسہ)۔ سوداو آن لائن پیمنٹ گیٹ وے، والیٹ یا ایسکرو نہیں چلاتا — کسی تنازعے کی صورت میں اپنی ادائیگی کی رسید محفوظ رکھیں۔"
@@ -134,10 +149,10 @@ export default function ServiceDetailPage() {
           </div>
         )}
 
-        <form onSubmit={handleBookService} className="mt-6 space-y-5">
+        <form onSubmit={handleBookService} className="space-y-5 pt-2">
           <div>
             <label className="block text-xs font-semibold text-ink-secondary">
-              Select Package Tier
+              {t.comparePackages}
             </label>
             <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
               {service.packages.map((pkg) => (
@@ -145,10 +160,10 @@ export default function ServiceDetailPage() {
                   key={pkg.id}
                   type="button"
                   onClick={() => setSelectedPkgId(pkg.id)}
-                  className={`rounded-xl border p-4 text-left transition ${
+                  className={`rounded-xl border p-4 text-start transition ${
                     selectedPkgId === pkg.id
-                      ? "border-brand-primary bg-brand-primary-soft/50"
-                      : "border-border-subtle bg-surface-card"
+                      ? "border-brand-primary bg-brand-primary-soft/50 ring-1 ring-brand-primary"
+                      : "border-border-subtle bg-surface-card hover:border-brand-primary/50"
                   }`}
                 >
                   <div className="text-sm font-bold text-ink-primary">
@@ -157,8 +172,12 @@ export default function ServiceDetailPage() {
                   <div className="mt-1 text-lg font-bold text-brand-primary">
                     {formatPkrFromPaisa(pkg.pricePaisa, locale)}
                   </div>
-                  <div className="mt-1 text-xs text-ink-secondary">
-                    {pkg.deliveryEstimateDays} days • {pkg.maxRevisions} revisions
+                  <p dir="auto" className="mt-1.5 text-xs text-ink-secondary">
+                    {pkg.description}
+                  </p>
+                  <div className="mt-2 text-[11px] font-medium text-ink-secondary">
+                    {pkg.deliveryEstimateDays} {t.daysDelivery} • {pkg.maxRevisions}{" "}
+                    {t.revisionsIncluded}
                   </div>
                 </button>
               ))}
@@ -168,21 +187,36 @@ export default function ServiceDetailPage() {
           {!isRemote && (
             <div>
               <label className="block text-xs font-semibold text-ink-secondary">
-                Service Location (Mianwali Address)
+                {locale === "ur"
+                  ? "سروس کا پتہ (ضلع میانوالی)"
+                  : "Service Location (Mianwali Address)"}
               </label>
-              <select
-                required
-                value={selectedAddressId}
-                onChange={(e) => setSelectedAddressId(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2.5 text-sm"
-              >
-                <option value="">Select address...</option>
-                {addresses.map((addr) => (
-                  <option key={addr.id} value={addr.id}>
-                    {addr.label ?? "Address"} — {addr.streetAddress} ({addr.areaZoneName})
-                  </option>
-                ))}
-              </select>
+              {addresses.length === 0 ? (
+                <p className="mt-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+                  {locale === "ur"
+                    ? "کوئی محفوظ پتہ موجود نہیں۔ "
+                    : "No saved address yet. "}
+                  <Link href="/cart" className="font-bold underline">
+                    {locale === "ur"
+                      ? "کارٹ صفحے پر پتہ شامل کریں"
+                      : "Save a Mianwali address in Cart"}
+                  </Link>
+                </p>
+              ) : (
+                <select
+                  required
+                  value={selectedAddressId}
+                  onChange={(e) => setSelectedAddressId(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2.5 text-sm"
+                >
+                  <option value="">Select address...</option>
+                  {addresses.map((addr) => (
+                    <option key={addr.id} value={addr.id}>
+                      {addr.label ?? "Address"} — {addr.streetAddress} ({addr.areaZoneName})
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
 
@@ -214,9 +248,13 @@ export default function ServiceDetailPage() {
             type="submit"
             className="rounded-xl bg-brand-primary px-6 py-3 text-sm font-semibold text-white hover:bg-brand-primary-hover"
           >
-            Place Single-Seller Service Order
+            {locale === "ur"
+              ? "سروس آرڈر جمع کرائیں"
+              : "Place Single-Seller Service Order"}
           </button>
         </form>
+
+        <ReportListingButton targetType="SERVICE" targetId={service.id} />
       </div>
     </main>
   );

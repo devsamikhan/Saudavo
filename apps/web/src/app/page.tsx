@@ -8,12 +8,15 @@ import type {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../components/locale-provider";
+import { SkeletonCard, TrustPill } from "../components/ui-primitives";
 import {
   fetchCategories,
   fetchDistricts,
   searchListings
 } from "../lib/api-client";
 import { formatPkrFromPaisa } from "../lib/money";
+
+type SortMode = "NEWEST" | "PRICE_ASC" | "PRICE_DESC";
 
 export default function HomePage() {
   const { locale, t } = useAppContext();
@@ -28,18 +31,34 @@ export default function HomePage() {
   const [selectedType, setSelectedType] = useState<"ALL" | "PRODUCT" | "SERVICE">("ALL");
   const [selectedZoneId, setSelectedZoneId] = useState<string>("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [minPkrText, setMinPkrText] = useState("");
+  const [maxPkrText, setMaxPkrText] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("NEWEST");
 
   const activeDistrict = districts[0] ?? null;
+
+  const parsePkrInputToPaisa = (value: string): number | undefined => {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const num = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(num) || num < 0) return undefined;
+    return num * 100;
+  };
 
   const loadResults = useCallback(async () => {
     setLoading(true);
     try {
+      const minPrice = parsePkrInputToPaisa(minPkrText);
+      const maxPrice = parsePkrInputToPaisa(maxPkrText);
       const res = await searchListings({
         q: queryText.trim() || undefined,
         type: selectedType,
         districtId: activeDistrict?.id,
         areaZoneId: selectedZoneId || undefined,
         categoryId: selectedCategoryId || undefined,
+        ...(minPrice !== undefined ? { minPrice } : {}),
+        ...(maxPrice !== undefined ? { maxPrice } : {}),
+        sort: sortMode,
         limit: 24
       });
       setItems(res.data);
@@ -52,10 +71,13 @@ export default function HomePage() {
     }
   }, [
     activeDistrict?.id,
+    maxPkrText,
+    minPkrText,
     queryText,
     selectedCategoryId,
     selectedType,
-    selectedZoneId
+    selectedZoneId,
+    sortMode
   ]);
 
   useEffect(() => {
@@ -206,13 +228,69 @@ export default function HomePage() {
             ))}
           </div>
         )}
+
+        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+          <input
+            type="number"
+            min={0}
+            value={minPkrText}
+            onChange={(e) => setMinPkrText(e.target.value)}
+            placeholder={t.minPriceLabel}
+            aria-label={t.minPriceLabel}
+            className="w-28 rounded-xl border border-border-subtle bg-surface-card px-3 py-1.5 text-xs"
+          />
+          <input
+            type="number"
+            min={0}
+            value={maxPkrText}
+            onChange={(e) => setMaxPkrText(e.target.value)}
+            placeholder={t.maxPriceLabel}
+            aria-label={t.maxPriceLabel}
+            className="w-28 rounded-xl border border-border-subtle bg-surface-card px-3 py-1.5 text-xs"
+          />
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            aria-label="Sort listings"
+            className="rounded-xl border border-border-subtle bg-surface-card px-3 py-1.5 text-xs font-medium text-ink-primary"
+          >
+            <option value="NEWEST">{t.sortNewest}</option>
+            <option value="PRICE_ASC">{t.sortPriceAsc}</option>
+            <option value="PRICE_DESC">{t.sortPriceDesc}</option>
+          </select>
+          {(queryText ||
+            selectedType !== "ALL" ||
+            selectedZoneId ||
+            selectedCategoryId ||
+            minPkrText ||
+            maxPkrText ||
+            sortMode !== "NEWEST") && (
+            <button
+              type="button"
+              onClick={() => {
+                setQueryText("");
+                setSelectedType("ALL");
+                setSelectedZoneId("");
+                setSelectedCategoryId("");
+                setMinPkrText("");
+                setMaxPkrText("");
+                setSortMode("NEWEST");
+              }}
+              className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold text-brand-accent hover:bg-brand-accent-soft"
+            >
+              {t.clearFilters}
+            </button>
+          )}
+        </div>
       </section>
 
       {/* Listings Grid */}
       <section className="mt-8">
         {loading ? (
-          <div className="rounded-2xl border border-border-subtle bg-surface-card p-10 text-center text-sm text-ink-secondary">
-            {t.loadingText}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-2xl border border-border-subtle bg-surface-card p-10 text-center">
@@ -259,33 +337,53 @@ export default function HomePage() {
               return (
                 <article
                   key={item.id}
-                  className="flex flex-col justify-between rounded-2xl border border-border-subtle bg-surface-card p-4 shadow-sm transition hover:border-brand-primary"
+                  className="flex flex-col justify-between rounded-2xl border border-border-subtle bg-surface-card p-4 shadow-sm transition hover:border-brand-primary hover:shadow-md"
                 >
                   <div>
                     <div
-                      className={`h-40 w-full rounded-xl ${
+                      className={`h-44 w-full overflow-hidden rounded-xl ${
                         isAccent ? "bg-brand-accent-soft" : "bg-brand-primary-soft"
                       } flex items-center justify-center text-xs font-semibold ${
                         isAccent ? "text-brand-accent" : "text-brand-primary"
                       }`}
                     >
-                      {item.type}
+                      {item.thumbnailUrl ? (
+                        <img
+                          src={item.thumbnailUrl}
+                          alt={item.title}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>
+                          {item.type === "PRODUCT"
+                            ? t.productsFilter
+                            : t.servicesFilter}
+                        </span>
+                      )}
                     </div>
 
-                    <div className="mt-4">
-                      <span
-                        className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
-                          isAccent
-                            ? "bg-brand-accent-soft text-brand-accent"
-                            : "bg-brand-primary-soft text-brand-primary"
-                        }`}
-                      >
-                        {badgeText}
-                      </span>
+                    <div className="mt-4 space-y-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={`inline-block rounded-full px-3 py-0.5 text-[11px] font-semibold ${
+                            isAccent
+                              ? "bg-brand-accent-soft text-brand-accent"
+                              : "bg-brand-primary-soft text-brand-primary"
+                          }`}
+                        >
+                          {badgeText}
+                        </span>
+                        {item.store.privacyProtected && (
+                          <TrustPill
+                            label={t.privacyShieldBadge}
+                            variant="privacy"
+                          />
+                        )}
+                      </div>
 
                       <h2
                         dir="auto"
-                        className="mt-2.5 text-lg font-semibold text-ink-primary"
+                        className="text-lg font-semibold text-ink-primary"
                       >
                         {item.title}
                       </h2>
@@ -293,11 +391,18 @@ export default function HomePage() {
                       <Link
                         href={`/stores/${item.store.slug}`}
                         dir="auto"
-                        className="mt-1 block text-xs font-medium text-ink-secondary hover:text-brand-primary"
+                        className="block text-xs font-medium text-ink-secondary hover:text-brand-primary"
                       >
                         {item.store.displayName} •{" "}
                         {item.store.serviceAreas.join(", ")}
                       </Link>
+
+                      {item.reviewCount > 0 && item.ratingAvg !== null && (
+                        <p className="text-xs font-semibold text-brand-accent">
+                          ★ {item.ratingAvg.toFixed(1)} ({item.reviewCount}{" "}
+                          {t.reviewsCountLabel})
+                        </p>
+                      )}
                     </div>
                   </div>
 

@@ -19,6 +19,15 @@ export interface UiDictionary {
   allCategoriesLabel: string;
   productsFilter: string;
   servicesFilter: string;
+  sortNewest: string;
+  sortPriceAsc: string;
+  sortPriceDesc: string;
+  minPriceLabel: string;
+  maxPriceLabel: string;
+  clearFilters: string;
+  verifiedStoreBadge: string;
+  privacyShieldBadge: string;
+  reviewsCountLabel: string;
   loadingText: string;
   emptyListingsTitle: string;
   emptyListingsBody: string;
@@ -28,6 +37,25 @@ export interface UiDictionary {
   hybridBadge: string;
   viewDetails: string;
   addToCart: string;
+  storeCatalogProducts: string;
+  storeCatalogServices: string;
+  shareStoreWhatsApp: string;
+  downloadQrPoster: string;
+  copiedNotice: string;
+  reportListingLabel: string;
+  submitReportButton: string;
+  reportSubmittedNotice: string;
+  comparePackages: string;
+  revisionsIncluded: string;
+  daysDelivery: string;
+  notificationsTitle: string;
+  notificationsEmpty: string;
+  markAllRead: string;
+  ordersPageTitle: string;
+  ordersEmpty: string;
+  sellerStudioTitle: string;
+  adminConsoleTitle: string;
+  exportCsvLedger: string;
   privacyFooterNote: string;
   footerBetaNote: string;
 }
@@ -53,6 +81,15 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     allCategoriesLabel: "All Categories",
     productsFilter: "Products",
     servicesFilter: "Services",
+    sortNewest: "Newest",
+    sortPriceAsc: "Price: Low to High",
+    sortPriceDesc: "Price: High to Low",
+    minPriceLabel: "Min Rs.",
+    maxPriceLabel: "Max Rs.",
+    clearFilters: "Clear Filters",
+    verifiedStoreBadge: "Verified Local Store",
+    privacyShieldBadge: "Privacy-Protected Seller",
+    reviewsCountLabel: "reviews",
     loadingText: "Loading Mianwali marketplace...",
     emptyListingsTitle: "No active listings match your filter yet",
     emptyListingsBody:
@@ -63,6 +100,25 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     hybridBadge: "Hybrid • COD",
     viewDetails: "View Details",
     addToCart: "Add to Store Cart",
+    storeCatalogProducts: "Products",
+    storeCatalogServices: "Services",
+    shareStoreWhatsApp: "Share Store on WhatsApp",
+    downloadQrPoster: "Download Store QR Sticker",
+    copiedNotice: "Copied store link!",
+    reportListingLabel: "Report Concern",
+    submitReportButton: "Submit Report",
+    reportSubmittedNotice: "Report submitted for moderator review.",
+    comparePackages: "Select Service Package",
+    revisionsIncluded: "revisions included",
+    daysDelivery: "day(s) delivery",
+    notificationsTitle: "Notifications",
+    notificationsEmpty: "No notifications yet.",
+    markAllRead: "Mark all read",
+    ordersPageTitle: "My Orders & Order Messages",
+    ordersEmpty: "No orders placed yet.",
+    sellerStudioTitle: "Saudavo Seller Studio",
+    adminConsoleTitle: "Saudavo Trust & Moderation Console",
+    exportCsvLedger: "Export Orders Ledger (CSV)",
     privacyFooterNote:
       "Privacy-first marketplace: seller home addresses and opt-out phone numbers stay hidden.",
     footerBetaNote:
@@ -88,6 +144,15 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     allCategoriesLabel: "تمام اقسام",
     productsFilter: "مصنوعات",
     servicesFilter: "سروسز",
+    sortNewest: "تازہ ترین",
+    sortPriceAsc: "کم سے زیادہ قیمت",
+    sortPriceDesc: "زیادہ سے کم قیمت",
+    minPriceLabel: "کم از کم روپے",
+    maxPriceLabel: "زیادہ سے زیادہ روپے",
+    clearFilters: "فلٹر صاف کریں",
+    verifiedStoreBadge: "تصدیق شدہ مقامی اسٹور",
+    privacyShieldBadge: "رازداری سے محفوظ سیلر",
+    reviewsCountLabel: "تبصرے",
     loadingText: "میانوالی مارکیٹ لوڈ ہو رہی ہے...",
     emptyListingsTitle: "اس فلٹر کے مطابق کوئی فعال لسٹنگ موجود نہیں",
     emptyListingsBody:
@@ -98,6 +163,25 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     hybridBadge: "ہائبرڈ • کیش آن ڈلیوری",
     viewDetails: "تفصیل دیکھیں",
     addToCart: "اسٹور کارٹ میں شامل کریں",
+    storeCatalogProducts: "مصنوعات",
+    storeCatalogServices: "سروسز",
+    shareStoreWhatsApp: "واٹس ایپ پر اسٹور شیئر کریں",
+    downloadQrPoster: "اسٹور QR اسٹیکر ڈاؤن لوڈ کریں",
+    copiedNotice: "اسٹور لنک کاپی ہو گیا!",
+    reportListingLabel: "رپورٹ کریں",
+    submitReportButton: "رپورٹ جمع کرائیں",
+    reportSubmittedNotice: "آپ کی رپورٹ ماڈریٹر کو بھیج دی گئی ہے۔",
+    comparePackages: "سروس پیکج منتخب کریں",
+    revisionsIncluded: "ترامیم شامل",
+    daysDelivery: "دن میں ڈلیوری",
+    notificationsTitle: "اطلاعات",
+    notificationsEmpty: "ابھی کوئی اطلاع موجود نہیں۔",
+    markAllRead: "سب پڑھا ہوا نشان لگائیں",
+    ordersPageTitle: "میرے آرڈرز اور پیغامات",
+    ordersEmpty: "ابھی تک کوئی آرڈر نہیں دیا گیا۔",
+    sellerStudioTitle: "سوداو سیلر اسٹوڈیو",
+    adminConsoleTitle: "سوداو ٹرسٹ اور ماڈریشن کنسول",
+    exportCsvLedger: "آرڈر لیجر ڈاؤن لوڈ کریں (CSV)",
     privacyFooterNote:
       "رازداری اولین ترجیح: دکاندار کا ذاتی پتہ اور نجی فون نمبر عوامی طور پر پوشیدہ رہتے ہیں۔",
     footerBetaNote:

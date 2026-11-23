@@ -81,6 +81,81 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
         return;
       }
 
+      if (url.includes("/stores/mianwali-handloom/listings")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              store: {
+                id: "0193a8b2-4100-7000-8000-000000000001",
+                slug: "mianwali-handloom",
+                displayName: "Mianwali Handloom",
+                description: "Traditional handmade textiles in Mianwali.",
+                districtId: "0193a8b2-1100-7000-8000-000000000001",
+                districtNameEn: "Mianwali",
+                districtNameUr: "میانوالی",
+                defaultDeliveryFeePaisa: 15000,
+                currency: "PKR",
+                publicContactPhone: null,
+                publicBusinessAddress: null,
+                serviceAreas: [
+                  {
+                    id: "0193a8b2-2100-7000-8000-000000000001",
+                    areaZoneId: "0193a8b2-2000-7000-8000-000000000001",
+                    areaZoneNameEn: "Mianwali",
+                    areaZoneNameUr: "میانوالی",
+                    areaZoneSlug: "mianwali",
+                    deliveryFeeOverridePaisa: null,
+                    pickupSupported: true,
+                    deliverySupported: true
+                  }
+                ]
+              },
+              ratingAvg: 5,
+              reviewCount: 2,
+              products: [
+                {
+                  id: "0193a8b2-5000-7000-8000-000000000001",
+                  type: "PRODUCT",
+                  slug: "handmade-phulkari-shawl",
+                  title: "Handmade Phulkari Shawl",
+                  pricePaisa: 350000,
+                  currency: "PKR",
+                  serviceMode: null,
+                  thumbnailUrl: null,
+                  ratingAvg: 5,
+                  reviewCount: 2,
+                  store: {
+                    id: "0193a8b2-4100-7000-8000-000000000001",
+                    slug: "mianwali-handloom",
+                    displayName: "Mianwali Handloom",
+                    districtName: "Mianwali",
+                    serviceAreas: ["Mianwali", "Isakhel"],
+                    privacyProtected: true
+                  }
+                }
+              ],
+              services: []
+            },
+            meta: { requestId: "req_e2e_store_1" }
+          })
+        });
+        return;
+      }
+
+      if (url.includes("/stores/mianwali-handloom/reviews")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: [],
+            meta: { requestId: "req_e2e_store_2" }
+          })
+        });
+        return;
+      }
+
       if (url.includes("/search")) {
         await route.fulfill({
           status: 200,
@@ -142,7 +217,17 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
     await expect(page.getByText("Shop Poster Design")).toBeVisible();
     await expect(page.getByText("Remote • Manual Offline")).toBeVisible();
 
-    // Switch to Urdu RTL and confirm DOM dir/lang + Urdu copy & integer PKR
+    // Verify sort & price controls exist and navigate to Storefront Store Page
+    await expect(page.getByLabel("Sort listings")).toBeVisible();
+
+    await page.getByRole("link", { name: /Mianwali Handloom/i }).first().click();
+    await expect(page).toHaveURL(/\/stores\/mianwali-handloom$/);
+    await expect(page.getByText("Handmade Phulkari Shawl")).toBeVisible();
+    await expect(page.getByText("Share Store on WhatsApp")).toBeVisible();
+    await expect(page.getByText("Download Store QR Sticker")).toBeVisible();
+
+    // Switch back to storefront and test Urdu RTL
+    await page.goto("/");
     await page
       .getByRole("button", { name: "Switch language between English and Urdu" })
       .click();

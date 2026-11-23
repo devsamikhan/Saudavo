@@ -13,7 +13,8 @@ import {
   PublicStoreDto,
   SearchQuery,
   SearchQuerySchema,
-  SearchResponse
+  SearchResponse,
+  StoreCatalogResponse
 } from "@saudavo/contracts";
 import { Public } from "../../common/auth/decorators";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
@@ -44,6 +45,17 @@ export class PublicCatalogController {
     @Req() req: AppRequest
   ): Promise<{ data: PublicStoreDto; meta: { requestId: string } }> {
     return this.catalogService.getPublicStoreBySlug(slug, getRequestId(req));
+  }
+
+  @Get("stores/:slug/listings")
+  async getStoreListings(
+    @Param("slug") slug: string,
+    @Req() req: AppRequest
+  ): Promise<StoreCatalogResponse> {
+    return this.catalogService.getPublicStoreCatalogBySlug(
+      slug,
+      getRequestId(req)
+    );
   }
 
   @Get("products/:slug")

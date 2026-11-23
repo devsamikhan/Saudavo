@@ -223,6 +223,7 @@ export const SearchQuerySchema = z.object({
   areaZoneId: z.string().uuid().optional(),
   minPrice: z.coerce.number().int().nonnegative().optional(),
   maxPrice: z.coerce.number().int().nonnegative().optional(),
+  sort: z.enum(["NEWEST", "PRICE_ASC", "PRICE_DESC"]).default("NEWEST"),
   cursor: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20)
 });
@@ -236,15 +237,36 @@ export const PublicSearchItemSchema = z.object({
   pricePaisa: z.number().int().positive(),
   currency: CurrencyCodeSchema,
   serviceMode: ServiceModeSchema.nullable(),
+  thumbnailUrl: z.string().nullable().default(null),
+  ratingAvg: z.number().min(1).max(5).nullable().default(null),
+  reviewCount: z.number().int().nonnegative().default(0),
   store: z.object({
     id: z.string().uuid(),
     slug: z.string(),
     displayName: z.string(),
     districtName: z.string(),
-    serviceAreas: z.array(z.string())
+    serviceAreas: z.array(z.string()),
+    privacyProtected: z.boolean().default(true)
   })
 });
 export type PublicSearchItem = z.infer<typeof PublicSearchItemSchema>;
+
+export const StoreCatalogDtoSchema = z.object({
+  store: PublicStoreDtoSchema,
+  ratingAvg: z.number().min(1).max(5).nullable(),
+  reviewCount: z.number().int().nonnegative(),
+  products: z.array(PublicSearchItemSchema),
+  services: z.array(PublicSearchItemSchema)
+});
+export type StoreCatalogDto = z.infer<typeof StoreCatalogDtoSchema>;
+
+export const StoreCatalogResponseSchema = z.object({
+  data: StoreCatalogDtoSchema,
+  meta: z.object({
+    requestId: z.string().min(1)
+  })
+});
+export type StoreCatalogResponse = z.infer<typeof StoreCatalogResponseSchema>;
 
 export const SearchResponseSchema = z.object({
   data: z.array(PublicSearchItemSchema),

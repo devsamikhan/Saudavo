@@ -28,6 +28,7 @@ import { AuditService } from "../audit/audit.service";
 import type { ClientMetadata } from "../auth/auth.service";
 import { CustomerService } from "../customer/customer.service";
 import { FinanceService } from "../finance/finance.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { OutboxService } from "../outbox/outbox.service";
 import { SellerService } from "../seller/seller.service";
 import {
@@ -53,7 +54,8 @@ export class OrdersService {
     private readonly sellerService: SellerService,
     private readonly financeService: FinanceService,
     private readonly outboxService: OutboxService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async quoteCheckout(
@@ -262,6 +264,26 @@ export class OrdersService {
           },
           tx
         );
+
+        const storeOwner = await tx.store.findUnique({
+          where: { id: order.storeId },
+          select: { sellerProfile: { select: { userId: true } } }
+        });
+        if (storeOwner?.sellerProfile.userId) {
+          await this.notificationsService.notify(
+            {
+              userId: storeOwner.sellerProfile.userId,
+              eventType: "ORDER_CREATED",
+              titleKey: "notification.orderCreated",
+              payloadJson: {
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                orderType: "PHYSICAL"
+              }
+            },
+            tx
+          );
+        }
 
         return OrderCreatedSummarySchema.parse({
           orderId: order.id,
@@ -487,6 +509,26 @@ export class OrdersService {
           },
           tx
         );
+
+        const serviceStoreOwner = await tx.store.findUnique({
+          where: { id: order.storeId },
+          select: { sellerProfile: { select: { userId: true } } }
+        });
+        if (serviceStoreOwner?.sellerProfile.userId) {
+          await this.notificationsService.notify(
+            {
+              userId: serviceStoreOwner.sellerProfile.userId,
+              eventType: "ORDER_CREATED",
+              titleKey: "notification.orderCreated",
+              payloadJson: {
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                orderType: "SERVICE"
+              }
+            },
+            tx
+          );
+        }
 
         return OrderCreatedSummarySchema.parse({
           orderId: order.id,
@@ -945,6 +987,25 @@ export class OrdersService {
         }
       });
 
+      const storeOwner = await tx.store.findUnique({
+        where: { id: order.storeId },
+        select: { sellerProfile: { select: { userId: true } } }
+      });
+      if (storeOwner?.sellerProfile.userId) {
+        await this.notificationsService.notify(
+          {
+            userId: storeOwner.sellerProfile.userId,
+            eventType: "REVISION_REQUESTED",
+            titleKey: "notification.revisionRequested",
+            payloadJson: {
+              orderId: order.id,
+              orderNumber: order.orderNumber
+            }
+          },
+          tx
+        );
+      }
+
       return tx.order.findFirst({
         where: { id: order.id },
         include: ORDER_WITH_DETAILS_INCLUDE
@@ -968,9 +1029,19 @@ export class OrdersService {
       orderBy: { createdAt: "desc" }
     });
 
+    const codStatsMap = await this.loadBuyerCodStatsMap(
+      orders.map((order) => order.customerId)
+    );
+
     return {
       data: orders.map((order) =>
-        toOrderDetailDto(order, { revealPickupInstructions: true })
+        toOrderDetailDto(order, {
+          revealPickupInstructions: true,
+          buyerCodStats: codStatsMap.get(order.customerId) ?? {
+            completedCodCount: 0,
+            refusedCodCount: 0
+          }
+        })
       ),
       meta: { requestId }
     };
@@ -994,10 +1065,53 @@ export class OrdersService {
       );
     }
 
+    const codStatsMap = await this.loadBuyerCodStatsMap([order.customerId]);
+
     return {
-      data: toOrderDetailDto(order, { revealPickupInstructions: true }),
+      data: toOrderDetailDto(order, {
+        revealPickupInstructions: true,
+        buyerCodStats: codStatsMap.get(order.customerId) ?? {
+          completedCodCount: 0,
+          refusedCodCount: 0
+        }
+      }),
       meta: { requestId }
     };
+  }
+
+  private async loadBuyerCodStatsMap(customerIds: string[]): Promise<
+    Map<string, { completedCodCount: number; refusedCodCount: number }>
+  > {
+    const map = new Map<
+      string,
+      { completedCodCount: number; refusedCodCount: number }
+    >();
+    const uniqueIds = [...new Set(customerIds)];
+    if (uniqueIds.length === 0) return map;
+
+    const grouped = await this.prisma.order.groupBy({
+      by: ["customerId", "codCollectionStatus"],
+      where: {
+        customerId: { in: uniqueIds },
+        paymentMethod: "COD"
+      },
+      _count: { _all: true }
+    });
+
+    for (const row of grouped) {
+      const current = map.get(row.customerId) ?? {
+        completedCodCount: 0,
+        refusedCodCount: 0
+      };
+      if (row.codCollectionStatus === "COLLECTED") {
+        current.completedCodCount += row._count._all;
+      } else if (row.codCollectionStatus === "FAILED_REFUSED") {
+        current.refusedCodCount += row._count._all;
+      }
+      map.set(row.customerId, current);
+    }
+
+    return map;
   }
 
   async confirmSellerOrder(
@@ -1058,6 +1172,19 @@ export class OrdersService {
           aggregateType: "Order",
           aggregateId: order.id,
           payloadJson: { orderId: order.id, storeId: store.id }
+        },
+        tx
+      );
+
+      await this.notificationsService.notify(
+        {
+          userId: order.customerId,
+          eventType: "ORDER_CONFIRMED",
+          titleKey: "notification.orderConfirmed",
+          payloadJson: {
+            orderId: order.id,
+            orderNumber: order.orderNumber
+          }
         },
         tx
       );
@@ -1269,6 +1396,20 @@ export class OrdersService {
           reason: dto.reason ?? dto.failedReason ?? null
         }
       });
+
+      await this.notificationsService.notify(
+        {
+          userId: order.customerId,
+          eventType: "ORDER_STATUS_UPDATED",
+          titleKey: "notification.orderStatusUpdated",
+          payloadJson: {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            status: dto.toStatus
+          }
+        },
+        tx
+      );
 
       return tx.order.findFirst({
         where: { id: order.id },
