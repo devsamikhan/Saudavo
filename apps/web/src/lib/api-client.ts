@@ -16,11 +16,15 @@ import {
   type CommissionSummaryDto,
   type ConfirmMediaUploadRequest,
   type CreateAddressRequest,
+  type CreateDisputeRequest,
   type CreateOrderMessageRequest,
   type CreatePhysicalOrderRequest,
   type CreateProductRequest,
+  type CreateReportRequest,
+  type CreateReviewRequest,
   type CreateServiceListingRequest,
   type CreateServiceOrderRequest,
+  type DisputeDto,
   type DistrictsResponse,
   type LoginRequest,
   type ManualPaymentConfirmationRequest,
@@ -38,7 +42,11 @@ import {
   type RegisterRequest,
   type RejectDecisionRequest,
   type RejectListingRequest,
+  type ReportDto,
   type RequestMediaUploadUrlRequest,
+  type RequestServiceRevisionRequest,
+  type ResolveDisputeRequest,
+  type ResolveReportRequest,
   type ReviewDto,
   type SearchResponse,
   type SellerOnboardingRequest,
@@ -414,6 +422,42 @@ export function acceptServiceDelivery(
   });
 }
 
+export function requestServiceRevision(
+  orderId: string,
+  body: RequestServiceRevisionRequest
+): Promise<{ data: OrderDetailDto }> {
+  return apiRequest(`/orders/${orderId}/service/request-revision`, {
+    method: "POST",
+    body
+  });
+}
+
+export function createOrderReview(
+  orderId: string,
+  body: CreateReviewRequest
+): Promise<{ data: ReviewDto }> {
+  return apiRequest(`/orders/${orderId}/reviews`, {
+    method: "POST",
+    body
+  });
+}
+
+export function createOrderDispute(
+  orderId: string,
+  body: CreateDisputeRequest
+): Promise<{ data: DisputeDto }> {
+  return apiRequest(`/orders/${orderId}/disputes`, {
+    method: "POST",
+    body
+  });
+}
+
+export function createReport(
+  body: CreateReportRequest
+): Promise<{ data: ReportDto }> {
+  return apiRequest("/reports", { method: "POST", body });
+}
+
 export function fetchOrderMessages(
   orderId: string
 ): Promise<{ data: OrderMessageDto[] }> {
@@ -574,5 +618,43 @@ export function rejectListingModeration(
   return apiRequest(`/admin/listings/${listingId}/reject`, {
     method: "POST",
     body
+  });
+}
+
+// Trust, Disputes & Automated Service Completion (Admin)
+export function fetchAdminReports(): Promise<{ data: ReportDto[] }> {
+  return apiRequest("/admin/reports");
+}
+
+export function resolveAdminReport(
+  reportId: string,
+  body: ResolveReportRequest
+): Promise<{ data: ReportDto }> {
+  return apiRequest(`/admin/reports/${reportId}/resolve`, {
+    method: "POST",
+    body
+  });
+}
+
+export function fetchAdminDisputes(): Promise<{ data: DisputeDto[] }> {
+  return apiRequest("/admin/disputes");
+}
+
+export function resolveAdminDispute(
+  disputeId: string,
+  body: ResolveDisputeRequest
+): Promise<{ data: DisputeDto }> {
+  return apiRequest(`/admin/disputes/${disputeId}/resolve`, {
+    method: "POST",
+    body
+  });
+}
+
+export function triggerServiceAutoCompleteSweep(): Promise<{
+  data: { checkedCount: number; completedOrderIds: string[] };
+}> {
+  return apiRequest("/admin/orders/auto-complete-services", {
+    method: "POST",
+    body: {}
   });
 }

@@ -2,9 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DICTIONARIES, getLocaleDirection } from "../src/i18n/dictionaries";
 import {
   ApiClientError,
+  createOrderDispute,
+  createOrderReview,
+  fetchAdminDisputes,
+  fetchAdminReports,
   logoutAccount,
   parseApiResponse,
-  setStoredCsrfToken
+  requestServiceRevision,
+  resolveAdminDispute,
+  resolveAdminReport,
+  setStoredCsrfToken,
+  triggerServiceAutoCompleteSweep
 } from "../src/lib/api-client";
 import { bytesToMagicHex, uploadImageAssetToS3 } from "../src/lib/media-upload";
 import { formatPkrFromPaisa } from "../src/lib/money";
@@ -133,5 +141,61 @@ describe("@saudavo/web i18n, integer PKR formatting, and API client", () => {
     await expect(
       uploadImageAssetToS3(svgFile, "PRODUCT_IMAGE")
     ).rejects.toThrow("Only JPEG, PNG, or WebP images are supported.");
+  });
+
+  it("wires service revision, review, dispute, report, and admin auto-complete endpoints cleanly", async () => {
+    setStoredCsrfToken("csrf_test_trust");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () =>
+        new Response(JSON.stringify({ data: {} }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        })
+      );
+
+    const orderId = "0193a8b2-1000-7000-8000-000000000010";
+    const reportId = "0193a8b2-1000-7000-8000-000000000020";
+    const disputeId = "0193a8b2-1000-7000-8000-000000000030";
+
+    await requestServiceRevision(orderId, { reason: "Adjust border spacing." });
+    await createOrderReview(orderId, { rating: 5, comment: "Prompt work." });
+    await createOrderDispute(orderId, {
+      disputeType: "QUALITY_MISMATCH",
+      description: "Work did not match agreed package."
+    });
+    await fetchAdminReports();
+    await resolveAdminReport(reportId, {
+      action: "DISMISSED",
+      resolutionNote: "Reviewed content."
+    });
+    await fetchAdminDisputes();
+    await resolveAdminDispute(disputeId, {
+      resolutionOutcome: "COMPLETE_ORDER",
+      resolutionNote: "Confirmed completed delivery."
+    });
+    await triggerServiceAutoCompleteSweep();
+
+    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      `/orders/${orderId}/service/request-revision`
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      `/orders/${orderId}/reviews`
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      `/orders/${orderId}/disputes`
+    );
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/admin/reports");
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
+      `/admin/reports/${reportId}/resolve`
+    );
+    expect(String(fetchMock.mock.calls[5]?.[0])).toContain("/admin/disputes");
+    expect(String(fetchMock.mock.calls[6]?.[0])).toContain(
+      `/admin/disputes/${disputeId}/resolve`
+    );
+    expect(String(fetchMock.mock.calls[7]?.[0])).toContain(
+      "/admin/orders/auto-complete-services"
+    );
   });
 });

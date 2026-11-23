@@ -1,6 +1,10 @@
 "use client";
 
-import type { OrderDetailDto, OrderMessageDto } from "@saudavo/contracts";
+import type {
+  DisputeType,
+  OrderDetailDto,
+  OrderMessageDto
+} from "@saudavo/contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../../components/locale-provider";
@@ -8,9 +12,12 @@ import {
   acceptServiceDelivery,
   ApiClientError,
   cancelCustomerOrder,
+  createOrderDispute,
+  createOrderReview,
   fetchCustomerOrders,
   fetchOrderMessages,
-  postOrderMessage
+  postOrderMessage,
+  requestServiceRevision
 } from "../../lib/api-client";
 import { formatPkrFromPaisa } from "../../lib/money";
 
@@ -23,6 +30,20 @@ export default function OrdersPage() {
   const [msgText, setMsgText] = useState("");
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [statusNotice, setStatusNotice] = useState<string | null>(null);
+
+  // Active inline panels per order
+  const [revisionOrderId, setRevisionOrderId] = useState<string | null>(null);
+  const [revisionReason, setRevisionReason] = useState("");
+
+  const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+
+  const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
+  const [disputeType, setDisputeType] =
+    useState<DisputeType>("QUALITY_MISMATCH");
+  const [disputeDescription, setDisputeDescription] = useState("");
 
   const loadOrders = useCallback(async () => {
     if (!user) {
@@ -69,6 +90,7 @@ export default function OrdersPage() {
     e.preventDefault();
     if (!selectedOrderId || !msgText.trim()) return;
     setErrorMsg(null);
+    setStatusNotice(null);
     try {
       await postOrderMessage(selectedOrderId, { body: msgText.trim() });
       setMsgText("");
@@ -76,6 +98,78 @@ export default function OrdersPage() {
     } catch (err: unknown) {
       setErrorMsg(
         err instanceof ApiClientError ? err.message : "Unable to post message."
+      );
+    }
+  };
+
+  const handleRequestRevision = async (
+    e: React.FormEvent<HTMLFormElement>,
+    orderId: string
+  ) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setStatusNotice(null);
+    try {
+      await requestServiceRevision(orderId, { reason: revisionReason.trim() });
+      setRevisionOrderId(null);
+      setRevisionReason("");
+      setStatusNotice("Service revision requested.");
+      await loadOrders();
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError
+          ? err.message
+          : "Unable to request service revision."
+      );
+    }
+  };
+
+  const handleSubmitReview = async (
+    e: React.FormEvent<HTMLFormElement>,
+    orderId: string
+  ) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setStatusNotice(null);
+    try {
+      const trimmedComment = reviewComment.trim();
+      await createOrderReview(orderId, {
+        rating: reviewRating,
+        ...(trimmedComment.length > 0 ? { comment: trimmedComment } : {})
+      });
+      setReviewOrderId(null);
+      setReviewComment("");
+      setReviewRating(5);
+      setStatusNotice("Verified review submitted.");
+      await loadOrders();
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError
+          ? err.message
+          : "Unable to submit review."
+      );
+    }
+  };
+
+  const handleSubmitDispute = async (
+    e: React.FormEvent<HTMLFormElement>,
+    orderId: string
+  ) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setStatusNotice(null);
+    try {
+      await createOrderDispute(orderId, {
+        disputeType,
+        description: disputeDescription.trim()
+      });
+      setDisputeOrderId(null);
+      setDisputeDescription("");
+      setStatusNotice("Dispute opened for moderator review.");
+      await loadOrders();
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : "Unable to open dispute."
       );
     }
   };
@@ -102,6 +196,12 @@ export default function OrdersPage() {
       {errorMsg && (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMsg}
+        </div>
+      )}
+
+      {statusNotice && (
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {statusNotice}
         </div>
       )}
 
@@ -172,18 +272,200 @@ export default function OrdersPage() {
                   {order.orderType === "SERVICE" &&
                     order.status === "DELIVERY_SUBMITTED" &&
                     !order.serviceOrderDetails?.customerAcceptedAt && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setErrorMsg(null);
+                            setStatusNotice(null);
+                            void acceptServiceDelivery(order.id)
+                              .then(async () => {
+                                setStatusNotice("Service delivery accepted.");
+                                await loadOrders();
+                              })
+                              .catch((err: unknown) =>
+                                setErrorMsg(
+                                  err instanceof ApiClientError
+                                    ? err.message
+                                    : "Unable to accept service delivery."
+                                )
+                              );
+                          }}
+                          className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          Accept Service Delivery
+                        </button>
+
+                        {order.serviceOrderDetails &&
+                          order.serviceOrderDetails.revisionsUsed <
+                            order.serviceOrderDetails.maxRevisionsSnapshot && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRevisionOrderId((prev) =>
+                                  prev === order.id ? null : order.id
+                                );
+                              }}
+                              className="rounded-lg border border-border-subtle px-3 py-1.5 text-xs font-semibold text-ink-primary hover:bg-surface-muted"
+                            >
+                              Request Revision (
+                              {order.serviceOrderDetails.revisionsUsed}/
+                              {order.serviceOrderDetails.maxRevisionsSnapshot})
+                            </button>
+                          )}
+                      </>
+                    )}
+
+                  {order.status === "COMPLETED" && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReviewOrderId((prev) =>
+                          prev === order.id ? null : order.id
+                        );
+                      }}
+                      className="rounded-lg bg-brand-primary-soft px-3 py-1.5 text-xs font-semibold text-brand-primary"
+                    >
+                      Leave Verified Review
+                    </button>
+                  )}
+
+                  {order.status !== "PENDING_CONFIRMATION" &&
+                    order.status !== "CANCELLED" &&
+                    order.status !== "DISPUTED" && (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          void acceptServiceDelivery(order.id).then(loadOrders);
+                          setDisputeOrderId((prev) =>
+                            prev === order.id ? null : order.id
+                          );
                         }}
-                        className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
                       >
-                        Accept Service Delivery
+                        Open Dispute
                       </button>
                     )}
                 </div>
+
+                {statusNotice && selectedOrderId === order.id && (
+                  <p className="mt-2 text-xs font-medium text-brand-primary">
+                    {statusNotice}
+                  </p>
+                )}
+
+                {revisionOrderId === order.id && (
+                  <form
+                    onClick={(e) => e.stopPropagation()}
+                    onSubmit={(e) => void handleRequestRevision(e, order.id)}
+                    className="mt-3 space-y-2 rounded-xl border border-border-subtle bg-surface-muted p-3"
+                  >
+                    <input
+                      type="text"
+                      required
+                      minLength={5}
+                      maxLength={1000}
+                      value={revisionReason}
+                      onChange={(e) => setRevisionReason(e.target.value)}
+                      placeholder="Describe revision adjustments needed (min 5 chars)..."
+                      className="w-full rounded-lg border border-border-subtle bg-surface-card px-3 py-1.5 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Submit Revision Request
+                    </button>
+                  </form>
+                )}
+
+                {reviewOrderId === order.id && (
+                  <form
+                    onClick={(e) => e.stopPropagation()}
+                    onSubmit={(e) => void handleSubmitReview(e, order.id)}
+                    className="mt-3 space-y-2 rounded-xl border border-border-subtle bg-surface-muted p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-xs font-semibold text-ink-primary">
+                        Rating:
+                      </label>
+                      <select
+                        value={reviewRating}
+                        onChange={(e) =>
+                          setReviewRating(Number(e.target.value))
+                        }
+                        className="rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1 text-xs"
+                      >
+                        <option value={5}>5 Stars</option>
+                        <option value={4}>4 Stars</option>
+                        <option value={3}>3 Stars</option>
+                        <option value={2}>2 Stars</option>
+                        <option value={1}>1 Star</option>
+                      </select>
+                    </div>
+                    <textarea
+                      rows={2}
+                      maxLength={2000}
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      placeholder="Share your experience (optional, min 3 chars if filled)..."
+                      className="w-full rounded-lg border border-border-subtle bg-surface-card px-3 py-1.5 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Submit Verified Review
+                    </button>
+                  </form>
+                )}
+
+                {disputeOrderId === order.id && (
+                  <form
+                    onClick={(e) => e.stopPropagation()}
+                    onSubmit={(e) => void handleSubmitDispute(e, order.id)}
+                    className="mt-3 space-y-2 rounded-xl border border-red-200 bg-red-50/50 p-3"
+                  >
+                    <select
+                      value={disputeType}
+                      onChange={(e) =>
+                        setDisputeType(e.target.value as DisputeType)
+                      }
+                      className="w-full rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1.5 text-xs"
+                    >
+                      <option value="QUALITY_MISMATCH">Quality Mismatch</option>
+                      <option value="ITEM_NOT_RECEIVED">
+                        Item Not Received
+                      </option>
+                      <option value="DAMAGED_OR_DEFECTIVE">
+                        Damaged or Defective
+                      </option>
+                      <option value="PAYMENT_DISPUTE">Payment Dispute</option>
+                      <option value="SERVICE_NON_DELIVERY">
+                        Service Non-Delivery
+                      </option>
+                    </select>
+                    <textarea
+                      required
+                      minLength={10}
+                      maxLength={2000}
+                      rows={2}
+                      value={disputeDescription}
+                      onChange={(e) => setDisputeDescription(e.target.value)}
+                      placeholder="Explain the issue for moderators (min 10 chars)..."
+                      className="w-full rounded-lg border border-border-subtle bg-surface-card px-3 py-1.5 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Submit Order Dispute
+                    </button>
+                  </form>
+                )}
               </article>
             ))}
           </div>

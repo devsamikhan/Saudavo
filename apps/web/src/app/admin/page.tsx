@@ -1,6 +1,12 @@
 "use client";
 
-import type { ModerationQueueResponse } from "@saudavo/contracts";
+import type {
+  DisputeDto,
+  ModerationQueueResponse,
+  ReportDto,
+  ResolveDisputeRequest,
+  ResolveReportRequest
+} from "@saudavo/contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../../components/locale-provider";
@@ -9,9 +15,14 @@ import {
   approveListingModeration,
   approveSellerModeration,
   enrollAdminMfa,
+  fetchAdminDisputes,
+  fetchAdminReports,
   fetchModerationQueue,
   rejectListingModeration,
   rejectSellerModeration,
+  resolveAdminDispute,
+  resolveAdminReport,
+  triggerServiceAutoCompleteSweep,
   verifyAdminMfa
 } from "../../lib/api-client";
 import { formatPkrFromPaisa } from "../../lib/money";
@@ -20,6 +31,8 @@ export default function AdminConsolePage() {
   const { locale, user, refreshUser } = useAppContext();
 
   const [queue, setQueue] = useState<ModerationQueueResponse["data"] | null>(null);
+  const [reports, setReports] = useState<ReportDto[]>([]);
+  const [disputes, setDisputes] = useState<DisputeDto[]>([]);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaEnrollment, setMfaEnrollment] = useState<{
     secretBase32: string;
@@ -27,9 +40,17 @@ export default function AdminConsolePage() {
     accountLabel: string;
   } | null>(null);
   const [enrollingMfa, setEnrollingMfa] = useState(false);
+  const [sweepLoading, setSweepLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState(
     "Insufficient store information for Mianwali closed beta."
   );
+  const [reportResolutionNotes, setReportResolutionNotes] = useState<
+    Record<string, string>
+  >({});
+  const [disputeResolutionNotes, setDisputeResolutionNotes] = useState<
+    Record<string, string>
+  >({});
+  const [statusNotice, setStatusNotice] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleEnrollMfa = async () => {
@@ -55,14 +76,87 @@ export default function AdminConsolePage() {
     if (!user || !user.mfaVerified) return;
     setErrorMsg(null);
     try {
-      const res = await fetchModerationQueue();
-      setQueue(res.data);
+      const [queueRes, reportsRes, disputesRes] = await Promise.all([
+        fetchModerationQueue(),
+        fetchAdminReports(),
+        fetchAdminDisputes()
+      ]);
+      setQueue(queueRes.data);
+      setReports(reportsRes.data);
+      setDisputes(disputesRes.data);
     } catch (err: unknown) {
       setErrorMsg(
         err instanceof ApiClientError ? err.message : "Access restricted."
       );
     }
   }, [user]);
+
+  const runAdminAction = async (
+    action: () => Promise<unknown>,
+    notice: string,
+    fallbackError: string
+  ) => {
+    setErrorMsg(null);
+    setStatusNotice(null);
+    try {
+      await action();
+      setStatusNotice(notice);
+      await loadQueue();
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : fallbackError
+      );
+    }
+  };
+
+  const handleAutoCompleteSweep = async () => {
+    setErrorMsg(null);
+    setStatusNotice(null);
+    setSweepLoading(true);
+    try {
+      const res = await triggerServiceAutoCompleteSweep();
+      setStatusNotice(
+        `Auto-complete sweep checked ${res.data.checkedCount} orders; completed ${res.data.completedOrderIds.length}.`
+      );
+      await loadQueue();
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError
+          ? err.message
+          : "Unable to run service auto-complete sweep."
+      );
+    } finally {
+      setSweepLoading(false);
+    }
+  };
+
+  const handleResolveReport = async (
+    reportId: string,
+    action: ResolveReportRequest["action"]
+  ) => {
+    const resolutionNote =
+      reportResolutionNotes[reportId]?.trim() ||
+      "Reviewed and resolved per Saudavo trust guidelines.";
+    await runAdminAction(
+      () => resolveAdminReport(reportId, { action, resolutionNote }),
+      `Report marked ${action}.`,
+      "Unable to resolve report."
+    );
+  };
+
+  const handleResolveDispute = async (
+    disputeId: string,
+    resolutionOutcome: ResolveDisputeRequest["resolutionOutcome"]
+  ) => {
+    const resolutionNote =
+      disputeResolutionNotes[disputeId]?.trim() ||
+      "Dispute resolved following moderator review.";
+    await runAdminAction(
+      () => resolveAdminDispute(disputeId, { resolutionOutcome, resolutionNote }),
+      `Dispute resolved (${resolutionOutcome}).`,
+      "Unable to resolve dispute."
+    );
+  };
 
   useEffect(() => {
     void loadQueue();
@@ -111,6 +205,12 @@ export default function AdminConsolePage() {
       {errorMsg && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMsg}
+        </div>
+      )}
+
+      {statusNotice && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {statusNotice}
         </div>
       )}
 
@@ -341,6 +441,196 @@ export default function AdminConsolePage() {
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-ink-primary">
+                  Service Order Auto-Complete Policy (PQ-10)
+                </h2>
+                <p className="text-xs text-ink-secondary">
+                  Automatically completes delivered service orders after 7 days
+                  of customer inaction.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={sweepLoading}
+                onClick={() => void handleAutoCompleteSweep()}
+                className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {sweepLoading
+                  ? "Running Sweep..."
+                  : "Run 7-Day Auto-Complete Sweep"}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">
+            <h2 className="text-lg font-bold text-ink-primary">
+              Abuse Reports ({reports.length})
+            </h2>
+            {reports.length === 0 ? (
+              <p className="mt-3 text-xs text-ink-secondary">
+                No abuse reports in queue.
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {reports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="space-y-2 rounded-xl border border-border-subtle p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-ink-primary">
+                        [{report.targetType}] {report.reasonCode}
+                      </p>
+                      <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-semibold text-ink-secondary">
+                        {report.status}
+                      </span>
+                    </div>
+                    <p dir="auto" className="text-xs text-ink-secondary">
+                      {report.details}
+                    </p>
+                    {report.status === "OPEN" && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={reportResolutionNotes[report.id] ?? ""}
+                          onChange={(e) =>
+                            setReportResolutionNotes((prev) => ({
+                              ...prev,
+                              [report.id]: e.target.value
+                            }))
+                          }
+                          placeholder="Resolution note (min 5 chars)..."
+                          className="min-w-[220px] flex-1 rounded-lg border border-border-subtle px-3 py-1.5 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleResolveReport(report.id, "DISMISSED")
+                          }
+                          className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleResolveReport(
+                              report.id,
+                              "WARNING_ISSUED"
+                            )
+                          }
+                          className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800"
+                        >
+                          Issue Warning
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleResolveReport(
+                              report.id,
+                              "CONTENT_HIDDEN"
+                            )
+                          }
+                          className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                        >
+                          Hide Content
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">
+            <h2 className="text-lg font-bold text-ink-primary">
+              Order Disputes ({disputes.length})
+            </h2>
+            {disputes.length === 0 ? (
+              <p className="mt-3 text-xs text-ink-secondary">
+                No order disputes found.
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {disputes.map((dispute) => (
+                  <div
+                    key={dispute.id}
+                    className="space-y-2 rounded-xl border border-border-subtle p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-ink-primary">
+                        Order {dispute.orderId} • {dispute.disputeType}
+                      </p>
+                      <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-semibold text-ink-secondary">
+                        {dispute.status}
+                      </span>
+                    </div>
+                    <p dir="auto" className="text-xs text-ink-secondary">
+                      {dispute.description}
+                    </p>
+                    {(dispute.status === "OPEN" ||
+                      dispute.status === "UNDER_REVIEW") && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={disputeResolutionNotes[dispute.id] ?? ""}
+                          onChange={(e) =>
+                            setDisputeResolutionNotes((prev) => ({
+                              ...prev,
+                              [dispute.id]: e.target.value
+                            }))
+                          }
+                          placeholder="Resolution note (min 5 chars)..."
+                          className="min-w-[220px] flex-1 rounded-lg border border-border-subtle px-3 py-1.5 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleResolveDispute(
+                              dispute.id,
+                              "COMPLETE_ORDER"
+                            )
+                          }
+                          className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          Complete Order
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleResolveDispute(
+                              dispute.id,
+                              "NO_FINANCIAL_CHANGE"
+                            )
+                          }
+                          className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                        >
+                          Close Without Change
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleResolveDispute(
+                              dispute.id,
+                              "CANCEL_WITH_FULL_REFUND"
+                            )
+                          }
+                          className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                        >
+                          Cancel & Full Refund
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </div>
       )}

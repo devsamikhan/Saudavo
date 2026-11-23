@@ -9,7 +9,9 @@ import type {
   PrivateStoreDto,
   ProductDto,
   SellerProfileDto,
-  SellerType
+  SellerType,
+  ServiceListingDto,
+  ServiceMode
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -17,14 +19,17 @@ import { useAppContext } from "../../components/locale-provider";
 import {
   ApiClientError,
   confirmSellerCodCollection,
+  confirmSellerManualPayment,
   confirmSellerOrder,
   createSellerProduct,
+  createSellerService,
   fetchCategories,
   fetchDistricts,
   fetchSellerCommissionSummary,
   fetchSellerOrders,
   fetchSellerProducts,
   fetchSellerProfile,
+  fetchSellerServices,
   fetchSellerStore,
   submitSellerOnboarding,
   updateSellerOrderStatus
@@ -38,10 +43,12 @@ export default function SellerStudioPage() {
   const [profile, setProfile] = useState<SellerProfileDto | null>(null);
   const [store, setStore] = useState<PrivateStoreDto | null>(null);
   const [products, setProducts] = useState<ProductDto[]>([]);
+  const [services, setServices] = useState<ServiceListingDto[]>([]);
   const [orders, setOrders] = useState<OrderDetailDto[]>([]);
   const [summary, setSummary] = useState<CommissionSummaryDto | null>(null);
   const [districts, setDistricts] = useState<DistrictDto[]>([]);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<CategoryDto[]>([]);
 
   // Onboarding form
   const [sellerType, setSellerType] = useState<SellerType>("HOME_MAKER");
@@ -58,20 +65,43 @@ export default function SellerStudioPage() {
   const [uploadedAssets, setUploadedAssets] = useState<MediaAssetDto[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
+  // New Service Listing form
+  const [svcTitle, setSvcTitle] = useState("");
+  const [svcCatId, setSvcCatId] = useState("");
+  const [svcMode, setSvcMode] = useState<ServiceMode>("ON_SITE");
+  const [svcDesc, setSvcDesc] = useState("");
+  const [svcPkgTier, setSvcPkgTier] = useState("Standard");
+  const [svcPkgDesc, setSvcPkgDesc] = useState(
+    "Standard package with scope confirmation."
+  );
+  const [svcPkgPricePaisa, setSvcPkgPricePaisa] = useState(250_000);
+  const [svcPkgDays, setSvcPkgDays] = useState(3);
+  const [svcPkgRevisions, setSvcPkgRevisions] = useState(1);
+
+  // Per-order offline payment reference description
+  const [manualPaymentDescByOrder, setManualPaymentDescByOrder] = useState<
+    Record<string, string>
+  >({});
+
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadSellerWorkspace = useCallback(async () => {
     setLoading(true);
     try {
-      const [distRes, catRes] = await Promise.all([
+      const [distRes, catRes, svcCatRes] = await Promise.all([
         fetchDistricts(),
-        fetchCategories("PRODUCT")
+        fetchCategories("PRODUCT"),
+        fetchCategories("SERVICE")
       ]);
       setDistricts(distRes.data);
       setCategories(catRes.data);
+      setServiceCategories(svcCatRes.data);
       if (catRes.data[0] && !prodCatId) {
         setProdCatId(catRes.data[0].id);
+      }
+      if (svcCatRes.data[0] && !svcCatId) {
+        setSvcCatId(svcCatRes.data[0].id);
       }
       const firstZone = distRes.data[0]?.areaZones[0]?.id;
       if (firstZone && selectedZoneIds.length === 0) {
@@ -80,16 +110,19 @@ export default function SellerStudioPage() {
 
       if (user) {
         try {
-          const [profRes, storeRes, prodRes, ordRes, sumRes] = await Promise.all([
-            fetchSellerProfile(),
-            fetchSellerStore(),
-            fetchSellerProducts(),
-            fetchSellerOrders(),
-            fetchSellerCommissionSummary()
-          ]);
+          const [profRes, storeRes, prodRes, svcRes, ordRes, sumRes] =
+            await Promise.all([
+              fetchSellerProfile(),
+              fetchSellerStore(),
+              fetchSellerProducts(),
+              fetchSellerServices(),
+              fetchSellerOrders(),
+              fetchSellerCommissionSummary()
+            ]);
           setProfile(profRes.data);
           setStore(storeRes.data);
           setProducts(prodRes.data);
+          setServices(svcRes.data);
           setOrders(ordRes.data);
           setSummary(sumRes.data);
         } catch {
@@ -100,7 +133,7 @@ export default function SellerStudioPage() {
     } finally {
       setLoading(false);
     }
-  }, [prodCatId, selectedZoneIds.length, user]);
+  }, [prodCatId, selectedZoneIds.length, svcCatId, user]);
 
   useEffect(() => {
     void loadSellerWorkspace();
@@ -184,6 +217,52 @@ export default function SellerStudioPage() {
       setErrorMsg(
         err instanceof ApiClientError ? err.message : "Unable to create product."
       );
+    }
+  };
+
+  const handleCreateService = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    try {
+      await createSellerService({
+        categoryId: svcCatId,
+        title: svcTitle,
+        description: svcDesc,
+        serviceMode: svcMode,
+        initialStatus: "PENDING_REVIEW",
+        packages: [
+          {
+            tierName: svcPkgTier,
+            description: svcPkgDesc,
+            pricePaisa: svcPkgPricePaisa,
+            deliveryEstimateDays: svcPkgDays,
+            maxRevisions: svcPkgRevisions,
+            isActive: true
+          }
+        ]
+      });
+      setSvcTitle("");
+      setSvcDesc("");
+      await loadSellerWorkspace();
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError
+          ? err.message
+          : "Unable to create service listing."
+      );
+    }
+  };
+
+  const runOrderAction = async (
+    action: () => Promise<unknown>,
+    fallbackMessage: string
+  ) => {
+    setErrorMsg(null);
+    try {
+      await action();
+      await loadSellerWorkspace();
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof ApiClientError ? err.message : fallbackMessage);
     }
   };
 
@@ -363,17 +442,19 @@ export default function SellerStudioPage() {
                       {formatPkrFromPaisa(order.totalPaisa, locale)}
                     </p>
                     <p className="text-xs text-ink-secondary">
-                      Order: {order.status} • Cash: {order.codCollectionStatus}
+                      {order.orderType} • {order.paymentMethod} • Order:{" "}
+                      {order.status} • Payment: {order.codCollectionStatus}
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {order.status === "PENDING_CONFIRMATION" && (
                       <button
                         type="button"
                         onClick={() =>
-                          void confirmSellerOrder(order.id).then(
-                            loadSellerWorkspace
+                          void runOrderAction(
+                            () => confirmSellerOrder(order.id),
+                            "Unable to confirm order."
                           )
                         }
                         className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
@@ -387,9 +468,13 @@ export default function SellerStudioPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            void updateSellerOrderStatus(order.id, {
-                              toStatus: "READY_FOR_DISPATCH"
-                            }).then(loadSellerWorkspace)
+                            void runOrderAction(
+                              () =>
+                                updateSellerOrderStatus(order.id, {
+                                  toStatus: "READY_FOR_DISPATCH"
+                                }),
+                              "Unable to mark order ready."
+                            )
                           }
                           className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
                         >
@@ -402,9 +487,13 @@ export default function SellerStudioPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            void updateSellerOrderStatus(order.id, {
-                              toStatus: "DELIVERED"
-                            }).then(loadSellerWorkspace)
+                            void runOrderAction(
+                              () =>
+                                updateSellerOrderStatus(order.id, {
+                                  toStatus: "DELIVERED"
+                                }),
+                              "Unable to mark order delivered."
+                            )
                           }
                           className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
                         >
@@ -412,21 +501,111 @@ export default function SellerStudioPage() {
                         </button>
                       )}
 
+                    {order.orderType === "SERVICE" &&
+                      order.status === "CONFIRMED" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void runOrderAction(
+                              () =>
+                                updateSellerOrderStatus(order.id, {
+                                  toStatus: "IN_PROGRESS"
+                                }),
+                              "Unable to start service order."
+                            )
+                          }
+                          className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                        >
+                          Start Service Work
+                        </button>
+                      )}
+
+                    {order.orderType === "SERVICE" &&
+                      order.status === "IN_PROGRESS" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void runOrderAction(
+                              () =>
+                                updateSellerOrderStatus(order.id, {
+                                  toStatus: "DELIVERY_SUBMITTED",
+                                  deliverySummary:
+                                    "Completed work delivered as scoped."
+                                }),
+                              "Unable to submit service delivery."
+                            )
+                          }
+                          className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                        >
+                          Submit Work Delivery
+                        </button>
+                      )}
+
                     {order.paymentMethod === "COD" &&
-                      order.status === "DELIVERED" &&
+                      ((order.orderType === "PHYSICAL" &&
+                        order.status === "DELIVERED") ||
+                        (order.orderType === "SERVICE" &&
+                          order.status === "DELIVERY_SUBMITTED")) &&
                       order.codCollectionStatus === "PENDING_COLLECTION" && (
                         <button
                           type="button"
                           onClick={() =>
-                            void confirmSellerCodCollection(order.id, {
-                              collectionStatus: "COLLECTED",
-                              collectedAmountPaisa: order.totalPaisa
-                            }).then(loadSellerWorkspace)
+                            void runOrderAction(
+                              () =>
+                                confirmSellerCodCollection(order.id, {
+                                  collectionStatus: "COLLECTED",
+                                  collectedAmountPaisa: order.totalPaisa
+                                }),
+                              "Unable to record COD cash collection."
+                            )
                           }
                           className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
                         >
                           Confirm COD Cash Collected
                         </button>
+                      )}
+
+                    {order.paymentMethod === "MANUAL_OFFLINE" &&
+                      order.status !== "CANCELLED" &&
+                      order.codCollectionStatus === "PENDING_COLLECTION" && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            value={
+                              manualPaymentDescByOrder[order.id] ??
+                              "JazzCash / EasyPaisa Offline"
+                            }
+                            onChange={(e) =>
+                              setManualPaymentDescByOrder((prev) => ({
+                                ...prev,
+                                [order.id]: e.target.value
+                              }))
+                            }
+                            placeholder="Offline method ref"
+                            className="rounded-lg border border-border-subtle px-2.5 py-1 text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void runOrderAction(
+                                () =>
+                                  confirmSellerManualPayment(order.id, {
+                                    collectionStatus: "COLLECTED",
+                                    collectedAmountPaisa: order.totalPaisa,
+                                    manualPaymentMethodDesc:
+                                      (
+                                        manualPaymentDescByOrder[order.id] ??
+                                        "JazzCash / EasyPaisa Offline"
+                                      ).trim() || "Offline Payment"
+                                  }),
+                                "Unable to confirm offline payment."
+                              )
+                            }
+                            className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Confirm Offline Payment
+                          </button>
+                        </div>
                       )}
                   </div>
                 </div>
@@ -541,6 +720,144 @@ export default function SellerStudioPage() {
                 className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 sm:w-fit"
               >
                 Submit Product for Review
+              </button>
+            </form>
+          </section>
+
+          {/* Service Listings & Add Service Form */}
+          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
+            <h2 className="text-lg font-bold text-ink-primary">
+              Service Listings ({services.length} listed)
+            </h2>
+
+            {services.length > 0 && (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {services.map((svc) => (
+                  <div
+                    key={svc.id}
+                    className="rounded-xl border border-border-subtle p-4"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold text-ink-primary">
+                          {svc.title}
+                        </p>
+                        <p className="text-xs text-ink-secondary">
+                          Mode: {svc.serviceMode} • Status: {svc.status}
+                        </p>
+                      </div>
+                      {svc.packages[0] && (
+                        <span className="text-xs font-bold text-brand-primary">
+                          {formatPkrFromPaisa(
+                            svc.packages[0].pricePaisa,
+                            locale
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <form
+              onSubmit={handleCreateService}
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+            >
+              <input
+                type="text"
+                required
+                minLength={3}
+                placeholder="Service Title (e.g. AC Repair or Logo Design)"
+                value={svcTitle}
+                onChange={(e) => setSvcTitle(e.target.value)}
+                className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+              />
+              <select
+                value={svcCatId}
+                onChange={(e) => setSvcCatId(e.target.value)}
+                className="rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2 text-sm"
+              >
+                {serviceCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nameEn}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={svcMode}
+                onChange={(e) => setSvcMode(e.target.value as ServiceMode)}
+                className="rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2 text-sm"
+              >
+                <option value="ON_SITE">ON_SITE (COD allowed)</option>
+                <option value="HYBRID">HYBRID (COD allowed)</option>
+                <option value="REMOTE">REMOTE (Manual Offline Payment)</option>
+              </select>
+              <input
+                type="text"
+                required
+                minLength={2}
+                placeholder="Initial Package Tier Name"
+                value={svcPkgTier}
+                onChange={(e) => setSvcPkgTier(e.target.value)}
+                className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+              />
+              <input
+                type="number"
+                required
+                min={100}
+                value={svcPkgPricePaisa}
+                onChange={(e) => setSvcPkgPricePaisa(Number(e.target.value))}
+                placeholder="Package Price (paisa)"
+                className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={365}
+                  value={svcPkgDays}
+                  onChange={(e) => setSvcPkgDays(Number(e.target.value))}
+                  placeholder="Days"
+                  aria-label="Delivery estimate days"
+                  className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                />
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  max={50}
+                  value={svcPkgRevisions}
+                  onChange={(e) => setSvcPkgRevisions(Number(e.target.value))}
+                  placeholder="Revisions"
+                  aria-label="Max revisions"
+                  className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                />
+              </div>
+              <input
+                type="text"
+                required
+                minLength={5}
+                value={svcPkgDesc}
+                onChange={(e) => setSvcPkgDesc(e.target.value)}
+                placeholder="Package Deliverable Summary"
+                className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm sm:col-span-2"
+              />
+              <textarea
+                required
+                minLength={10}
+                rows={2}
+                placeholder="Full Service Description"
+                value={svcDesc}
+                onChange={(e) => setSvcDesc(e.target.value)}
+                className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm sm:col-span-2"
+              />
+              <button
+                type="submit"
+                className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white sm:w-fit"
+              >
+                Submit Service for Review
               </button>
             </form>
           </section>
