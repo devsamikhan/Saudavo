@@ -4,13 +4,14 @@ import type {
   AddressDto,
   CheckoutQuoteDto,
   DistrictDto,
+  OrderCreatedSummary,
   StoreCartDto
 } from "@saudavo/contracts";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { EmptyCartSpot, SpotState } from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
+import { OrderConfirmedModal } from "../../components/order-confirmed-modal";
 import {
   ApiClientError,
   createAddress,
@@ -25,7 +26,6 @@ import {
 import { formatPkrFromPaisa } from "../../lib/money";
 
 export default function CartPage() {
-  const router = useRouter();
   const { locale, t, user, refreshCartCount, showToast } = useAppContext();
 
   const [carts, setCarts] = useState<StoreCartDto[]>([]);
@@ -38,6 +38,10 @@ export default function CartPage() {
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [quote, setQuote] = useState<CheckoutQuoteDto | null>(null);
   const [customerNote, setCustomerNote] = useState("");
+  const [confirmedOrder, setConfirmedOrder] = useState<OrderCreatedSummary | null>(
+    null
+  );
+  const [placingOrder, setPlacingOrder] = useState(false);
 
   // Quick Address Form
   const [showAddrForm, setShowAddrForm] = useState(false);
@@ -88,6 +92,34 @@ export default function CartPage() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!user || !selectedCartStoreId || carts.length === 0) {
+      setQuote(null);
+      return;
+    }
+    if (fulfilmentMode === "SELLER_DELIVERY" && !selectedAddressId) {
+      setQuote(null);
+      return;
+    }
+    let active = true;
+    void quoteCheckout({
+      storeId: selectedCartStoreId,
+      fulfilmentMode,
+      ...(fulfilmentMode === "SELLER_DELIVERY" && selectedAddressId
+        ? { addressId: selectedAddressId }
+        : {})
+    })
+      .then((res) => {
+        if (active) setQuote(res.data);
+      })
+      .catch(() => {
+        if (active) setQuote(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [carts, fulfilmentMode, selectedAddressId, selectedCartStoreId, user]);
+
   const handleQuote = async () => {
     if (!selectedCartStoreId) return;
     setErrorMsg(null);
@@ -109,10 +141,11 @@ export default function CartPage() {
   };
 
   const handlePlaceOrder = async () => {
-    if (!selectedCartStoreId) return;
+    if (!selectedCartStoreId || placingOrder) return;
     setErrorMsg(null);
+    setPlacingOrder(true);
     try {
-      await createPhysicalOrder({
+      const res = await createPhysicalOrder({
         storeId: selectedCartStoreId,
         fulfilmentMode,
         ...(fulfilmentMode === "SELLER_DELIVERY" && selectedAddressId
@@ -121,18 +154,20 @@ export default function CartPage() {
         paymentMethod: "COD",
         ...(customerNote.trim() ? { customerNote: customerNote.trim() } : {})
       });
-      await refreshCartCount();
+      setConfirmedOrder(res.data);
+      await loadData();
       showToast(
         locale === "ur"
           ? "آرڈر کامیابی سے بن گیا۔"
           : "COD order placed successfully.",
         "primary"
       );
-      router.push("/orders");
     } catch (err: unknown) {
       setErrorMsg(
         err instanceof ApiClientError ? err.message : "Checkout failed."
       );
+    } finally {
+      setPlacingOrder(false);
     }
   };
 
@@ -170,17 +205,32 @@ export default function CartPage() {
   if (!user) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-10">
-        <div className="rounded-2xl border border-border-subtle bg-surface-card p-8 text-center">
-          <p className="text-sm text-ink-secondary">
-            Please sign in to view your store-scoped carts and checkout.
-          </p>
-          <Link
-            href="/auth"
-            className="mt-4 inline-block rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white"
-          >
-            Sign In
-          </Link>
-        </div>
+        <SpotState
+          illustration={<EmptyCartSpot />}
+          badge={locale === "ur" ? "کارٹ اور چیک آؤٹ" : "Cart & Checkout"}
+          title={t.emptyCartTitle}
+          description={
+            locale === "ur"
+              ? "اپنے اسٹور کارٹس دیکھنے اور کیش آن ڈلیوری آرڈر کرنے کے لیے لاگ ان کریں۔"
+              : "Sign in to view your store-scoped carts and complete Cash on Delivery checkout."
+          }
+          actions={
+            <>
+              <Link
+                href="/auth"
+                className="rounded-2xl bg-brand-accent px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-accent-hover"
+              >
+                {t.navSignIn}
+              </Link>
+              <Link
+                href="/"
+                className="rounded-2xl border border-border-subtle bg-surface-muted px-6 py-3 text-sm font-bold text-ink-primary transition hover:border-brand-primary"
+              >
+                {t.browseMarketplaceBtn}
+              </Link>
+            </>
+          }
+        />
       </main>
     );
   }
@@ -231,15 +281,15 @@ export default function CartPage() {
             {carts.map((cart) => (
               <section
                 key={cart.cartId}
-                className={`rounded-2xl border p-5 bg-surface-card ${
+                className={`rounded-3xl border bg-surface-card p-6 shadow-card transition ${
                   selectedCartStoreId === cart.storeId
-                    ? "border-brand-primary"
+                    ? "border-brand-primary ring-2 ring-brand-primary/15"
                     : "border-border-subtle"
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle pb-3">
                   <div>
-                    <h2 dir="auto" className="text-lg font-bold text-ink-primary">
+                    <h2 dir="auto" className="text-lg font-extrabold text-ink-primary">
                       {cart.storeDisplayName}
                     </h2>
                     <p className="text-xs text-ink-secondary">
@@ -252,10 +302,10 @@ export default function CartPage() {
                       setSelectedCartStoreId(cart.storeId);
                       setQuote(null);
                     }}
-                    className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold ${
+                    className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
                       selectedCartStoreId === cart.storeId
-                        ? "bg-brand-primary text-white"
-                        : "bg-surface-muted text-ink-primary"
+                        ? "bg-brand-primary text-white shadow-sm"
+                        : "bg-surface-muted text-ink-primary hover:bg-brand-primary-soft"
                     }`}
                   >
                     {selectedCartStoreId === cart.storeId
@@ -268,10 +318,10 @@ export default function CartPage() {
                   {cart.items.map((item) => (
                     <div
                       key={item.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-muted px-4 py-3 text-sm"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border-subtle bg-surface-canvas px-4 py-3 text-sm"
                     >
                       <div>
-                        <p dir="auto" className="font-semibold text-ink-primary">
+                        <p dir="auto" className="font-bold text-ink-primary">
                           {item.productTitle}
                         </p>
                         {item.variantTitle && (
@@ -281,40 +331,42 @@ export default function CartPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         <button
                           type="button"
+                          aria-label={`Decrease quantity for ${item.productTitle}`}
                           onClick={() =>
                             void updateCartItem(
                               item.id,
                               Math.max(1, item.quantity - 1)
                             ).then(loadData)
                           }
-                          className="rounded border border-border-subtle bg-surface-card px-2 py-0.5 text-xs"
+                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-sm font-bold text-ink-primary transition hover:border-brand-primary"
                         >
-                          -
+                          −
                         </button>
-                        <span className="text-xs font-semibold">
+                        <span className="w-6 text-center text-xs font-extrabold">
                           {item.quantity}
                         </span>
                         <button
                           type="button"
+                          aria-label={`Increase quantity for ${item.productTitle}`}
                           onClick={() =>
                             void updateCartItem(item.id, item.quantity + 1).then(
                               loadData
                             )
                           }
-                          className="rounded border border-border-subtle bg-surface-card px-2 py-0.5 text-xs"
+                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-sm font-bold text-ink-primary transition hover:border-brand-primary"
                         >
                           +
                         </button>
-                        <span className="font-bold text-brand-primary">
+                        <span className="ms-2 font-extrabold text-brand-primary">
                           {formatPkrFromPaisa(item.lineTotalPaisa, locale)}
                         </span>
                         <button
                           type="button"
                           onClick={() => void removeCartItem(item.id).then(loadData)}
-                          className="text-xs font-medium text-red-600 hover:underline"
+                          className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                         >
                           Remove
                         </button>
@@ -326,7 +378,7 @@ export default function CartPage() {
             ))}
           </div>
 
-          <aside className="space-y-4 rounded-2xl border border-border-subtle bg-surface-card p-6 h-fit">
+          <aside className="h-fit space-y-4 rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card">
             <h2 className="text-lg font-bold text-ink-primary">
               Single-Seller Checkout (COD)
             </h2>
@@ -470,13 +522,25 @@ export default function CartPage() {
 
             <button
               type="button"
+              disabled={placingOrder}
               onClick={() => void handlePlaceOrder()}
-              className="w-full rounded-xl bg-brand-primary py-3 text-sm font-semibold text-white hover:bg-brand-primary-hover"
+              className="w-full rounded-2xl bg-brand-accent py-3.5 text-sm font-bold text-white shadow-soft transition hover:bg-brand-accent-hover disabled:opacity-60"
             >
-              Place COD Order
+              {placingOrder
+                ? "..."
+                : locale === "ur"
+                  ? "کیش آن ڈلیوری آرڈر دیں"
+                  : "Place COD Order"}
             </button>
           </aside>
         </div>
+      )}
+
+      {confirmedOrder && (
+        <OrderConfirmedModal
+          order={confirmedOrder}
+          onClose={() => setConfirmedOrder(null)}
+        />
       )}
     </main>
   );

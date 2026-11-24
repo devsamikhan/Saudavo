@@ -185,6 +185,27 @@ export default function SellerStudioPage() {
   }, [prodCatId, selectedZoneIds.length, svcCatId, user]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const prefill = window.sessionStorage.getItem("saudavo_prefill_store_name");
+        if (prefill) {
+          setStoreName((prev) => prev || prefill);
+          setStoreSlug((prev) => {
+            if (prev) return prev;
+            return prefill
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-|-$/g, "");
+          });
+          window.sessionStorage.removeItem("saudavo_prefill_store_name");
+        }
+      } catch {
+        // Ignore storage unavailable
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     void loadSellerWorkspace();
   }, [loadSellerWorkspace]);
 

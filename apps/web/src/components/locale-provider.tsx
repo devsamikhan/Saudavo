@@ -40,18 +40,23 @@ interface AppContextValue {
   refreshUser: () => Promise<void>;
   cartItemCount: number;
   refreshCartCount: () => Promise<void>;
+  wishlistIds: string[];
+  isWishlisted: (id: string) => boolean;
+  toggleWishlist: (id: string, title?: string) => void;
   showToast: (message: string, tone?: "primary" | "accent" | "neutral") => void;
   signOut: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 const LOCALE_STORAGE_KEY = "saudavo_locale";
+const WISHLIST_STORAGE_KEY = "saudavo_wishlist";
 
 export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<LocaleCode>("en");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [cartItemCount, setCartItemCount] = useState(0);
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const showToast = useCallback(
@@ -65,6 +70,36 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       }
     },
     []
+  );
+
+  const isWishlisted = useCallback(
+    (id: string) => wishlistIds.includes(id),
+    [wishlistIds]
+  );
+
+  const toggleWishlist = useCallback(
+    (id: string, title?: string) => {
+      const exists = wishlistIds.includes(id);
+      const next = exists
+        ? wishlistIds.filter((entry) => entry !== id)
+        : [...wishlistIds, id];
+      setWishlistIds(next);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // Ignore storage error
+        }
+      }
+      const dict = DICTIONARIES[locale];
+      const msg = exists
+        ? dict.wishlistRemovedToast
+        : title
+          ? `${title} — ${dict.wishlistSavedToast}`
+          : dict.wishlistSavedToast;
+      showToast(msg, exists ? "neutral" : "accent");
+    },
+    [locale, showToast, wishlistIds]
   );
 
   const applyLocaleToDom = useCallback((next: LocaleCode) => {
@@ -138,6 +173,13 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
           setLocaleState(saved);
           applyLocaleToDom(saved);
         }
+        const rawWish = window.localStorage.getItem(WISHLIST_STORAGE_KEY);
+        if (rawWish) {
+          const parsed: unknown = JSON.parse(rawWish);
+          if (Array.isArray(parsed)) {
+            setWishlistIds(parsed.filter((item): item is string => typeof item === "string"));
+          }
+        }
       } catch {
         // Ignore storage errors
       }
@@ -157,19 +199,25 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       refreshUser,
       cartItemCount,
       refreshCartCount,
+      wishlistIds,
+      isWishlisted,
+      toggleWishlist,
       showToast,
       signOut
     }),
     [
       authLoading,
       cartItemCount,
+      isWishlisted,
       locale,
       refreshCartCount,
       refreshUser,
       setLocale,
       showToast,
       signOut,
-      user
+      toggleWishlist,
+      user,
+      wishlistIds
     ]
   );
 

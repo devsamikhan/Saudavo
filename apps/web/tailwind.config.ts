@@ -8,8 +8,10 @@ const config: Config = {
         brand: {
           primary: "#0F6B52",
           "primary-hover": "#0B5440",
+          "primary-dark": "#094232",
           "primary-soft": "#E7F4EF",
           accent: "#D96B27",
+          "accent-hover": "#BF5B1E",
           "accent-soft": "#FCEFE6"
         },
         surface: {

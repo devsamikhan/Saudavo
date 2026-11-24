@@ -89,6 +89,40 @@ export interface UiDictionary {
   backToMarketplaceBtn: string;
   privacyFooterNote: string;
   footerBetaNote: string;
+  browseByCategoryTitle: string;
+  browseByCategorySub: string;
+  savedItemsFilter: string;
+  saveToWishlistLabel: string;
+  wishlistSavedToast: string;
+  wishlistRemovedToast: string;
+  buddyName: string;
+  buddyGreeting: string;
+  buddyTipBody: string;
+  buddyGotItBtn: string;
+  orderConfirmedTitle: string;
+  orderConfirmedBody: string;
+  trackLiveOrderBtn: string;
+  continueShoppingBtn: string;
+  liveTrackingBadge: string;
+  liveTrackingTitle: string;
+  trackStep1Title: string;
+  trackStep1Sub: string;
+  trackStep2Title: string;
+  trackStep2Sub: string;
+  trackStep3Title: string;
+  trackStep3Sub: string;
+  trackStep4Title: string;
+  trackStep4Sub: string;
+  serviceTrackStep1Title: string;
+  serviceTrackStep1Sub: string;
+  serviceTrackStep2Title: string;
+  serviceTrackStep2Sub: string;
+  serviceTrackStep3Title: string;
+  serviceTrackStep3Sub: string;
+  serviceTrackStep4Title: string;
+  serviceTrackStep4Sub: string;
+  becomeSellerBtn: string;
+  inCartLabel: string;
 }
 
 export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
@@ -184,7 +218,43 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     privacyFooterNote:
       "Privacy-first marketplace: seller home addresses and opt-out phone numbers stay hidden.",
     footerBetaNote:
-      "0% promotional seller commission active during Mianwali closed beta. No platform wallet or escrow."
+      "0% promotional seller commission active during Mianwali closed beta. No platform wallet or escrow.",
+    browseByCategoryTitle: "Browse by Category",
+    browseByCategorySub: "Soft 3D categories filter trusted Mianwali shops & makers live below.",
+    savedItemsFilter: "Saved",
+    saveToWishlistLabel: "Save to wishlist",
+    wishlistSavedToast: "Saved to wishlist!",
+    wishlistRemovedToast: "Removed from wishlist.",
+    buddyName: "Sauda Buddy",
+    buddyGreeting: "Assalam-o-Alaikum!",
+    buddyTipBody:
+      "Explore verified Mianwali shops, save favorites to your wishlist, and track Cash on Delivery orders live.",
+    buddyGotItBtn: "Got it!",
+    orderConfirmedTitle: "Order Confirmed!",
+    orderConfirmedBody:
+      "Your Cash on Delivery order has been sent to the local shop. Track live delivery progress anytime.",
+    trackLiveOrderBtn: "Track Live Order",
+    continueShoppingBtn: "Continue Shopping",
+    liveTrackingBadge: "Isometric Live Tracking",
+    liveTrackingTitle: "Live Order",
+    trackStep1Title: "Order Confirmed",
+    trackStep1Sub: "Received by local Mianwali seller",
+    trackStep2Title: "Packed & Sealed",
+    trackStep2Sub: "Checked and prepared for handoff",
+    trackStep3Title: "Rider Dispatched",
+    trackStep3Sub: "En route for local delivery",
+    trackStep4Title: "Delivered Safely",
+    trackStep4Sub: "Cash on Delivery settled directly",
+    serviceTrackStep1Title: "Booking Requested",
+    serviceTrackStep1Sub: "Sent to service provider",
+    serviceTrackStep2Title: "Seller Confirmed",
+    serviceTrackStep2Sub: "Scope & schedule confirmed",
+    serviceTrackStep3Title: "Work In Progress",
+    serviceTrackStep3Sub: "Service fulfillment underway",
+    serviceTrackStep4Title: "Delivered & Accepted",
+    serviceTrackStep4Sub: "Completed & offline payment confirmed",
+    becomeSellerBtn: "Become a Local Seller",
+    inCartLabel: "In Cart"
   },
   ur: {
     brandName: "سوداو",
@@ -278,7 +348,43 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     privacyFooterNote:
       "رازداری اولین ترجیح: دکاندار کا ذاتی پتہ اور نجی فون نمبر عوامی طور پر پوشیدہ رہتے ہیں۔",
     footerBetaNote:
-      "میانوالی کلوزڈ بیٹا کے دوران 0% پروموشنل کمیشن فعال ہے۔ پلیٹ فارم والٹ یا ایسکرو موجود نہیں۔"
+      "میانوالی کلوزڈ بیٹا کے دوران 0% پروموشنل کمیشن فعال ہے۔ پلیٹ فارم والٹ یا ایسکرو موجود نہیں۔",
+    browseByCategoryTitle: "اقسام کے لحاظ سے تلاش کریں",
+    browseByCategorySub: "تھری ڈی کیٹیگری کارڈز کے ذریعے میانوالی کی تصدیق شدہ دکانیں فلٹر کریں۔",
+    savedItemsFilter: "پسندیدہ",
+    saveToWishlistLabel: "پسندیدہ میں شامل کریں",
+    wishlistSavedToast: "پسندیدہ فہرست میں محفوظ ہو گیا!",
+    wishlistRemovedToast: "پسندیدہ فہرست سے ہٹا دیا گیا۔",
+    buddyName: "سودا بڈی",
+    buddyGreeting: "السلام علیکم!",
+    buddyTipBody:
+      "میانوالی کی تصدیق شدہ دکانیں دیکھیں، پسندیدہ اشیاء محفوظ کریں اور اپنا آرڈر لائیو ٹریک کریں۔",
+    buddyGotItBtn: "سمجھ آ گیا!",
+    orderConfirmedTitle: "آرڈر کنفرم ہو گیا!",
+    orderConfirmedBody:
+      "آپ کا کیش آن ڈلیوری آرڈر مقامی دکان کو بھیج دیا گیا ہے۔ اب آپ لائیو ٹریکنگ دیکھ سکتے ہیں۔",
+    trackLiveOrderBtn: "لائیو آرڈر ٹریک کریں",
+    continueShoppingBtn: "مزید خریداری کریں",
+    liveTrackingBadge: "لائیو آرڈر ٹریکنگ",
+    liveTrackingTitle: "لائیو آرڈر",
+    trackStep1Title: "آرڈر کنفرم",
+    trackStep1Sub: "مقامی دکاندار کو آرڈر موصول ہو گیا",
+    trackStep2Title: "پیک اور سیل",
+    trackStep2Sub: "معیار کی جانچ اور ترسیل کی تیاری",
+    trackStep3Title: "رائیڈر روانہ",
+    trackStep3Sub: "آپ کے پتے کی طرف ترسیل جاری ہے",
+    trackStep4Title: "محفوظ ترسیل مکمل",
+    trackStep4Sub: "کیش آن ڈلیوری مکمل ہو گئی",
+    serviceTrackStep1Title: "بکنگ موصول",
+    serviceTrackStep1Sub: "سروس فراہم کنندہ کو درخواست بھیج دی گئی",
+    serviceTrackStep2Title: "سیلر کی منظوری",
+    serviceTrackStep2Sub: "کام اور وقت طے ہو گیا",
+    serviceTrackStep3Title: "کام جاری ہے",
+    serviceTrackStep3Sub: "سروس کی تکمیل جاری ہے",
+    serviceTrackStep4Title: "سروس مکمل",
+    serviceTrackStep4Sub: "کام قبول اور ادائیگی کی تصدیق ہو گئی",
+    becomeSellerBtn: "مقامی سیلر بنیں",
+    inCartLabel: "کارٹ میں شامل"
   }
 };
 

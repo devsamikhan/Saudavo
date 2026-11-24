@@ -2,7 +2,7 @@
 
 import type { LocaleCode } from "@saudavo/contracts";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AuthSplitIllustration } from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import {
@@ -18,6 +18,7 @@ export default function AuthPage() {
 
   const [mode, setMode] = useState<"LOGIN" | "REGISTER">("LOGIN");
   const [accountIntent, setAccountIntent] = useState<"BUYER" | "SELLER">("BUYER");
+  const [shopNamePrefill, setShopNamePrefill] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -30,6 +31,15 @@ export default function AuthPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("intent") === "seller") {
+      setMode("REGISTER");
+      setAccountIntent("SELLER");
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -74,6 +84,20 @@ export default function AuthPage() {
         preferredLocale
       });
       setUser(res.data.user);
+      if (
+        accountIntent === "SELLER" &&
+        shopNamePrefill.trim().length > 0 &&
+        typeof window !== "undefined"
+      ) {
+        try {
+          window.sessionStorage.setItem(
+            "saudavo_prefill_store_name",
+            shopNamePrefill.trim()
+          );
+        } catch {
+          // Ignore storage unavailability
+        }
+      }
       showToast(
         locale === "ur"
           ? "آپ کا سوداو اکاؤنٹ بن گیا!"
@@ -148,37 +172,37 @@ export default function AuthPage() {
 
   return (
     <main className="fade-slide mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:py-12">
-      <div className="grid grid-cols-1 overflow-hidden rounded-3xl border border-border-subtle bg-surface-card shadow-soft lg:grid-cols-12">
-        {/* Split-Screen Left Visual Panel (Saudavo Emerald #0F6B52) */}
-        <section className="flex flex-col justify-between gap-6 bg-brand-primary p-7 text-white sm:p-10 lg:col-span-6">
-          <div className="space-y-3">
-            <span className="inline-block rounded-full bg-white/15 px-3.5 py-1 text-xs font-bold tracking-wide text-white">
+      <div className="grid min-h-[590px] grid-cols-1 overflow-hidden rounded-3xl border border-border-subtle bg-surface-card shadow-soft lg:grid-cols-12">
+        {/* Split-Screen Left Visual Panel (Saudavo Deep Emerald Gradient) */}
+        <section className="relative flex flex-col justify-between gap-6 overflow-hidden bg-gradient-to-br from-[#094232] via-[#0F6B52] to-[#073528] p-7 text-white sm:p-10 lg:col-span-6">
+          <div className="relative z-10 space-y-3">
+            <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-bold tracking-wide text-[#FDE68A]">
               {visualCopy.badge}
             </span>
             <h1 className="text-2xl font-extrabold leading-snug sm:text-3xl">
               {visualCopy.heading}
             </h1>
-            <p className="text-sm leading-relaxed text-brand-primary-soft">
+            <p className="text-sm leading-relaxed text-white/85">
               {visualCopy.body}
             </p>
           </div>
 
-          <div className="py-2">
+          <div className="glass-promo relative z-10 rounded-3xl p-3">
             <AuthSplitIllustration />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="rounded-2xl bg-white/10 p-3">
+          <div className="relative z-10 grid grid-cols-2 gap-3 text-xs">
+            <div className="glass-promo rounded-2xl p-3">
               <p className="font-bold text-white">{t.codBadge}</p>
-              <p className="mt-0.5 text-brand-primary-soft">
+              <p className="mt-0.5 text-white/80">
                 {locale === "ur"
                   ? "ڈلیوری کے بعد نقد ادائیگی"
                   : "Pay on verified delivery"}
               </p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-3">
+            <div className="glass-promo rounded-2xl p-3">
               <p className="font-bold text-white">{t.privacyShieldBadge}</p>
-              <p className="mt-0.5 text-brand-primary-soft">
+              <p className="mt-0.5 text-white/80">
                 {locale === "ur"
                   ? "ذاتی تفصیلات مکمل محفوظ"
                   : "Private contact protection"}
@@ -337,6 +361,32 @@ export default function AuthPage() {
                   </p>
                 </button>
               </div>
+
+              {accountIntent === "SELLER" && (
+                <div>
+                  <label
+                    htmlFor="auth-reg-shop-name"
+                    className="block text-xs font-semibold text-ink-secondary"
+                  >
+                    {locale === "ur"
+                      ? "دکان یا کاروبار کا نام (اختیاری)"
+                      : "Shop or Craft Name (Optional)"}
+                  </label>
+                  <input
+                    id="auth-reg-shop-name"
+                    type="text"
+                    maxLength={80}
+                    value={shopNamePrefill}
+                    onChange={(e) => setShopNamePrefill(e.target.value)}
+                    placeholder={
+                      locale === "ur"
+                        ? "مثلاً میانوالی ہینڈلوم اسٹوڈیو"
+                        : "e.g. Indus Looms Studio"
+                    }
+                    className="mt-1.5 w-full rounded-2xl border border-brand-accent/40 bg-brand-accent-soft/40 px-4 py-2.5 text-sm focus:border-brand-accent focus:outline-none"
+                  />
+                </div>
+              )}
 
               <p className="text-xs text-ink-secondary">
                 {locale === "ur"

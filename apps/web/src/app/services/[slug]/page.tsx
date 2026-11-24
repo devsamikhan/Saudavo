@@ -1,10 +1,15 @@
 "use client";
 
-import type { AddressDto, PublicServiceDetailDto } from "@saudavo/contracts";
+import type {
+  AddressDto,
+  OrderCreatedSummary,
+  PublicServiceDetailDto
+} from "@saudavo/contracts";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAppContext } from "../../../components/locale-provider";
+import { OrderConfirmedModal } from "../../../components/order-confirmed-modal";
 import { ReportListingButton, TrustPill } from "../../../components/ui-primitives";
 import {
   ApiClientError,
@@ -17,7 +22,7 @@ import { formatPkrFromPaisa } from "../../../lib/money";
 export default function ServiceDetailPage() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
-  const { locale, t, user } = useAppContext();
+  const { locale, t, user, showToast } = useAppContext();
 
   const [service, setService] = useState<PublicServiceDetailDto | null>(null);
   const [addresses, setAddresses] = useState<AddressDto[]>([]);
@@ -26,6 +31,9 @@ export default function ServiceDetailPage() {
   const [requirements, setRequirements] = useState("");
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<OrderCreatedSummary | null>(
+    null
+  );
 
   useEffect(() => {
     let active = true;
@@ -66,7 +74,7 @@ export default function ServiceDetailPage() {
     }
     setErrorMsg(null);
     try {
-      await createServiceOrder({
+      const res = await createServiceOrder({
         serviceListingId: service.id,
         servicePackageId: selectedPkgId,
         ...(service.serviceMode !== "REMOTE" && selectedAddressId
@@ -74,7 +82,13 @@ export default function ServiceDetailPage() {
           : {}),
         customerRequirements: requirements
       });
-      router.push("/orders");
+      setConfirmedOrder(res.data);
+      showToast(
+        locale === "ur"
+          ? "سروس آرڈر جمع ہو گیا۔"
+          : "Service order booked successfully.",
+        "primary"
+      );
     } catch (err: unknown) {
       setErrorMsg(
         err instanceof ApiClientError
@@ -123,7 +137,7 @@ export default function ServiceDetailPage() {
         / <span dir="auto">{service.title}</span>
       </nav>
 
-      <div className="rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 space-y-4">
+      <div className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card sm:p-8 space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-block rounded-full bg-brand-accent-soft px-3 py-1 text-xs font-semibold text-brand-accent">
             {isRemote
@@ -292,11 +306,18 @@ export default function ServiceDetailPage() {
           <button
             type="submit"
             form="service-order-form"
-            className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white"
+            className="rounded-xl bg-brand-accent px-4 py-2 text-xs font-bold text-white"
           >
             {locale === "ur" ? "سروس بک کریں" : "Book Service"}
           </button>
         </div>
+      )}
+
+      {confirmedOrder && (
+        <OrderConfirmedModal
+          order={confirmedOrder}
+          onClose={() => setConfirmedOrder(null)}
+        />
       )}
     </main>
   );

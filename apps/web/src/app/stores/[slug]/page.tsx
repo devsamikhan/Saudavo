@@ -4,12 +4,12 @@ import type { PublicSearchItem, PublicStoreDto, ReviewDto } from "@saudavo/contr
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { EmptyCartSpot, SpotState } from "../../../components/illustrations";
 import { useAppContext } from "../../../components/locale-provider";
 import { StoreShareAndQrCard } from "../../../components/qr-poster";
 import {
   CategoryArtwork,
-  ReportListingButton,
-  TrustPill
+  ReportListingButton
 } from "../../../components/ui-primitives";
 import {
   ApiClientError,
@@ -20,7 +20,7 @@ import { formatPkrFromPaisa } from "../../../lib/money";
 
 export default function PublicStorePage() {
   const params = useParams<{ slug: string }>();
-  const { locale, t } = useAppContext();
+  const { locale, t, isWishlisted, toggleWishlist } = useAppContext();
 
   const [store, setStore] = useState<PublicStoreDto | null>(null);
   const [ratingAvg, setRatingAvg] = useState<number | null>(null);
@@ -93,67 +93,75 @@ export default function PublicStorePage() {
         / <span dir="auto">{store.displayName}</span>
       </nav>
 
-      <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-block rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-semibold text-brand-primary">
-              {districtName}
-            </span>
-            <TrustPill label={t.verifiedStoreBadge} variant="verified" />
-            {isPrivacyProtected && (
-              <TrustPill label={t.privacyShieldBadge} variant="privacy" />
+      <section className="overflow-hidden rounded-3xl border border-border-subtle bg-surface-card shadow-card">
+        <div className="bg-gradient-to-br from-[#094232] via-[#0F6B52] to-[#073528] p-6 text-white sm:p-8 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="glass-promo inline-block rounded-full px-3 py-1 text-xs font-bold text-[#FDE68A]">
+                {districtName}
+              </span>
+              <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-white">
+                {t.verifiedStoreBadge}
+              </span>
+              {isPrivacyProtected && (
+                <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-[#A7F3D0]">
+                  {t.privacyShieldBadge}
+                </span>
+              )}
+            </div>
+            {ratingAvg !== null && reviewCount > 0 && (
+              <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-extrabold text-[#FDE68A]">
+                ★ {ratingAvg.toFixed(1)} ({reviewCount} {t.reviewsCountLabel})
+              </span>
             )}
           </div>
-          {ratingAvg !== null && reviewCount > 0 && (
-            <span className="text-sm font-bold text-brand-accent">
-              ★ {ratingAvg.toFixed(1)} ({reviewCount} {t.reviewsCountLabel})
-            </span>
+
+          <h1 dir="auto" className="text-2xl font-extrabold sm:text-3xl">
+            {store.displayName}
+          </h1>
+          {store.description && (
+            <p dir="auto" className="max-w-2xl text-sm leading-relaxed text-white/85">
+              {store.description}
+            </p>
           )}
         </div>
 
-        <h1 dir="auto" className="text-2xl font-bold text-ink-primary sm:text-3xl">
-          {store.displayName}
-        </h1>
-        {store.description && (
-          <p dir="auto" className="text-sm leading-relaxed text-ink-secondary">
-            {store.description}
-          </p>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          {store.serviceAreas.map((sa) => (
-            <span
-              key={sa.id}
-              className="rounded-full border border-border-subtle bg-surface-muted px-3 py-1 text-xs font-medium text-ink-primary"
-            >
-              {locale === "ur" ? sa.areaZoneNameUr : sa.areaZoneNameEn}
+        <div className="space-y-4 p-6 sm:px-8">
+          <div className="flex flex-wrap gap-2">
+            {store.serviceAreas.map((sa) => (
+              <span
+                key={sa.id}
+                className="rounded-full border border-border-subtle bg-surface-muted px-3 py-1 text-xs font-medium text-ink-primary"
+              >
+                {locale === "ur" ? sa.areaZoneNameUr : sa.areaZoneNameEn}
+              </span>
+            ))}
+            <span className="rounded-full bg-brand-accent-soft px-3 py-1 text-xs font-bold text-brand-accent">
+              {locale === "ur" ? "ڈلیوری فیس:" : "Default Delivery:"}{" "}
+              {formatPkrFromPaisa(store.defaultDeliveryFeePaisa, locale)}
             </span>
-          ))}
-          <span className="rounded-full bg-brand-accent-soft px-3 py-1 text-xs font-semibold text-brand-accent">
-            {locale === "ur" ? "ڈلیوری فیس:" : "Default Delivery:"}{" "}
-            {formatPkrFromPaisa(store.defaultDeliveryFeePaisa, locale)}
-          </span>
-        </div>
-
-        {(store.publicContactPhone || store.publicBusinessAddress) && (
-          <div className="rounded-xl bg-surface-muted p-4 text-xs text-ink-secondary space-y-1">
-            {store.publicContactPhone && (
-              <p>Public Phone: {store.publicContactPhone}</p>
-            )}
-            {store.publicBusinessAddress && (
-              <p dir="auto">Business Address: {store.publicBusinessAddress}</p>
-            )}
           </div>
-        )}
 
-        <StoreShareAndQrCard
-          storeSlug={store.slug}
-          storeDisplayName={store.displayName}
-          districtName={districtName}
-        />
+          {(store.publicContactPhone || store.publicBusinessAddress) && (
+            <div className="rounded-2xl bg-surface-muted p-4 text-xs text-ink-secondary space-y-1">
+              {store.publicContactPhone && (
+                <p>Public Phone: {store.publicContactPhone}</p>
+              )}
+              {store.publicBusinessAddress && (
+                <p dir="auto">Business Address: {store.publicBusinessAddress}</p>
+              )}
+            </div>
+          )}
 
-        <div className="pt-1">
-          <ReportListingButton targetType="STORE" targetId={store.id} />
+          <StoreShareAndQrCard
+            storeSlug={store.slug}
+            storeDisplayName={store.displayName}
+            districtName={districtName}
+          />
+
+          <div className="pt-1">
+            <ReportListingButton targetType="STORE" targetId={store.id} />
+          </div>
         </div>
       </section>
 
@@ -182,25 +190,54 @@ export default function PublicStorePage() {
 
       {/* Store Active Products */}
       {(catalogTab === "ALL" || catalogTab === "PRODUCTS") && (
-      <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
-        <h2 className="text-lg font-bold text-ink-primary">
+      <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+        <h2 className="text-lg font-extrabold text-ink-primary">
           {t.storeCatalogProducts} ({products.length})
         </h2>
         {products.length === 0 ? (
-          <p className="text-sm text-ink-secondary">
-            {locale === "ur"
-              ? "اس اسٹور میں ابھی کوئی فعال پروڈکٹ موجود نہیں۔"
-              : "No active products listed by this store yet."}
-          </p>
+          <SpotState
+            illustration={<EmptyCartSpot />}
+            title={
+              locale === "ur"
+                ? "اس اسٹور میں ابھی کوئی فعال پروڈکٹ موجود نہیں۔"
+                : "No active products listed by this store yet."
+            }
+            description={t.browseMarketplaceBtn}
+          />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((prod) => (
+            {products.map((prod) => {
+              const wished = isWishlisted(prod.id);
+              return (
               <article
                 key={prod.id}
-                className="flex flex-col justify-between rounded-xl border border-border-subtle p-4 transition hover:border-brand-primary"
+                className="flex flex-col justify-between rounded-3xl border border-border-subtle p-4 transition hover:border-brand-primary hover:shadow-card"
               >
-                <div className="space-y-2">
-                  <div className="h-36 w-full overflow-hidden rounded-lg">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-full bg-brand-primary-soft px-2.5 py-0.5 text-[11px] font-bold text-brand-primary">
+                      {t.codBadge}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleWishlist(prod.id, prod.title)}
+                      aria-label={t.saveToWishlistLabel}
+                      className="rounded-xl p-1.5 hover:bg-brand-accent-soft"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill={wished ? "#D96B27" : "none"}
+                        stroke="#D96B27"
+                        strokeWidth="2.2"
+                        aria-hidden="true"
+                      >
+                        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="h-40 w-full overflow-hidden rounded-2xl">
                     {prod.thumbnailUrl ? (
                       <img
                         src={prod.thumbnailUrl}
@@ -211,23 +248,24 @@ export default function PublicStorePage() {
                       <CategoryArtwork type="PRODUCT" label={t.codBadge} />
                     )}
                   </div>
-                  <h3 dir="auto" className="text-base font-bold text-ink-primary">
+                  <h3 dir="auto" className="text-base font-extrabold text-ink-primary">
                     {prod.title}
                   </h3>
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3">
-                  <span className="font-bold text-brand-primary">
+                  <span className="font-extrabold text-brand-primary">
                     {formatPkrFromPaisa(prod.pricePaisa, locale)}
                   </span>
                   <Link
                     href={`/products/${prod.slug}`}
-                    className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-primary-hover"
+                    className="rounded-xl bg-brand-accent px-3.5 py-1.5 text-xs font-bold text-white hover:bg-brand-accent-hover"
                   >
                     {t.viewDetails}
                   </Link>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -235,8 +273,8 @@ export default function PublicStorePage() {
 
       {/* Store Active Services */}
       {(catalogTab === "ALL" || catalogTab === "SERVICES") && (
-      <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
-        <h2 className="text-lg font-bold text-ink-primary">
+      <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+        <h2 className="text-lg font-extrabold text-ink-primary">
           {t.storeCatalogServices} ({services.length})
         </h2>
         {services.length === 0 ? (
@@ -247,36 +285,59 @@ export default function PublicStorePage() {
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {services.map((svc) => (
+            {services.map((svc) => {
+              const wished = isWishlisted(svc.id);
+              return (
               <article
                 key={svc.id}
-                className="flex flex-col justify-between rounded-xl border border-border-subtle p-4 transition hover:border-brand-accent"
+                className="flex flex-col justify-between rounded-3xl border border-border-subtle p-4 transition hover:border-brand-accent hover:shadow-card"
               >
                 <div className="space-y-2">
-                  <span className="inline-block rounded-full bg-brand-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-brand-accent">
-                    {svc.serviceMode === "REMOTE"
-                      ? t.remoteBadge
-                      : svc.serviceMode === "HYBRID"
-                        ? t.hybridBadge
-                        : t.onSiteBadge}
-                  </span>
-                  <h3 dir="auto" className="text-base font-bold text-ink-primary">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-block rounded-full bg-brand-accent-soft px-2.5 py-0.5 text-[11px] font-bold text-brand-accent">
+                      {svc.serviceMode === "REMOTE"
+                        ? t.remoteBadge
+                        : svc.serviceMode === "HYBRID"
+                          ? t.hybridBadge
+                          : t.onSiteBadge}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleWishlist(svc.id, svc.title)}
+                      aria-label={t.saveToWishlistLabel}
+                      className="rounded-xl p-1.5 hover:bg-brand-accent-soft"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill={wished ? "#D96B27" : "none"}
+                        stroke="#D96B27"
+                        strokeWidth="2.2"
+                        aria-hidden="true"
+                      >
+                        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <h3 dir="auto" className="text-base font-extrabold text-ink-primary">
                     {svc.title}
                   </h3>
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t border-border-subtle pt-3">
-                  <span className="font-bold text-brand-primary">
+                  <span className="font-extrabold text-brand-primary">
                     {formatPkrFromPaisa(svc.pricePaisa, locale)}
                   </span>
                   <Link
                     href={`/services/${svc.slug}`}
-                    className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-primary-hover"
+                    className="rounded-xl bg-brand-primary px-3.5 py-1.5 text-xs font-bold text-white hover:bg-brand-primary-hover"
                   >
                     {t.viewDetails}
                   </Link>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

@@ -1,12 +1,45 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
-/**
- * Corporate Memphis Flat-Vector Marketplace Hero Illustration
- * Rendered strictly in Saudavo Emerald (#0F6B52), Saffron (#D96B27), and Soft Mint/Cream tones.
- */
-export function HeroMarketplaceIllustration() {
+function ThemedIllustration({
+  src,
+  alt,
+  width,
+  height,
+  eager = false,
+  className = "h-auto w-full select-none",
+  fallback
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  eager?: boolean;
+  className?: string;
+  fallback: ReactNode;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return <>{fallback}</>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      onError={() => setFailed(true)}
+      className={className}
+    />
+  );
+}
+
+function HeroVectorFallback() {
   return (
     <svg
       viewBox="0 0 520 380"
@@ -16,16 +49,11 @@ export function HeroMarketplaceIllustration() {
       role="img"
       aria-label="Saudavo Mianwali digital marketplace illustration"
     >
-      {/* Organic Background Shapes */}
       <circle cx="275" cy="185" r="145" fill="#E7F4EF" />
       <path
         d="M84 265C60 210 92 140 156 122C220 104 282 146 310 198C338 250 302 318 228 326C154 334 108 320 84 265Z"
         fill="#FCEFE6"
       />
-      <circle cx="430" cy="85" r="24" fill="#FDE68A" />
-      <circle cx="96" cy="96" r="14" fill="#0F6B52" fillOpacity="0.18" />
-
-      {/* Storefront / Mobile Frame */}
       <rect
         x="160"
         y="62"
@@ -36,7 +64,6 @@ export function HeroMarketplaceIllustration() {
         stroke="#0F6B52"
         strokeWidth="3"
       />
-      {/* Store Awning */}
       <path
         d="M160 88C160 73.64 171.64 62 186 62H344C358.36 62 370 73.64 370 88V108H160V88Z"
         fill="#0F6B52"
@@ -46,99 +73,26 @@ export function HeroMarketplaceIllustration() {
       <circle cx="265" cy="108" r="16" fill="#D96B27" />
       <circle cx="301" cy="108" r="16" fill="#FCEFE6" />
       <circle cx="335" cy="108" r="16" fill="#D96B27" />
-
-      {/* Product Cards Inside Storefront */}
       <rect x="182" y="142" width="76" height="82" rx="14" fill="#E7F4EF" />
-      <path
-        d="M204 176L220 162L236 176V194H204V176Z"
-        fill="#0F6B52"
-      />
       <rect x="272" y="142" width="76" height="82" rx="14" fill="#FCEFE6" />
-      <circle cx="310" cy="178" r="18" fill="#D96B27" />
-      <rect x="182" y="238" width="166" height="16" rx="8" fill="#F1F5F4" />
       <rect x="182" y="264" width="110" height="28" rx="14" fill="#0F6B52" />
       <rect x="302" y="264" width="46" height="28" rx="14" fill="#D96B27" />
-
-      {/* Left Character (Local Seller / Home Maker) */}
-      <circle cx="105" cy="176" r="22" fill="#E8B49A" />
-      <path
-        d="M84 174C84 156 96 146 112 148C125 150 130 164 128 180H84V174Z"
-        fill="#111827"
-      />
-      <path
-        d="M72 288C72 238 84 206 108 206C132 206 144 238 144 288H72Z"
-        fill="#D96B27"
-      />
-      <path
-        d="M126 226L170 208"
-        stroke="#E8B49A"
-        strokeWidth="12"
-        strokeLinecap="round"
-      />
-      <rect x="64" y="286" width="88" height="22" rx="11" fill="#0F6B52" />
-
-      {/* Right Character (Buyer Receiving COD Package) */}
-      <circle cx="424" cy="178" r="21" fill="#DDA58A" />
-      <path
-        d="M402 174C403 157 416 148 430 151C442 154 446 168 444 178H402V174Z"
-        fill="#111827"
-      />
-      <path
-        d="M390 296C392 240 404 208 424 208C446 208 456 240 458 296H390Z"
-        fill="#0F6B52"
-      />
-      <rect
-        x="360"
-        y="220"
-        width="44"
-        height="36"
-        rx="8"
-        fill="#FDE68A"
-        stroke="#D96B27"
-        strokeWidth="2.5"
-      />
-      <path d="M360 234H404" stroke="#D96B27" strokeWidth="2.5" />
-
-      {/* Ground Horizon */}
-      <line
-        x1="44"
-        y1="316"
-        x2="476"
-        y2="316"
-        stroke="#0F6B52"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
     </svg>
   );
 }
 
-/**
- * Corporate Memphis Split-Screen Auth Panel Illustration
- */
-export function AuthSplitIllustration() {
+function AuthVectorFallback() {
   return (
     <svg
       viewBox="0 0 380 260"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className="h-auto w-full max-w-xs mx-auto select-none"
+      className="mx-auto h-auto w-full max-w-xs select-none"
       role="img"
       aria-label="Saudavo account security and local store illustration"
     >
       <circle cx="190" cy="130" r="108" fill="#FFFFFF" fillOpacity="0.10" />
-      <circle cx="105" cy="70" r="18" fill="#D96B27" fillOpacity="0.85" />
-      <circle cx="290" cy="195" r="14" fill="#FDE68A" fillOpacity="0.85" />
-
-      {/* Mobile Auth Card Motif */}
-      <rect
-        x="110"
-        y="36"
-        width="160"
-        height="196"
-        rx="24"
-        fill="#FFFFFF"
-      />
+      <rect x="110" y="36" width="160" height="196" rx="24" fill="#FFFFFF" />
       <rect x="132" y="60" width="116" height="44" rx="12" fill="#E7F4EF" />
       <circle cx="190" cy="82" r="14" fill="#0F6B52" />
       <path
@@ -151,36 +105,11 @@ export function AuthSplitIllustration() {
       <rect x="132" y="120" width="116" height="16" rx="8" fill="#F1F5F4" />
       <rect x="132" y="146" width="116" height="16" rx="8" fill="#F1F5F4" />
       <rect x="132" y="176" width="116" height="32" rx="12" fill="#D96B27" />
-
-      {/* Floating Security Key Character */}
-      <circle cx="88" cy="148" r="18" fill="#E8B49A" />
-      <path
-        d="M66 218C66 184 74 170 88 170C102 170 110 184 110 218H66Z"
-        fill="#FDE68A"
-      />
-      <circle
-        cx="294"
-        cy="108"
-        r="24"
-        fill="#FCEFE6"
-        stroke="#D96B27"
-        strokeWidth="3"
-      />
-      <path
-        d="M286 112V104C286 99.6 289.6 96 294 96C298.4 96 302 99.6 302 104V112"
-        stroke="#0F6B52"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <rect x="282" y="108" width="24" height="16" rx="4" fill="#0F6B52" />
     </svg>
   );
 }
 
-/**
- * Spot Illustration: Empty Shopping Cart
- */
-export function EmptyCartSpot() {
+function EmptyCartVectorFallback() {
   return (
     <svg
       viewBox="0 0 240 200"
@@ -190,7 +119,6 @@ export function EmptyCartSpot() {
       aria-hidden="true"
     >
       <circle cx="120" cy="102" r="76" fill="#E7F4EF" />
-      <circle cx="176" cy="54" r="12" fill="#FCEFE6" />
       <path
         d="M48 64H72L92 132H172L188 82H80"
         stroke="#0F6B52"
@@ -200,21 +128,11 @@ export function EmptyCartSpot() {
       />
       <circle cx="102" cy="154" r="10" fill="#D96B27" />
       <circle cx="160" cy="154" r="10" fill="#D96B27" />
-      <path
-        d="M114 96L144 96M129 81L129 111"
-        stroke="#0F6B52"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeOpacity="0.35"
-      />
     </svg>
   );
 }
 
-/**
- * Spot Illustration: Empty Inbox / No Orders Yet
- */
-export function EmptyInboxSpot() {
+function EmptyInboxVectorFallback() {
   return (
     <svg
       viewBox="0 0 240 200"
@@ -241,25 +159,12 @@ export function EmptyInboxSpot() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path
-        d="M146 40L188 54L154 74L146 40Z"
-        fill="#D96B27"
-      />
-      <path
-        d="M116 64C126 56 134 54 142 54"
-        stroke="#0F6B52"
-        strokeWidth="3"
-        strokeDasharray="4 4"
-        strokeLinecap="round"
-      />
+      <path d="M146 40L188 54L154 74L146 40Z" fill="#D96B27" />
     </svg>
   );
 }
 
-/**
- * Spot Illustration: 404 Error / Page Not Found
- */
-export function NotFoundSpot() {
+function NotFoundVectorFallback() {
   return (
     <svg
       viewBox="0 0 240 190"
@@ -286,14 +191,188 @@ export function NotFoundSpot() {
         strokeWidth="8"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function IsometricTrackingVectorFallback() {
+  return (
+    <svg
+      viewBox="0 0 440 260"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-auto w-full select-none"
+      aria-hidden="true"
+    >
+      <rect width="440" height="260" rx="20" fill="#F8FAF9" />
       <path
-        d="M94 82L118 96M118 82L94 96"
-        stroke="#D96B27"
-        strokeWidth="4.5"
+        d="M40 205L390 120"
+        stroke="#0F6B52"
+        strokeWidth="22"
         strokeLinecap="round"
       />
-      <circle cx="176" cy="52" r="10" fill="#FDE68A" />
+      <path
+        d="M52 202L378 123"
+        stroke="#FFFFFF"
+        strokeWidth="2"
+        strokeDasharray="8 8"
+      />
+      <rect
+        x="72"
+        y="74"
+        width="104"
+        height="88"
+        rx="14"
+        fill="#0F6B52"
+      />
+      <path d="M64 82L184 82L174 102H74L64 82Z" fill="#D96B27" />
+      <rect x="236" y="138" width="44" height="32" rx="8" fill="#D96B27" />
+      <circle cx="330" cy="76" r="22" fill="#E7F4EF" stroke="#0F6B52" strokeWidth="4" />
+      <circle cx="330" cy="76" r="7" fill="#0F6B52" />
     </svg>
+  );
+}
+
+function MascotVectorFallback() {
+  return (
+    <svg
+      viewBox="0 0 80 80"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-full w-full select-none"
+      aria-hidden="true"
+    >
+      <circle cx="40" cy="40" r="38" fill="#E7F4EF" />
+      <circle cx="40" cy="42" r="22" fill="#FFFFFF" stroke="#0F6B52" strokeWidth="3" />
+      <path d="M22 28C25 18 32 14 42 14C52 14 58 20 58 28H22Z" fill="#D96B27" />
+      <circle cx="33" cy="39" r="3" fill="#0F6B52" />
+      <circle cx="47" cy="39" r="3" fill="#0F6B52" />
+      <path
+        d="M34 48C37 51 43 51 46 48"
+        stroke="#0F6B52"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Soft 3D Claymorphism Storefront Hero Illustration
+ */
+export function HeroMarketplaceIllustration() {
+  return (
+    <ThemedIllustration
+      src="/illustrations/hero-clay-storefront.webp"
+      alt="Saudavo Soft 3D Claymorphism local marketplace illustration"
+      width={880}
+      height={657}
+      eager
+      className="animate-float h-auto w-full rounded-2xl object-contain select-none"
+      fallback={<HeroVectorFallback />}
+    />
+  );
+}
+
+/**
+ * Corporate Memphis Split-Screen Auth Panel Illustration
+ */
+export function AuthSplitIllustration() {
+  return (
+    <ThemedIllustration
+      src="/illustrations/auth-memphis-onboarding.webp"
+      alt="Saudavo account onboarding and local storefront illustration"
+      width={720}
+      height={964}
+      eager
+      className="mx-auto h-auto max-h-72 w-full rounded-2xl object-contain select-none"
+      fallback={<AuthVectorFallback />}
+    />
+  );
+}
+
+/**
+ * 3D Isometric Live Order Logistics Illustration
+ */
+export function IsometricTrackingIllustration() {
+  return (
+    <ThemedIllustration
+      src="/illustrations/track-isometric-logistics.webp"
+      alt="Saudavo isometric live parcel delivery tracking illustration"
+      width={880}
+      height={491}
+      eager
+      className="h-auto w-full rounded-2xl border border-border-subtle object-cover select-none"
+      fallback={<IsometricTrackingVectorFallback />}
+    />
+  );
+}
+
+/**
+ * Sauda Buddy Mascot Avatar
+ */
+export function SaudaBuddyAvatar({
+  className = "h-full w-full"
+}: {
+  className?: string;
+}) {
+  return (
+    <ThemedIllustration
+      src="/illustrations/mascot-sauda-buddy.webp"
+      alt="Sauda Buddy helper mascot"
+      width={256}
+      height={256}
+      className={`${className} rounded-full object-cover select-none`}
+      fallback={<MascotVectorFallback />}
+    />
+  );
+}
+
+/**
+ * Spot Illustration: Empty Shopping Cart
+ */
+export function EmptyCartSpot() {
+  return (
+    <ThemedIllustration
+      src="/illustrations/spot-empty-cart.webp"
+      alt="Empty Saudavo cart illustration"
+      width={520}
+      height={520}
+      className="mx-auto h-48 w-48 object-contain select-none sm:h-52 sm:w-52"
+      fallback={<EmptyCartVectorFallback />}
+    />
+  );
+}
+
+/**
+ * Spot Illustration: Empty Inbox / No Orders Yet
+ */
+export function EmptyInboxSpot() {
+  return (
+    <ThemedIllustration
+      src="/illustrations/spot-empty-inbox.webp"
+      alt="Empty orders and inbox illustration"
+      width={520}
+      height={520}
+      className="mx-auto h-48 w-48 object-contain select-none sm:h-52 sm:w-52"
+      fallback={<EmptyInboxVectorFallback />}
+    />
+  );
+}
+
+/**
+ * Spot Illustration: 404 Error / Page Not Found
+ */
+export function NotFoundSpot() {
+  return (
+    <ThemedIllustration
+      src="/illustrations/spot-404-not-found.webp"
+      alt="Page not found illustration"
+      width={560}
+      height={418}
+      className="mx-auto h-auto w-60 max-w-full object-contain select-none sm:w-72"
+      fallback={<NotFoundVectorFallback />}
+    />
   );
 }
 
@@ -314,14 +393,16 @@ export function SpotState({
   actions?: ReactNode;
 }) {
   return (
-    <div className="fade-slide flex flex-col items-center justify-center rounded-3xl border border-border-subtle bg-surface-card px-6 py-10 text-center shadow-card">
+    <div className="fade-slide flex flex-col items-center justify-center rounded-3xl border border-border-subtle bg-surface-card px-6 py-10 text-center shadow-card sm:px-10">
       <div className="mb-3 flex items-center justify-center">{illustration}</div>
       {badge && (
-        <span className="mb-2 inline-block rounded-full bg-brand-primary-soft px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-brand-primary">
+        <span className="mb-2 inline-block rounded-full bg-brand-primary-soft px-3.5 py-1 text-[11px] font-bold uppercase tracking-wide text-brand-primary">
           {badge}
         </span>
       )}
-      <h2 className="text-xl font-bold text-ink-primary">{title}</h2>
+      <h2 className="text-xl font-extrabold text-ink-primary sm:text-2xl">
+        {title}
+      </h2>
       <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-ink-secondary">
         {description}
       </p>

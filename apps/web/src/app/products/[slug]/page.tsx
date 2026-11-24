@@ -21,7 +21,8 @@ import { formatPkrFromPaisa } from "../../../lib/money";
 export default function ProductDetailPage() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
-  const { locale, t, user, refreshCartCount } = useAppContext();
+  const { locale, t, user, refreshCartCount, isWishlisted, toggleWishlist, showToast } =
+    useAppContext();
 
   const [product, setProduct] = useState<PublicProductDetailDto | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
@@ -101,6 +102,7 @@ export default function ProductDetailPage() {
       });
       await refreshCartCount();
       setFeedback("Added to this store's saved cart.");
+      showToast(`${product.title} — ${t.inCartLabel}!`, "primary");
     } catch (err: unknown) {
       setErrorMsg(
         err instanceof ApiClientError ? err.message : "Unable to add to cart."
@@ -155,7 +157,7 @@ export default function ProductDetailPage() {
         / <span dir="auto">{product.title}</span>
       </nav>
 
-      <div className="grid grid-cols-1 gap-8 rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card sm:p-8 lg:grid-cols-2">
         <div className="space-y-3">
           <div className="h-72 overflow-hidden rounded-2xl lg:h-96">
             {activePhotoUrl ? (
@@ -216,13 +218,35 @@ export default function ProductDetailPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-block rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-semibold text-brand-primary">
-              {t.codBadge}
-            </span>
-            {isPrivacyProtected && (
-              <TrustPill label={t.privacyShieldBadge} variant="privacy" />
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-block rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-semibold text-brand-primary">
+                {t.codBadge}
+              </span>
+              {isPrivacyProtected && (
+                <TrustPill label={t.privacyShieldBadge} variant="privacy" />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleWishlist(product.id, product.title)}
+              aria-label={t.saveToWishlistLabel}
+              aria-pressed={isWishlisted(product.id)}
+              className="rounded-xl border border-border-subtle p-2 transition hover:border-brand-accent hover:bg-brand-accent-soft"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill={isWishlisted(product.id) ? "#D96B27" : "none"}
+                stroke="#D96B27"
+                strokeWidth="2.2"
+                className={isWishlisted(product.id) ? "pop-heart" : ""}
+                aria-hidden="true"
+              >
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+              </svg>
+            </button>
           </div>
 
           <h1 dir="auto" className="text-2xl font-bold text-ink-primary">
@@ -272,14 +296,32 @@ export default function ProductDetailPage() {
             <label className="text-xs font-semibold text-ink-secondary">
               Qty
             </label>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
-              className="w-20 rounded-xl border border-border-subtle px-3 py-2 text-sm"
-            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Decrease quantity"
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-sm font-bold hover:border-brand-primary"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                className="w-16 rounded-xl border border-border-subtle px-2 py-2 text-center text-sm font-bold"
+              />
+              <button
+                type="button"
+                aria-label="Increase quantity"
+                onClick={() => setQuantity((q) => Math.min(100, q + 1))}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-sm font-bold hover:border-brand-primary"
+              >
+                +
+              </button>
+            </div>
           </div>
 
           {errorMsg && (
@@ -299,7 +341,7 @@ export default function ProductDetailPage() {
           <button
             type="button"
             onClick={() => void handleAddToCart()}
-            className="w-full rounded-xl bg-brand-primary py-3 text-sm font-semibold text-white hover:bg-brand-primary-hover"
+            className="w-full rounded-2xl bg-brand-accent py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-accent-hover"
           >
             {t.addToCart}
           </button>
