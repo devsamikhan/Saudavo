@@ -22,3 +22,26 @@ export function formatPkrFromPaisa(
   const prefix = negative ? "-" : "";
   return locale === "ur" ? `${prefix}${formatted} روپے` : `${prefix}Rs. ${formatted}`;
 }
+
+/**
+ * Converts a whole-rupee user input string or integer to integer paisa without float drift.
+ */
+export function parseWholeRupeesToPaisa(rupeesInput: string | number): number {
+  if (typeof rupeesInput === "number") {
+    if (!Number.isFinite(rupeesInput) || rupeesInput < 0) return 0;
+    return Math.trunc(rupeesInput) * 100;
+  }
+  const digits = rupeesInput.replace(/[^0-9]/g, "");
+  if (!digits) return 0;
+  const parsed = Number.parseInt(digits, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) return 0;
+  return parsed * 100;
+}
+
+/**
+ * Returns whole rupees truncated cleanly from integer paisa for rupee-denominated form inputs.
+ */
+export function paisaToWholeRupees(amountPaisa: number): number {
+  const safeInt = Math.trunc(amountPaisa);
+  return Math.max(0, Math.trunc(safeInt / 100));
+}

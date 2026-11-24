@@ -101,11 +101,28 @@ export default function ServiceDetailPage() {
   }
 
   const isRemote = service.serviceMode === "REMOTE";
+  const selectedPkg =
+    service.packages.find((p) => p.id === selectedPkgId) ?? service.packages[0];
   const isPrivacyProtected =
     !service.store.publicContactPhone && !service.store.publicBusinessAddress;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-5xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:px-8 space-y-4">
+      <nav aria-label="Breadcrumb" className="text-xs text-ink-secondary">
+        <Link href="/" className="font-semibold text-brand-primary hover:underline">
+          {t.navStorefront}
+        </Link>{" "}
+        /{" "}
+        <Link
+          href={`/stores/${service.store.slug}`}
+          dir="auto"
+          className="font-semibold text-brand-primary hover:underline"
+        >
+          {service.store.displayName}
+        </Link>{" "}
+        / <span dir="auto">{service.title}</span>
+      </nav>
+
       <div className="rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-block rounded-full bg-brand-accent-soft px-3 py-1 text-xs font-semibold text-brand-accent">
@@ -149,7 +166,11 @@ export default function ServiceDetailPage() {
           </div>
         )}
 
-        <form onSubmit={handleBookService} className="space-y-5 pt-2">
+        <form
+          id="service-order-form"
+          onSubmit={handleBookService}
+          className="space-y-5 pt-2"
+        >
           <div>
             <label className="block text-xs font-semibold text-ink-secondary">
               {t.comparePackages}
@@ -256,6 +277,27 @@ export default function ServiceDetailPage() {
 
         <ReportListingButton targetType="SERVICE" targetId={service.id} />
       </div>
+
+      {/* Mobile Sticky Service Booking Bar */}
+      {selectedPkg && (
+        <div className="fixed inset-x-0 bottom-[56px] z-20 flex items-center justify-between gap-3 border-t border-border-subtle bg-surface-card/95 px-4 py-2.5 backdrop-blur md:hidden">
+          <div>
+            <p className="text-[10px] font-medium text-ink-secondary">
+              {selectedPkg.tierName}
+            </p>
+            <p className="text-base font-bold text-brand-primary">
+              {formatPkrFromPaisa(selectedPkg.pricePaisa, locale)}
+            </p>
+          </div>
+          <button
+            type="submit"
+            form="service-order-form"
+            className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white"
+          >
+            {locale === "ur" ? "سروس بک کریں" : "Book Service"}
+          </button>
+        </div>
+      )}
     </main>
   );
 }

@@ -6,10 +6,10 @@ import { useAppContext } from "./locale-provider";
 
 export function MobileBottomNav() {
   const pathname = usePathname();
-  const { t } = useAppContext();
+  const { t, cartItemCount } = useAppContext();
 
   const itemClass = (href: string) =>
-    `flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition ${
+    `relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition ${
       pathname === href
         ? "text-brand-primary"
         : "text-ink-secondary hover:text-ink-primary"
@@ -21,15 +21,69 @@ export function MobileBottomNav() {
       className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border-subtle bg-surface-card/95 px-2 py-1 backdrop-blur md:hidden"
     >
       <Link href="/" className={itemClass("/")}>
+        <svg
+          className="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </svg>
         <span>{t.navStorefront}</span>
       </Link>
+
       <Link href="/cart" className={itemClass("/cart")}>
+        <div className="relative">
+          <svg
+            className="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <circle cx="9" cy="21" r="1" />
+            <circle cx="20" cy="21" r="1" />
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+          </svg>
+          {cartItemCount > 0 && (
+            <span className="absolute -end-2.5 -top-1.5 rounded-full bg-brand-accent px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">
+              {cartItemCount}
+            </span>
+          )}
+        </div>
         <span>{t.navCart}</span>
       </Link>
+
       <Link href="/orders" className={itemClass("/orders")}>
+        <svg
+          className="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <path d="M9 11l3 3L22 4" />
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        </svg>
         <span>{t.navOrders}</span>
       </Link>
+
       <Link href="/seller" className={itemClass("/seller")}>
+        <svg
+          className="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7" />
+          <path d="M16 3H8L3 7h18l-5-4z" />
+        </svg>
         <span>{t.navSeller}</span>
       </Link>
     </nav>

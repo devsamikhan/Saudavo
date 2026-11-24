@@ -8,13 +8,13 @@ import type {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../components/locale-provider";
-import { SkeletonCard, TrustPill } from "../components/ui-primitives";
+import { CategoryArtwork, SkeletonCard, TrustPill } from "../components/ui-primitives";
 import {
   fetchCategories,
   fetchDistricts,
   searchListings
 } from "../lib/api-client";
-import { formatPkrFromPaisa } from "../lib/money";
+import { formatPkrFromPaisa, parseWholeRupeesToPaisa } from "../lib/money";
 
 type SortMode = "NEWEST" | "PRICE_ASC" | "PRICE_DESC";
 
@@ -37,19 +37,17 @@ export default function HomePage() {
 
   const activeDistrict = districts[0] ?? null;
 
-  const parsePkrInputToPaisa = (value: string): number | undefined => {
+  const parsePriceFilter = (value: string): number | undefined => {
     const trimmed = value.trim();
     if (!trimmed) return undefined;
-    const num = Number.parseInt(trimmed, 10);
-    if (!Number.isFinite(num) || num < 0) return undefined;
-    return num * 100;
+    return parseWholeRupeesToPaisa(trimmed);
   };
 
   const loadResults = useCallback(async () => {
     setLoading(true);
     try {
-      const minPrice = parsePkrInputToPaisa(minPkrText);
-      const maxPrice = parsePkrInputToPaisa(maxPkrText);
+      const minPrice = parsePriceFilter(minPkrText);
+      const maxPrice = parsePriceFilter(maxPkrText);
       const res = await searchListings({
         q: queryText.trim() || undefined,
         type: selectedType,
@@ -340,13 +338,7 @@ export default function HomePage() {
                   className="flex flex-col justify-between rounded-2xl border border-border-subtle bg-surface-card p-4 shadow-sm transition hover:border-brand-primary hover:shadow-md"
                 >
                   <div>
-                    <div
-                      className={`h-44 w-full overflow-hidden rounded-xl ${
-                        isAccent ? "bg-brand-accent-soft" : "bg-brand-primary-soft"
-                      } flex items-center justify-center text-xs font-semibold ${
-                        isAccent ? "text-brand-accent" : "text-brand-primary"
-                      }`}
-                    >
+                    <div className="h-44 w-full overflow-hidden rounded-xl">
                       {item.thumbnailUrl ? (
                         <img
                           src={item.thumbnailUrl}
@@ -354,11 +346,14 @@ export default function HomePage() {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span>
-                          {item.type === "PRODUCT"
-                            ? t.productsFilter
-                            : t.servicesFilter}
-                        </span>
+                        <CategoryArtwork
+                          type={item.type}
+                          label={
+                            item.type === "PRODUCT"
+                              ? t.productsFilter
+                              : t.servicesFilter
+                          }
+                        />
                       )}
                     </div>
 

@@ -6,6 +6,7 @@ import type {
   DistrictDto,
   MediaAssetDto,
   OrderDetailDto,
+  OrderMessageDto,
   PrivateStoreDto,
   ProductDto,
   SellerProfileDto,
@@ -18,7 +19,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../../components/locale-provider";
 import { StoreShareAndQrCard } from "../../components/qr-poster";
-import { StatusBadge, TrustPill } from "../../components/ui-primitives";
+import {
+  ConfirmActionButton,
+  OrderTimeline,
+  StatusBadge,
+  TrustPill
+} from "../../components/ui-primitives";
 import {
   ApiClientError,
   archiveSellerProduct,
@@ -29,12 +35,14 @@ import {
   createSellerService,
   fetchCategories,
   fetchDistricts,
+  fetchOrderMessages,
   fetchSellerCommissionSummary,
   fetchSellerOrders,
   fetchSellerProducts,
   fetchSellerProfile,
   fetchSellerServices,
   fetchSellerStore,
+  postOrderMessage,
   submitSellerOnboarding,
   updateSellerOrderStatus,
   updateSellerProduct,
@@ -42,7 +50,13 @@ import {
   updateSellerStore
 } from "../../lib/api-client";
 import { uploadImageAssetToS3 } from "../../lib/media-upload";
-import { formatPkrFromPaisa } from "../../lib/money";
+import {
+  formatPkrFromPaisa,
+  paisaToWholeRupees,
+  parseWholeRupeesToPaisa
+} from "../../lib/money";
+
+type SellerTab = "ORDERS" | "PRODUCTS" | "SERVICES" | "GROWTH";
 
 export default function SellerStudioPage() {
   const { locale, t, user, refreshUser } = useAppContext();
@@ -63,10 +77,10 @@ export default function SellerStudioPage() {
   const [storeSlug, setStoreSlug] = useState("");
   const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
 
-  // New Product form
+  // New Product form (Rupees input converted safely to integer paisa)
   const [prodTitle, setProdTitle] = useState("");
   const [prodCatId, setProdCatId] = useState("");
-  const [prodPricePaisa, setProdPricePaisa] = useState(150_000);
+  const [prodPriceRupees, setProdPriceRupees] = useState(1500);
   const [prodStock, setProdStock] = useState(5);
   const [prodDesc, setProdDesc] = useState("");
   const [uploadedAssets, setUploadedAssets] = useState<MediaAssetDto[]>([]);
@@ -88,15 +102,20 @@ export default function SellerStudioPage() {
     }
   ]);
 
-  // Store Settings Editor
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Tab navigation & Store Settings Editor
+  const [activeTab, setActiveTab] = useState<SellerTab>("ORDERS");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editDeliveryFeePaisa, setEditDeliveryFeePaisa] = useState(0);
+  const [editDeliveryFeeRupees, setEditDeliveryFeeRupees] = useState(0);
   const [editShowPublicPhone, setEditShowPublicPhone] = useState(false);
   const [editPublicPhone, setEditPublicPhone] = useState("");
   const [editShowPublicAddress, setEditShowPublicAddress] = useState(false);
   const [editPublicAddress, setEditPublicAddress] = useState("");
+
+  // Order chat drawer state
+  const [chatOrderId, setChatOrderId] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<OrderMessageDto[]>([]);
+  const [chatText, setChatText] = useState("");
 
   // Per-order offline payment reference description
   const [manualPaymentDescByOrder, setManualPaymentDescByOrder] = useState<
@@ -144,7 +163,9 @@ export default function SellerStudioPage() {
           setStore(storeRes.data);
           setEditDisplayName(storeRes.data.displayName);
           setEditDescription(storeRes.data.description ?? "");
-          setEditDeliveryFeePaisa(storeRes.data.defaultDeliveryFeePaisa);
+          setEditDeliveryFeeRupees(
+            paisaToWholeRupees(storeRes.data.defaultDeliveryFeePaisa)
+          );
           setEditShowPublicPhone(storeRes.data.showPublicPhone);
           setEditPublicPhone(storeRes.data.publicContactPhone ?? "");
           setEditShowPublicAddress(storeRes.data.showPublicAddress);
@@ -228,7 +249,7 @@ export default function SellerStudioPage() {
         categoryId: prodCatId,
         title: prodTitle,
         description: prodDesc,
-        basePricePaisa: prodPricePaisa,
+        basePricePaisa: parseWholeRupeesToPaisa(prodPriceRupees),
         stockQuantity: prodStock,
         deliveryEnabled: true,
         pickupEnabled: true,
@@ -240,6 +261,11 @@ export default function SellerStudioPage() {
       setProdTitle("");
       setProdDesc("");
       setUploadedAssets([]);
+      setStatusNotice(
+        locale === "ur"
+          ? "پروڈکٹ منظوری کے لیے بھیج دی گئی۔"
+          : "Product submitted for review."
+      );
       await loadSellerWorkspace();
     } catch (err: unknown) {
       setErrorMsg(
@@ -284,7 +310,7 @@ export default function SellerStudioPage() {
       await updateSellerStore({
         displayName: editDisplayName.trim(),
         description: editDescription.trim() || null,
-        defaultDeliveryFeePaisa: editDeliveryFeePaisa,
+        defaultDeliveryFeePaisa: parseWholeRupeesToPaisa(editDeliveryFeeRupees),
         showPublicPhone: editShowPublicPhone,
         publicContactPhone:
           editShowPublicPhone && editPublicPhone.trim()
@@ -296,7 +322,6 @@ export default function SellerStudioPage() {
             ? editPublicAddress.trim()
             : null
       });
-      setSettingsOpen(false);
       setStatusNotice("Store settings updated.");
       await loadSellerWorkspace();
     } catch (err: unknown) {
@@ -334,6 +359,36 @@ export default function SellerStudioPage() {
     a.download = `${store?.slug ?? "saudavo"}-orders-ledger.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const openOrderChat = async (orderId: string) => {
+    if (chatOrderId === orderId) {
+      setChatOrderId(null);
+      return;
+    }
+    setChatOrderId(orderId);
+    try {
+      const res = await fetchOrderMessages(orderId);
+      setChatMessages(res.data);
+    } catch {
+      setChatMessages([]);
+    }
+  };
+
+  const handleSendSellerMessage = async (orderId: string, bodyText: string) => {
+    const trimmed = bodyText.trim();
+    if (!trimmed) return;
+    setErrorMsg(null);
+    try {
+      await postOrderMessage(orderId, { body: trimmed });
+      setChatText("");
+      const res = await fetchOrderMessages(orderId);
+      setChatMessages(res.data);
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : "Unable to send message."
+      );
+    }
   };
 
   const runOrderAction = async (
@@ -390,13 +445,6 @@ export default function SellerStudioPage() {
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={profile.verificationStatus} />
             <StatusBadge status={store.status} />
-            <button
-              type="button"
-              onClick={() => setSettingsOpen((prev) => !prev)}
-              className="rounded-lg border border-border-subtle bg-surface-card px-3 py-1.5 text-xs font-semibold text-ink-primary hover:border-brand-primary"
-            >
-              {locale === "ur" ? "اسٹور سیٹنگز" : "Store Settings & Privacy"}
-            </button>
           </div>
         )}
       </div>
@@ -408,8 +456,18 @@ export default function SellerStudioPage() {
       )}
 
       {statusNotice && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {statusNotice}
+        <div
+          role="status"
+          className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+        >
+          <span>{statusNotice}</span>
+          <button
+            type="button"
+            onClick={() => setStatusNotice(null)}
+            className="text-xs font-bold text-emerald-900 hover:underline"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -497,99 +555,148 @@ export default function SellerStudioPage() {
         </form>
       ) : (
         <div className="space-y-6">
-          {/* Store QR & Share Card */}
-          {store.status === "ACTIVE" && (
-            <StoreShareAndQrCard
-              storeSlug={store.slug}
-              storeDisplayName={store.displayName}
-              districtName={store.districtNameEn}
-            />
-          )}
-
-          {/* Store Settings & Privacy Editor */}
-          {settingsOpen && (
-            <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
-              <h2 className="text-lg font-bold text-ink-primary">
-                {locale === "ur"
-                  ? "اسٹور پروفائل اور رازداری سیٹنگز"
-                  : "Store Profile & Privacy Settings"}
-              </h2>
-              <form
-                onSubmit={handleSaveStoreSettings}
-                className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          {/* Seller Workspace Tabs */}
+          <div className="flex flex-wrap gap-2 border-b border-border-subtle pb-3">
+            {(
+              [
+                {
+                  key: "ORDERS",
+                  label: `${t.sellerTabOrders} (${orders.length})`
+                },
+                {
+                  key: "PRODUCTS",
+                  label: `${t.sellerTabProducts} (${products.length})`
+                },
+                {
+                  key: "SERVICES",
+                  label: `${t.sellerTabServices} (${services.length})`
+                },
+                {
+                  key: "GROWTH",
+                  label: t.sellerTabGrowth
+                }
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                  activeTab === tab.key
+                    ? "bg-brand-primary text-white shadow-sm"
+                    : "border border-border-subtle bg-surface-card text-ink-secondary hover:text-ink-primary"
+                }`}
               >
-                <input
-                  type="text"
-                  required
-                  minLength={2}
-                  value={editDisplayName}
-                  onChange={(e) => setEditDisplayName(e.target.value)}
-                  placeholder="Store Display Name"
-                  className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === "GROWTH" && (
+            <div className="space-y-6">
+              {store.status === "ACTIVE" && (
+                <StoreShareAndQrCard
+                  storeSlug={store.slug}
+                  storeDisplayName={store.displayName}
+                  districtName={store.districtNameEn}
                 />
-                <input
-                  type="number"
-                  min={0}
-                  value={editDeliveryFeePaisa}
-                  onChange={(e) =>
-                    setEditDeliveryFeePaisa(Number(e.target.value))
-                  }
-                  placeholder="Default Delivery Fee (paisa)"
-                  className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
-                />
-                <textarea
-                  rows={2}
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder="Store bio / description..."
-                  className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm sm:col-span-2"
-                />
-                <label className="flex items-center gap-2 text-xs text-ink-primary">
-                  <input
-                    type="checkbox"
-                    checked={editShowPublicPhone}
-                    onChange={(e) => setEditShowPublicPhone(e.target.checked)}
-                  />
-                  Show public business phone (off by default for privacy)
-                </label>
-                {editShowPublicPhone && (
-                  <input
-                    type="text"
-                    value={editPublicPhone}
-                    onChange={(e) => setEditPublicPhone(e.target.value)}
-                    placeholder="03001234567"
-                    className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
-                  />
-                )}
-                <label className="flex items-center gap-2 text-xs text-ink-primary">
-                  <input
-                    type="checkbox"
-                    checked={editShowPublicAddress}
-                    onChange={(e) => setEditShowPublicAddress(e.target.checked)}
-                  />
-                  Show public shop address (never enable for home-based stores)
-                </label>
-                {editShowPublicAddress && (
-                  <input
-                    type="text"
-                    value={editPublicAddress}
-                    onChange={(e) => setEditPublicAddress(e.target.value)}
-                    placeholder="Shop #4, Main Bazaar Mianwali"
-                    className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
-                  />
-                )}
-                <button
-                  type="submit"
-                  className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white sm:w-fit"
+              )}
+
+              <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
+                <h2 className="text-lg font-bold text-ink-primary">
+                  {locale === "ur"
+                    ? "اسٹور پروفائل اور رازداری سیٹنگز"
+                    : "Store Profile & Privacy Settings"}
+                </h2>
+                <form
+                  onSubmit={handleSaveStoreSettings}
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-2"
                 >
-                  Save Store Settings
-                </button>
-              </form>
-            </section>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-ink-secondary">
+                      {locale === "ur" ? "اسٹور کا نام" : "Store Display Name"}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      minLength={2}
+                      value={editDisplayName}
+                      onChange={(e) => setEditDisplayName(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-ink-secondary">
+                      {locale === "ur"
+                        ? "ڈیفالٹ ڈلیوری فیس (روپے Rs.)"
+                        : "Default Delivery Fee (Rs.)"}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editDeliveryFeeRupees}
+                      onChange={(e) =>
+                        setEditDeliveryFeeRupees(Number(e.target.value))
+                      }
+                      className="mt-1 w-full rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                    />
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    placeholder="Store bio / description..."
+                    className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm sm:col-span-2"
+                  />
+                  <label className="flex items-center gap-2 text-xs text-ink-primary">
+                    <input
+                      type="checkbox"
+                      checked={editShowPublicPhone}
+                      onChange={(e) => setEditShowPublicPhone(e.target.checked)}
+                    />
+                    Show public business phone (off by default for privacy)
+                  </label>
+                  {editShowPublicPhone && (
+                    <input
+                      type="text"
+                      value={editPublicPhone}
+                      onChange={(e) => setEditPublicPhone(e.target.value)}
+                      placeholder="03001234567"
+                      className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                    />
+                  )}
+                  <label className="flex items-center gap-2 text-xs text-ink-primary">
+                    <input
+                      type="checkbox"
+                      checked={editShowPublicAddress}
+                      onChange={(e) =>
+                        setEditShowPublicAddress(e.target.checked)
+                      }
+                    />
+                    Show public shop address (never enable for home-based stores)
+                  </label>
+                  {editShowPublicAddress && (
+                    <input
+                      type="text"
+                      value={editPublicAddress}
+                      onChange={(e) => setEditPublicAddress(e.target.value)}
+                      placeholder="Shop #4, Main Bazaar Mianwali"
+                      className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                    />
+                  )}
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white sm:w-fit"
+                  >
+                    {locale === "ur" ? "سیٹنگز محفوظ کریں" : "Save Store Settings"}
+                  </button>
+                </form>
+              </section>
+            </div>
           )}
 
-          {/* Accounting Summary matching Figma 8:98 */}
-          {summary && (
+          {/* Accounting Summary + Orders Tab */}
+          {activeTab === "ORDERS" && summary && (
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-brand-accent-soft px-4 py-2 text-xs font-semibold text-brand-accent">
                 <span>
@@ -644,6 +751,7 @@ export default function SellerStudioPage() {
           )}
 
           {/* Seller Orders & Split COD Confirmation */}
+          {activeTab === "ORDERS" && (
           <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">
             <h2 className="text-lg font-bold text-ink-primary">
               Store Orders ({orders.length})
@@ -652,207 +760,305 @@ export default function SellerStudioPage() {
               {orders.map((order) => (
                 <div
                   key={order.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle p-4"
+                  className="space-y-3 rounded-xl border border-border-subtle p-4"
                 >
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-ink-primary">
-                      #{order.orderNumber} —{" "}
-                      {formatPkrFromPaisa(order.totalPaisa, locale)}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-secondary">
-                      <span>
-                        {order.orderType} • {order.paymentMethod}
-                      </span>
-                      <StatusBadge status={order.status} />
-                      <StatusBadge status={order.codCollectionStatus} />
-                      {order.paymentMethod === "COD" && order.buyerCodStats && (
-                        <TrustPill
-                          variant={
-                            order.buyerCodStats.refusedCodCount > 0
-                              ? "cod"
-                              : order.buyerCodStats.completedCodCount > 0
-                                ? "privacy"
-                                : "verified"
-                          }
-                          label={
-                            order.buyerCodStats.refusedCodCount > 0
-                              ? `Caution: ${order.buyerCodStats.refusedCodCount} COD refusal(s)`
-                              : order.buyerCodStats.completedCodCount > 0
-                                ? `Trusted Buyer: ${order.buyerCodStats.completedCodCount} COD paid`
-                                : "First-time COD buyer"
-                          }
-                        />
-                      )}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-ink-primary">
+                        #{order.orderNumber} —{" "}
+                        {formatPkrFromPaisa(order.totalPaisa, locale)}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-secondary">
+                        <span>
+                          {order.orderType} • {order.paymentMethod}
+                        </span>
+                        <StatusBadge status={order.status} />
+                        <StatusBadge status={order.codCollectionStatus} />
+                        {order.paymentMethod === "COD" && order.buyerCodStats && (
+                          <TrustPill
+                            variant={
+                              order.buyerCodStats.refusedCodCount > 0
+                                ? "cod"
+                                : order.buyerCodStats.completedCodCount > 0
+                                  ? "privacy"
+                                  : "verified"
+                            }
+                            label={
+                              order.buyerCodStats.refusedCodCount > 0
+                                ? `Caution: ${order.buyerCodStats.refusedCodCount} COD refusal(s)`
+                                : order.buyerCodStats.completedCodCount > 0
+                                  ? `Trusted Buyer: ${order.buyerCodStats.completedCodCount} COD paid`
+                                  : "First-time COD buyer"
+                            }
+                          />
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {order.status === "PENDING_CONFIRMATION" && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void runOrderAction(
-                            () => confirmSellerOrder(order.id),
-                            "Unable to confirm order."
-                          )
-                        }
-                        className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
-                      >
-                        Confirm Order
-                      </button>
-                    )}
-
-                    {order.orderType === "PHYSICAL" &&
-                      order.status === "CONFIRMED" && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {order.status === "PENDING_CONFIRMATION" && (
                         <button
                           type="button"
                           onClick={() =>
                             void runOrderAction(
-                              () =>
-                                updateSellerOrderStatus(order.id, {
-                                  toStatus: "READY_FOR_DISPATCH"
-                                }),
-                              "Unable to mark order ready."
-                            )
-                          }
-                          className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
-                        >
-                          Mark Ready
-                        </button>
-                      )}
-
-                    {order.orderType === "PHYSICAL" &&
-                      order.status === "READY_FOR_DISPATCH" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void runOrderAction(
-                              () =>
-                                updateSellerOrderStatus(order.id, {
-                                  toStatus: "DELIVERED"
-                                }),
-                              "Unable to mark order delivered."
-                            )
-                          }
-                          className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
-                        >
-                          Mark Delivered
-                        </button>
-                      )}
-
-                    {order.orderType === "SERVICE" &&
-                      order.status === "CONFIRMED" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void runOrderAction(
-                              () =>
-                                updateSellerOrderStatus(order.id, {
-                                  toStatus: "IN_PROGRESS"
-                                }),
-                              "Unable to start service order."
-                            )
-                          }
-                          className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
-                        >
-                          Start Service Work
-                        </button>
-                      )}
-
-                    {order.orderType === "SERVICE" &&
-                      order.status === "IN_PROGRESS" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void runOrderAction(
-                              () =>
-                                updateSellerOrderStatus(order.id, {
-                                  toStatus: "DELIVERY_SUBMITTED",
-                                  deliverySummary:
-                                    "Completed work delivered as scoped."
-                                }),
-                              "Unable to submit service delivery."
-                            )
-                          }
-                          className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
-                        >
-                          Submit Work Delivery
-                        </button>
-                      )}
-
-                    {order.paymentMethod === "COD" &&
-                      ((order.orderType === "PHYSICAL" &&
-                        order.status === "DELIVERED") ||
-                        (order.orderType === "SERVICE" &&
-                          order.status === "DELIVERY_SUBMITTED")) &&
-                      order.codCollectionStatus === "PENDING_COLLECTION" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void runOrderAction(
-                              () =>
-                                confirmSellerCodCollection(order.id, {
-                                  collectionStatus: "COLLECTED",
-                                  collectedAmountPaisa: order.totalPaisa
-                                }),
-                              "Unable to record COD cash collection."
+                              () => confirmSellerOrder(order.id),
+                              "Unable to confirm order."
                             )
                           }
                           className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
                         >
-                          Confirm COD Cash Collected
+                          {t.confirmOrderBtn}
                         </button>
                       )}
 
-                    {order.paymentMethod === "MANUAL_OFFLINE" &&
-                      order.status !== "CANCELLED" &&
-                      order.codCollectionStatus === "PENDING_COLLECTION" && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <input
-                            type="text"
-                            value={
-                              manualPaymentDescByOrder[order.id] ??
-                              "JazzCash / EasyPaisa Offline"
-                            }
-                            onChange={(e) =>
-                              setManualPaymentDescByOrder((prev) => ({
-                                ...prev,
-                                [order.id]: e.target.value
-                              }))
-                            }
-                            placeholder="Offline method ref"
-                            className="rounded-lg border border-border-subtle px-2.5 py-1 text-xs"
-                          />
+                      {order.orderType === "PHYSICAL" &&
+                        order.status === "CONFIRMED" && (
                           <button
                             type="button"
                             onClick={() =>
                               void runOrderAction(
                                 () =>
-                                  confirmSellerManualPayment(order.id, {
-                                    collectionStatus: "COLLECTED",
-                                    collectedAmountPaisa: order.totalPaisa,
-                                    manualPaymentMethodDesc:
-                                      (
-                                        manualPaymentDescByOrder[order.id] ??
-                                        "JazzCash / EasyPaisa Offline"
-                                      ).trim() || "Offline Payment"
+                                  updateSellerOrderStatus(order.id, {
+                                    toStatus: "READY_FOR_DISPATCH"
                                   }),
-                                "Unable to confirm offline payment."
+                                "Unable to mark order ready."
+                              )
+                            }
+                            className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                          >
+                            {t.markReadyBtn}
+                          </button>
+                        )}
+
+                      {order.orderType === "PHYSICAL" &&
+                        order.status === "READY_FOR_DISPATCH" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void runOrderAction(
+                                () =>
+                                  updateSellerOrderStatus(order.id, {
+                                    toStatus: "DELIVERED"
+                                  }),
+                                "Unable to mark order delivered."
+                              )
+                            }
+                            className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                          >
+                            {t.markDeliveredBtn}
+                          </button>
+                        )}
+
+                      {order.orderType === "SERVICE" &&
+                        order.status === "CONFIRMED" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void runOrderAction(
+                                () =>
+                                  updateSellerOrderStatus(order.id, {
+                                    toStatus: "IN_PROGRESS"
+                                  }),
+                                "Unable to start service order."
+                              )
+                            }
+                            className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                          >
+                            {t.startServiceBtn}
+                          </button>
+                        )}
+
+                      {order.orderType === "SERVICE" &&
+                        order.status === "IN_PROGRESS" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void runOrderAction(
+                                () =>
+                                  updateSellerOrderStatus(order.id, {
+                                    toStatus: "DELIVERY_SUBMITTED",
+                                    deliverySummary:
+                                      "Completed work delivered as scoped."
+                                  }),
+                                "Unable to submit service delivery."
+                              )
+                            }
+                            className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                          >
+                            {t.submitDeliveryBtn}
+                          </button>
+                        )}
+
+                      {order.paymentMethod === "COD" &&
+                        ((order.orderType === "PHYSICAL" &&
+                          order.status === "DELIVERED") ||
+                          (order.orderType === "SERVICE" &&
+                            order.status === "DELIVERY_SUBMITTED")) &&
+                        order.codCollectionStatus === "PENDING_COLLECTION" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void runOrderAction(
+                                () =>
+                                  confirmSellerCodCollection(order.id, {
+                                    collectionStatus: "COLLECTED",
+                                    collectedAmountPaisa: order.totalPaisa
+                                  }),
+                                "Unable to record COD cash collection."
                               )
                             }
                             className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
                           >
-                            Confirm Offline Payment
+                            {t.confirmCodCashBtn}
                           </button>
-                        </div>
-                      )}
+                        )}
+
+                      {order.paymentMethod === "MANUAL_OFFLINE" &&
+                        order.status !== "CANCELLED" &&
+                        order.codCollectionStatus === "PENDING_COLLECTION" && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="text"
+                              value={
+                                manualPaymentDescByOrder[order.id] ??
+                                "JazzCash / EasyPaisa Offline"
+                              }
+                              onChange={(e) =>
+                                setManualPaymentDescByOrder((prev) => ({
+                                  ...prev,
+                                  [order.id]: e.target.value
+                                }))
+                              }
+                              placeholder="Offline method ref"
+                              className="rounded-lg border border-border-subtle px-2.5 py-1 text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void runOrderAction(
+                                  () =>
+                                    confirmSellerManualPayment(order.id, {
+                                      collectionStatus: "COLLECTED",
+                                      collectedAmountPaisa: order.totalPaisa,
+                                      manualPaymentMethodDesc:
+                                        (
+                                          manualPaymentDescByOrder[order.id] ??
+                                          "JazzCash / EasyPaisa Offline"
+                                        ).trim() || "Offline Payment"
+                                    }),
+                                  "Unable to confirm offline payment."
+                                )
+                              }
+                              className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                            >
+                              {t.confirmOfflinePayBtn}
+                            </button>
+                          </div>
+                        )}
+
+                      <button
+                        type="button"
+                        onClick={() => void openOrderChat(order.id)}
+                        className="rounded-lg border border-border-subtle px-3 py-1.5 text-xs font-semibold text-ink-primary hover:border-brand-primary"
+                      >
+                        {t.orderChatBtn}
+                      </button>
+                    </div>
                   </div>
+
+                  <OrderTimeline
+                    orderType={order.orderType}
+                    status={order.status}
+                    locale={locale}
+                  />
+
+                  {chatOrderId === order.id && (
+                    <div className="rounded-xl border border-border-subtle bg-surface-muted/40 p-3 space-y-2.5">
+                      <div className="max-h-48 space-y-1.5 overflow-y-auto">
+                        {chatMessages.length === 0 ? (
+                          <p className="text-xs text-ink-secondary">
+                            {locale === "ur"
+                              ? "ابھی کوئی پیغام موجود نہیں۔"
+                              : "No messages on this order yet."}
+                          </p>
+                        ) : (
+                          chatMessages.map((msg) => (
+                            <div
+                              key={msg.id}
+                              className="rounded-lg bg-surface-card p-2 text-xs"
+                            >
+                              <span className="font-bold text-brand-primary">
+                                {msg.senderRole}:
+                              </span>{" "}
+                              <span dir="auto" className="text-ink-primary">
+                                {msg.body}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {(locale === "ur"
+                          ? [
+                              "جی، آپ کا آرڈر تیار کیا جا رہا ہے۔",
+                              "برائے کرم ڈلیوری کے لیے قریبی نشان بتا دیں۔",
+                              "آپ کا پارسل آج ڈسپیچ ہو رہا ہے۔"
+                            ]
+                          : [
+                              "Order confirmed and preparing now.",
+                              "Please share nearest Mianwali landmark.",
+                              "Rider/service scheduled for today."
+                            ]
+                        ).map((quick) => (
+                          <button
+                            key={quick}
+                            type="button"
+                            onClick={() =>
+                              void handleSendSellerMessage(order.id, quick)
+                            }
+                            className="rounded-full border border-brand-primary/30 bg-surface-card px-2.5 py-1 text-[11px] font-medium text-brand-primary hover:bg-brand-primary-soft"
+                          >
+                            + {quick}
+                          </button>
+                        ))}
+                      </div>
+
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void handleSendSellerMessage(order.id, chatText);
+                        }}
+                        className="flex gap-2"
+                      >
+                        <input
+                          type="text"
+                          value={chatText}
+                          onChange={(e) => setChatText(e.target.value)}
+                          placeholder={
+                            locale === "ur"
+                              ? "خریدار کو پیغام لکھیں..."
+                              : "Reply to buyer..."
+                          }
+                          className="flex-1 rounded-lg border border-border-subtle bg-surface-card px-3 py-1.5 text-xs"
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          {locale === "ur" ? "بھیجیں" : "Send"}
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </section>
+          )}
 
           {/* Seller Products List + Add Product Form */}
+          {activeTab === "PRODUCTS" && (
           <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
             <h2 className="text-lg font-bold text-ink-primary">
               Physical Products ({products.length} listed)
@@ -932,18 +1138,17 @@ export default function SellerStudioPage() {
                           Resubmit for Review
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() =>
+                      <ConfirmActionButton
+                        label={t.archiveBtn}
+                        confirmLabel={t.confirmYesBtn}
+                        cancelLabel={t.cancelBtn}
+                        onConfirm={() => {
                           void runOrderAction(
                             () => archiveSellerProduct(prod.id),
                             "Unable to archive product."
-                          )
-                        }
-                        className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-700"
-                      >
-                        Archive
-                      </button>
+                          );
+                        }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -970,28 +1175,40 @@ export default function SellerStudioPage() {
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.nameEn}
+                    {locale === "ur" ? c.nameUr : c.nameEn}
                   </option>
                 ))}
               </select>
-              <input
-                type="number"
-                required
-                min={100}
-                value={prodPricePaisa}
-                onChange={(e) => setProdPricePaisa(Number(e.target.value))}
-                placeholder="Price in integer paisa (100 paisa = 1 PKR)"
-                className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
-              />
-              <input
-                type="number"
-                required
-                min={0}
-                value={prodStock}
-                onChange={(e) => setProdStock(Number(e.target.value))}
-                placeholder="Stock quantity"
-                className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
-              />
+              <div>
+                <label className="block text-[11px] font-semibold text-ink-secondary">
+                  {locale === "ur"
+                    ? "قیمت (روپے Rs.)"
+                    : "Price in Rupees (Rs.)"}
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={prodPriceRupees}
+                  onChange={(e) => setProdPriceRupees(Number(e.target.value))}
+                  placeholder="e.g. 1500"
+                  className="mt-1 w-full rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-ink-secondary">
+                  {locale === "ur" ? "موجودہ اسٹاک" : "Stock Quantity"}
+                </label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={prodStock}
+                  onChange={(e) => setProdStock(Number(e.target.value))}
+                  placeholder="Stock quantity"
+                  className="mt-1 w-full rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
+                />
+              </div>
               <textarea
                 required
                 minLength={10}
@@ -1055,8 +1272,10 @@ export default function SellerStudioPage() {
               </button>
             </form>
           </section>
+          )}
 
           {/* Service Listings & Add Service Form */}
+          {activeTab === "SERVICES" && (
           <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
             <h2 className="text-lg font-bold text-ink-primary">
               Service Listings ({services.length} listed)
@@ -1202,18 +1421,23 @@ export default function SellerStudioPage() {
                     <input
                       type="number"
                       required
-                      min={100}
-                      value={pkg.pricePaisa}
+                      min={1}
+                      value={paisaToWholeRupees(pkg.pricePaisa)}
                       onChange={(e) =>
                         setSvcPackages((prev) =>
                           prev.map((item, i) =>
                             i === idx
-                              ? { ...item, pricePaisa: Number(e.target.value) }
+                              ? {
+                                  ...item,
+                                  pricePaisa: parseWholeRupeesToPaisa(
+                                    e.target.value
+                                  )
+                                }
                               : item
                           )
                         )
                       }
-                      placeholder="Price (paisa)"
+                      placeholder="Price (Rs.)"
                       className="rounded-lg border border-border-subtle bg-surface-card px-3 py-1.5 text-xs"
                     />
                     <input
@@ -1308,6 +1532,7 @@ export default function SellerStudioPage() {
               </button>
             </form>
           </section>
+          )}
         </div>
       )}
     </main>

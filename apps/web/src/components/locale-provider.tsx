@@ -16,6 +16,7 @@ import {
   type UiDictionary
 } from "../i18n/dictionaries";
 import {
+  fetchCarts,
   fetchCurrentUser,
   getStoredCsrfToken,
   logoutAccount,
@@ -31,6 +32,8 @@ interface AppContextValue {
   authLoading: boolean;
   setUser: (user: AuthUser | null) => void;
   refreshUser: () => Promise<void>;
+  cartItemCount: number;
+  refreshCartCount: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -41,6 +44,7 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<LocaleCode>("en");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [cartItemCount, setCartItemCount] = useState(0);
 
   const applyLocaleToDom = useCallback((next: LocaleCode) => {
     if (typeof document !== "undefined") {
@@ -64,6 +68,20 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
     [applyLocaleToDom]
   );
 
+  const refreshCartCount = useCallback(async () => {
+    try {
+      const cartRes = await fetchCarts();
+      const totalItems = cartRes.data.reduce(
+        (sum, cart) =>
+          sum + cart.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+        0
+      );
+      setCartItemCount(totalItems);
+    } catch {
+      setCartItemCount(0);
+    }
+  }, []);
+
   const refreshUser = useCallback(async () => {
     setAuthLoading(true);
     try {
@@ -71,13 +89,15 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
         syncCsrf: !getStoredCsrfToken()
       });
       setUser(res.data.user);
+      void refreshCartCount();
     } catch {
       setUser(null);
+      setCartItemCount(0);
       setStoredCsrfToken(null);
     } finally {
       setAuthLoading(false);
     }
-  }, []);
+  }, [refreshCartCount]);
 
   const signOut = useCallback(async () => {
     try {
@@ -86,6 +106,7 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       // Clear client state even if session already expired
     }
     setUser(null);
+    setCartItemCount(0);
   }, []);
 
   useEffect(() => {
@@ -113,9 +134,20 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       authLoading,
       setUser,
       refreshUser,
+      cartItemCount,
+      refreshCartCount,
       signOut
     }),
-    [authLoading, locale, refreshUser, setLocale, signOut, user]
+    [
+      authLoading,
+      cartItemCount,
+      locale,
+      refreshCartCount,
+      refreshUser,
+      setLocale,
+      signOut,
+      user
+    ]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

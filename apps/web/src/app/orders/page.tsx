@@ -8,7 +8,11 @@ import type {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../../components/locale-provider";
-import { StatusBadge } from "../../components/ui-primitives";
+import {
+  ConfirmActionButton,
+  OrderTimeline,
+  StatusBadge
+} from "../../components/ui-primitives";
 import {
   acceptServiceDelivery,
   ApiClientError,
@@ -246,12 +250,23 @@ export default function OrdersPage() {
                   </span>
                 </div>
 
+                <OrderTimeline
+                  orderType={order.orderType}
+                  status={order.status}
+                  locale={locale}
+                />
+
                 <div className="mt-4 flex flex-wrap gap-2">
                   {order.status === "PENDING_CONFIRMATION" && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
+                    <ConfirmActionButton
+                      label={
+                        locale === "ur"
+                          ? "آرڈر منسوخ کریں (منظوری سے پہلے)"
+                          : "Self-Cancel (Before Confirmation)"
+                      }
+                      confirmLabel={t.confirmYesBtn}
+                      cancelLabel={t.cancelBtn}
+                      onConfirm={() => {
                         void cancelCustomerOrder(order.id, {
                           reason: "Cancelled by customer"
                         })
@@ -265,9 +280,7 @@ export default function OrdersPage() {
                           );
                       }}
                       className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
-                    >
-                      Self-Cancel (Before Confirmation)
-                    </button>
+                    />
                   )}
 
                   {order.orderType === "SERVICE" &&

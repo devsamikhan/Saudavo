@@ -54,6 +54,21 @@ export interface UiDictionary {
   ordersPageTitle: string;
   ordersEmpty: string;
   sellerStudioTitle: string;
+  sellerTabOrders: string;
+  sellerTabProducts: string;
+  sellerTabServices: string;
+  sellerTabGrowth: string;
+  confirmOrderBtn: string;
+  markReadyBtn: string;
+  markDeliveredBtn: string;
+  startServiceBtn: string;
+  submitDeliveryBtn: string;
+  confirmCodCashBtn: string;
+  confirmOfflinePayBtn: string;
+  archiveBtn: string;
+  confirmYesBtn: string;
+  cancelBtn: string;
+  orderChatBtn: string;
   adminConsoleTitle: string;
   exportCsvLedger: string;
   privacyFooterNote: string;
@@ -117,6 +132,21 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     ordersPageTitle: "My Orders & Order Messages",
     ordersEmpty: "No orders placed yet.",
     sellerStudioTitle: "Saudavo Seller Studio",
+    sellerTabOrders: "Overview & Orders",
+    sellerTabProducts: "Products",
+    sellerTabServices: "Services",
+    sellerTabGrowth: "Store & QR Growth",
+    confirmOrderBtn: "Confirm Order",
+    markReadyBtn: "Mark Ready",
+    markDeliveredBtn: "Mark Delivered",
+    startServiceBtn: "Start Service Work",
+    submitDeliveryBtn: "Submit Work Delivery",
+    confirmCodCashBtn: "Confirm COD Cash Collected",
+    confirmOfflinePayBtn: "Confirm Offline Payment",
+    archiveBtn: "Archive",
+    confirmYesBtn: "Confirm?",
+    cancelBtn: "Cancel",
+    orderChatBtn: "Order Chat",
     adminConsoleTitle: "Saudavo Trust & Moderation Console",
     exportCsvLedger: "Export Orders Ledger (CSV)",
     privacyFooterNote:
@@ -180,6 +210,21 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     ordersPageTitle: "میرے آرڈرز اور پیغامات",
     ordersEmpty: "ابھی تک کوئی آرڈر نہیں دیا گیا۔",
     sellerStudioTitle: "سوداو سیلر اسٹوڈیو",
+    sellerTabOrders: "جائزہ اور آرڈرز",
+    sellerTabProducts: "مصنوعات",
+    sellerTabServices: "سروسز",
+    sellerTabGrowth: "اسٹور اور QR شیئر",
+    confirmOrderBtn: "آرڈر منظور کریں",
+    markReadyBtn: "ترسیل کے لیے تیار",
+    markDeliveredBtn: "ڈلیور ہو گیا",
+    startServiceBtn: "کام شروع کریں",
+    submitDeliveryBtn: "کام مکمل کر کے بھیجیں",
+    confirmCodCashBtn: "COD رقم وصولی کی تصدیق",
+    confirmOfflinePayBtn: "آف لائن ادائیگی کی تصدیق",
+    archiveBtn: "آرکائیو کریں",
+    confirmYesBtn: "تصدیق کریں؟",
+    cancelBtn: "منسوخ",
+    orderChatBtn: "آرڈر چیٹ",
     adminConsoleTitle: "سوداو ٹرسٹ اور ماڈریشن کنسول",
     exportCsvLedger: "آرڈر لیجر ڈاؤن لوڈ کریں (CSV)",
     privacyFooterNote:

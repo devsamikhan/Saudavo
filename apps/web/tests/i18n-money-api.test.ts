@@ -23,7 +23,11 @@ import {
   updateSellerService
 } from "../src/lib/api-client";
 import { bytesToMagicHex, uploadImageAssetToS3 } from "../src/lib/media-upload";
-import { formatPkrFromPaisa } from "../src/lib/money";
+import {
+  formatPkrFromPaisa,
+  paisaToWholeRupees,
+  parseWholeRupeesToPaisa
+} from "../src/lib/money";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -37,6 +41,11 @@ describe("@saudavo/web i18n, integer PKR formatting, and API client", () => {
     expect(formatPkrFromPaisa(350_050, "en")).toBe("Rs. 3,500.50");
     expect(formatPkrFromPaisa(350_000, "ur")).toBe("3,500 روپے");
     expect(formatPkrFromPaisa(-10_000, "en")).toBe("-Rs. 100");
+    expect(parseWholeRupeesToPaisa("1500")).toBe(150_000);
+    expect(parseWholeRupeesToPaisa("Rs. 2,450")).toBe(245_000);
+    expect(parseWholeRupeesToPaisa(-5)).toBe(0);
+    expect(paisaToWholeRupees(150_000)).toBe(1500);
+    expect(paisaToWholeRupees(-100)).toBe(0);
   });
 
   it("maintains full EN/UR dictionary parity and RTL/LTR direction mapping", () => {

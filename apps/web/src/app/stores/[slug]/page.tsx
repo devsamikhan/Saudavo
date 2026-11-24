@@ -6,7 +6,11 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAppContext } from "../../../components/locale-provider";
 import { StoreShareAndQrCard } from "../../../components/qr-poster";
-import { ReportListingButton, TrustPill } from "../../../components/ui-primitives";
+import {
+  CategoryArtwork,
+  ReportListingButton,
+  TrustPill
+} from "../../../components/ui-primitives";
 import {
   ApiClientError,
   fetchPublicStoreCatalog,
@@ -24,6 +28,7 @@ export default function PublicStorePage() {
   const [products, setProducts] = useState<PublicSearchItem[]>([]);
   const [services, setServices] = useState<PublicSearchItem[]>([]);
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
+  const [catalogTab, setCatalogTab] = useState<"ALL" | "PRODUCTS" | "SERVICES">("ALL");
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -81,6 +86,13 @@ export default function PublicStorePage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+      <nav aria-label="Breadcrumb" className="text-xs text-ink-secondary">
+        <Link href="/" className="font-semibold text-brand-primary hover:underline">
+          {t.navStorefront}
+        </Link>{" "}
+        / <span dir="auto">{store.displayName}</span>
+      </nav>
+
       <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -145,7 +157,31 @@ export default function PublicStorePage() {
         </div>
       </section>
 
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { key: "ALL", label: `${t.allCategoriesLabel} (${products.length + services.length})` },
+            { key: "PRODUCTS", label: `${t.storeCatalogProducts} (${products.length})` },
+            { key: "SERVICES", label: `${t.storeCatalogServices} (${services.length})` }
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setCatalogTab(tab.key)}
+            className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+              catalogTab === tab.key
+                ? "bg-brand-primary text-white"
+                : "border border-border-subtle bg-surface-card text-ink-secondary hover:text-ink-primary"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Store Active Products */}
+      {(catalogTab === "ALL" || catalogTab === "PRODUCTS") && (
       <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
         <h2 className="text-lg font-bold text-ink-primary">
           {t.storeCatalogProducts} ({products.length})
@@ -164,7 +200,7 @@ export default function PublicStorePage() {
                 className="flex flex-col justify-between rounded-xl border border-border-subtle p-4 transition hover:border-brand-primary"
               >
                 <div className="space-y-2">
-                  <div className="h-36 w-full overflow-hidden rounded-lg bg-brand-primary-soft flex items-center justify-center text-xs font-semibold text-brand-primary">
+                  <div className="h-36 w-full overflow-hidden rounded-lg">
                     {prod.thumbnailUrl ? (
                       <img
                         src={prod.thumbnailUrl}
@@ -172,7 +208,7 @@ export default function PublicStorePage() {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      t.codBadge
+                      <CategoryArtwork type="PRODUCT" label={t.codBadge} />
                     )}
                   </div>
                   <h3 dir="auto" className="text-base font-bold text-ink-primary">
@@ -195,8 +231,10 @@ export default function PublicStorePage() {
           </div>
         )}
       </section>
+      )}
 
       {/* Store Active Services */}
+      {(catalogTab === "ALL" || catalogTab === "SERVICES") && (
       <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
         <h2 className="text-lg font-bold text-ink-primary">
           {t.storeCatalogServices} ({services.length})
@@ -242,6 +280,7 @@ export default function PublicStorePage() {
           </div>
         )}
       </section>
+      )}
 
       {/* Verified Buyer Reviews */}
       <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">

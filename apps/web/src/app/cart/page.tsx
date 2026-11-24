@@ -25,7 +25,7 @@ import { formatPkrFromPaisa } from "../../lib/money";
 
 export default function CartPage() {
   const router = useRouter();
-  const { locale, t, user } = useAppContext();
+  const { locale, t, user, refreshCartCount } = useAppContext();
 
   const [carts, setCarts] = useState<StoreCartDto[]>([]);
   const [addresses, setAddresses] = useState<AddressDto[]>([]);
@@ -61,6 +61,7 @@ export default function CartPage() {
         fetchDistricts()
       ]);
       setCarts(cartRes.data);
+      void refreshCartCount();
       setAddresses(addrRes.data);
       setDistricts(distRes.data);
       if (cartRes.data.length > 0 && !selectedCartStoreId) {
@@ -119,6 +120,7 @@ export default function CartPage() {
         paymentMethod: "COD",
         ...(customerNote.trim() ? { customerNote: customerNote.trim() } : {})
       });
+      await refreshCartCount();
       router.push("/orders");
     } catch (err: unknown) {
       setErrorMsg(

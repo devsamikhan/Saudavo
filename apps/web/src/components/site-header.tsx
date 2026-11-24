@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
-  fetchCarts,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead
@@ -98,12 +97,11 @@ function formatNotificationText(
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { locale, setLocale, t, user, signOut } = useAppContext();
+  const { locale, setLocale, t, user, cartItemCount, signOut } = useAppContext();
 
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [cartItemCount, setCartItemCount] = useState(0);
 
   const toggleLocale = () => {
     setLocale(locale === "en" ? "ur" : "en");
@@ -118,26 +116,13 @@ export function SiteHeader() {
     if (!user) {
       setNotifications([]);
       setUnreadCount(0);
-      setCartItemCount(0);
       return;
     }
 
-    const [notifRes, cartRes] = await Promise.all([
-      fetchNotifications().catch(() => null),
-      fetchCarts().catch(() => null)
-    ]);
-
+    const notifRes = await fetchNotifications().catch(() => null);
     if (notifRes) {
       setNotifications(notifRes.data);
       setUnreadCount(notifRes.meta.unreadCount);
-    }
-    if (cartRes) {
-      const totalItems = cartRes.data.reduce(
-        (sum, cart) =>
-          sum + cart.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
-        0
-      );
-      setCartItemCount(totalItems);
     }
   }, [user]);
 

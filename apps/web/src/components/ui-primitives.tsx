@@ -71,6 +71,196 @@ export function SkeletonCard() {
   );
 }
 
+export function CategoryArtwork({
+  type,
+  label
+}: {
+  type: "PRODUCT" | "SERVICE";
+  label: string;
+}) {
+  const isService = type === "SERVICE";
+  return (
+    <div
+      className={`relative flex h-full w-full flex-col items-center justify-center gap-2 overflow-hidden px-4 text-center ${
+        isService
+          ? "bg-gradient-to-br from-brand-accent-soft via-amber-50 to-white text-brand-accent"
+          : "bg-gradient-to-br from-brand-primary-soft via-emerald-50 to-white text-brand-primary"
+      }`}
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/90 shadow-sm">
+        {isService ? (
+          <svg
+            className="h-6 w-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z" />
+          </svg>
+        ) : (
+          <svg
+            className="h-6 w-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+            <path d="M3 6h18" />
+            <path d="M16 10a4 4 0 0 1-8 0" />
+          </svg>
+        )}
+      </div>
+      <span className="text-xs font-semibold tracking-wide opacity-90">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+export function ConfirmActionButton({
+  label,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  className = "rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+}: {
+  label: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  onConfirm: () => void | Promise<void>;
+  className?: string;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  if (!armed) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setArmed(true);
+        }}
+        className={className}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setArmed(false);
+          void onConfirm();
+        }}
+        className="rounded-lg bg-red-700 px-2.5 py-1 text-xs font-semibold text-white"
+      >
+        {confirmLabel}
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setArmed(false);
+        }}
+        className="rounded-lg bg-surface-muted px-2 py-1 text-xs font-semibold text-ink-secondary"
+      >
+        {cancelLabel}
+      </button>
+    </span>
+  );
+}
+
+export function OrderTimeline({
+  orderType,
+  status,
+  locale
+}: {
+  orderType: "PHYSICAL" | "SERVICE";
+  status: string;
+  locale: "en" | "ur";
+}) {
+  if (status === "CANCELLED" || status === "DISPUTED") {
+    return (
+      <div className="mt-3 rounded-xl border border-red-200 bg-red-50/70 px-3 py-2 text-xs font-semibold text-red-800">
+        {status === "CANCELLED"
+          ? locale === "ur"
+            ? "یہ آرڈر منسوخ ہو چکا ہے۔"
+            : "This order has been cancelled."
+          : locale === "ur"
+            ? "یہ آرڈر ماڈریٹر تنازعہ (Dispute) کے تحت ہے۔"
+            : "This order is currently under moderator dispute review."}
+      </div>
+    );
+  }
+
+  const steps =
+    orderType === "SERVICE"
+      ? [
+          {
+            key: "PENDING_CONFIRMATION",
+            en: "Placed",
+            ur: "موصول"
+          },
+          { key: "CONFIRMED", en: "Confirmed", ur: "منظور" },
+          { key: "IN_PROGRESS", en: "Working", ur: "جاری" },
+          { key: "DELIVERY_SUBMITTED", en: "Delivered", ur: "مکمل کام" },
+          { key: "COMPLETED", en: "Completed", ur: "مکمل" }
+        ]
+      : [
+          { key: "PENDING_CONFIRMATION", en: "Placed", ur: "موصول" },
+          { key: "CONFIRMED", en: "Confirmed", ur: "منظور" },
+          { key: "READY_FOR_DISPATCH", en: "Ready", ur: "تیار" },
+          { key: "DELIVERED", en: "Delivered", ur: "ڈلیور" },
+          { key: "COMPLETED", en: "Completed", ur: "مکمل" }
+        ];
+
+  const normalizedStatus =
+    status === "REVISION_REQUESTED"
+      ? "IN_PROGRESS"
+      : status === "PREPARING"
+        ? "CONFIRMED"
+        : status === "OUT_FOR_DELIVERY"
+          ? "READY_FOR_DISPATCH"
+          : status;
+
+  const activeIdx = Math.max(
+    0,
+    steps.findIndex((s) => s.key === normalizedStatus)
+  );
+
+  return (
+    <div className="mt-3 grid grid-cols-5 gap-1.5" aria-label="Order progress">
+      {steps.map((step, idx) => {
+        const reached = idx <= activeIdx;
+        return (
+          <div key={step.key} className="space-y-1">
+            <div
+              className={`h-1.5 w-full rounded-full ${
+                reached ? "bg-brand-primary" : "bg-surface-muted"
+              }`}
+            />
+            <p
+              className={`truncate text-[10px] font-semibold ${
+                reached ? "text-brand-primary" : "text-ink-secondary"
+              }`}
+            >
+              {locale === "ur" ? step.ur : step.en}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ReportListingButton({
   targetType,
   targetId

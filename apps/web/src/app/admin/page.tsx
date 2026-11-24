@@ -10,7 +10,10 @@ import type {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../../components/locale-provider";
-import { StatusBadge } from "../../components/ui-primitives";
+import {
+  ConfirmActionButton,
+  StatusBadge
+} from "../../components/ui-primitives";
 import {
   ApiClientError,
   approveListingModeration,
@@ -610,18 +613,18 @@ export default function AdminConsolePage() {
                         >
                           Close Without Change
                         </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void handleResolveDispute(
+                        <ConfirmActionButton
+                          label="Cancel & Full Refund"
+                          confirmLabel={t.confirmYesBtn}
+                          cancelLabel={t.cancelBtn}
+                          onConfirm={() =>
+                            handleResolveDispute(
                               dispute.id,
                               "CANCEL_WITH_FULL_REFUND"
                             )
                           }
                           className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
-                        >
-                          Cancel & Full Refund
-                        </button>
+                        />
                       </div>
                     )}
                   </div>

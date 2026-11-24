@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAppContext } from "../../../components/locale-provider";
-import { ReportListingButton, TrustPill } from "../../../components/ui-primitives";
+import {
+  CategoryArtwork,
+  ReportListingButton,
+  TrustPill
+} from "../../../components/ui-primitives";
 import {
   addCartItem,
   ApiClientError,
@@ -17,7 +21,7 @@ import { formatPkrFromPaisa } from "../../../lib/money";
 export default function ProductDetailPage() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
-  const { locale, t, user } = useAppContext();
+  const { locale, t, user, refreshCartCount } = useAppContext();
 
   const [product, setProduct] = useState<PublicProductDetailDto | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
@@ -95,6 +99,7 @@ export default function ProductDetailPage() {
         ...(selectedVariantId ? { productVariantId: selectedVariantId } : {}),
         quantity
       });
+      await refreshCartCount();
       setFeedback("Added to this store's saved cart.");
     } catch (err: unknown) {
       setErrorMsg(
@@ -134,10 +139,25 @@ export default function ProductDetailPage() {
     !product.store.publicContactPhone && !product.store.publicBusinessAddress;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-5xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:px-8 space-y-4">
+      <nav aria-label="Breadcrumb" className="text-xs text-ink-secondary">
+        <Link href="/" className="font-semibold text-brand-primary hover:underline">
+          {t.navStorefront}
+        </Link>{" "}
+        /{" "}
+        <Link
+          href={`/stores/${product.store.slug}`}
+          dir="auto"
+          className="font-semibold text-brand-primary hover:underline"
+        >
+          {product.store.displayName}
+        </Link>{" "}
+        / <span dir="auto">{product.title}</span>
+      </nav>
+
       <div className="grid grid-cols-1 gap-8 rounded-2xl border border-border-subtle bg-surface-card p-6 sm:p-8 lg:grid-cols-2">
         <div className="space-y-3">
-          <div className="flex h-72 items-center justify-center overflow-hidden rounded-2xl bg-brand-primary-soft text-sm font-semibold text-brand-primary lg:h-96">
+          <div className="h-72 overflow-hidden rounded-2xl lg:h-96">
             {activePhotoUrl ? (
               <img
                 src={activePhotoUrl}
@@ -152,7 +172,14 @@ export default function ProductDetailPage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              locale === "ur" ? product.category.nameUr : product.category.nameEn
+              <CategoryArtwork
+                type="PRODUCT"
+                label={
+                  locale === "ur"
+                    ? product.category.nameUr
+                    : product.category.nameEn
+                }
+              />
             )}
           </div>
 
@@ -279,6 +306,23 @@ export default function ProductDetailPage() {
 
           <ReportListingButton targetType="PRODUCT" targetId={product.id} />
         </div>
+      </div>
+
+      {/* Mobile Sticky Action Bar */}
+      <div className="fixed inset-x-0 bottom-[56px] z-20 flex items-center justify-between gap-3 border-t border-border-subtle bg-surface-card/95 px-4 py-2.5 backdrop-blur md:hidden">
+        <div>
+          <p className="text-[10px] font-medium text-ink-secondary">{t.codBadge}</p>
+          <p className="text-base font-bold text-brand-primary">
+            {formatPkrFromPaisa(displayPrice, locale)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleAddToCart()}
+          className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white"
+        >
+          {t.addToCart}
+        </button>
       </div>
     </main>
   );

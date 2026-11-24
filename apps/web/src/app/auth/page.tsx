@@ -23,6 +23,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [preferredLocale, setPreferredLocale] = useState<LocaleCode>(locale);
   const [mfaCode, setMfaCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -170,14 +171,29 @@ export default function AuthPage() {
               >
                 {locale === "ur" ? "پاس ورڈ" : "Password"}
               </label>
-              <input
-                id="auth-login-password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-border-subtle px-3.5 py-2.5 text-sm focus:border-brand-primary focus:outline-none"
-              />
+              <div className="relative mt-1.5">
+                <input
+                  id="auth-login-password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-xl border border-border-subtle px-3.5 py-2.5 pe-16 text-sm focus:border-brand-primary focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 end-2 my-auto h-fit rounded-md px-2 py-1 text-xs font-semibold text-brand-primary hover:bg-surface-muted"
+                >
+                  {showPassword
+                    ? locale === "ur"
+                      ? "چھپائیں"
+                      : "Hide"
+                    : locale === "ur"
+                      ? "دکھائیں"
+                      : "Show"}
+                </button>
+              </div>
             </div>
 
             <button
@@ -258,17 +274,34 @@ export default function AuthPage() {
                 htmlFor="auth-reg-password"
                 className="block text-xs font-semibold text-ink-secondary"
               >
-                Password (min 8 chars)
+                {locale === "ur"
+                  ? "پاس ورڈ (کم از کم 8 حروف)"
+                  : "Password (min 8 chars)"}
               </label>
-              <input
-                id="auth-reg-password"
-                type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-border-subtle px-3.5 py-2.5 text-sm focus:border-brand-primary focus:outline-none"
-              />
+              <div className="relative mt-1.5">
+                <input
+                  id="auth-reg-password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-xl border border-border-subtle px-3.5 py-2.5 pe-16 text-sm focus:border-brand-primary focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 end-2 my-auto h-fit rounded-md px-2 py-1 text-xs font-semibold text-brand-primary hover:bg-surface-muted"
+                >
+                  {showPassword
+                    ? locale === "ur"
+                      ? "چھپائیں"
+                      : "Hide"
+                    : locale === "ur"
+                      ? "دکھائیں"
+                      : "Show"}
+                </button>
+              </div>
             </div>
 
             <div>
