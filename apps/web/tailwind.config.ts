@@ -34,6 +34,10 @@ const config: Config = {
           "Arial",
           "sans-serif"
         ]
+      },
+      boxShadow: {
+        soft: "0 10px 30px -10px rgba(15, 107, 82, 0.14)",
+        card: "0 4px 20px -4px rgba(15, 107, 82, 0.08)"
       }
     }
   },

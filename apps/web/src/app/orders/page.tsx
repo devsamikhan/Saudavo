@@ -7,6 +7,7 @@ import type {
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { EmptyInboxSpot, SpotState } from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import {
   ConfirmActionButton,
@@ -211,9 +212,26 @@ export default function OrdersPage() {
       )}
 
       {loading ? (
-        <p className="mt-6 text-sm text-ink-secondary">{t.loadingText}</p>
+        <div className="mt-6 rounded-2xl border border-border-subtle bg-surface-card p-8 text-sm text-ink-secondary">
+          {t.loadingText}
+        </div>
       ) : orders.length === 0 ? (
-        <p className="mt-6 text-sm text-ink-secondary">{t.ordersEmpty}</p>
+        <div className="mt-6">
+          <SpotState
+            illustration={<EmptyInboxSpot />}
+            badge={locale === "ur" ? "آرڈرز اور ان باکس" : "Orders & Inbox"}
+            title={t.ordersEmpty}
+            description={t.emptyInboxBody}
+            actions={
+              <Link
+                href="/"
+                className="inline-flex rounded-2xl bg-brand-primary px-6 py-3 text-sm font-bold text-white shadow-soft transition-all hover:bg-brand-primary-hover"
+              >
+                {t.browseMarketplaceBtn}
+              </Link>
+            }
+          />
+        </div>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-4 lg:col-span-2">
@@ -494,7 +512,14 @@ export default function OrdersPage() {
 
             <div className="mt-4 max-h-64 space-y-2 overflow-y-auto rounded-xl bg-surface-muted p-3">
               {messages.length === 0 ? (
-                <p className="text-xs text-ink-secondary">No messages yet.</p>
+                <div className="flex flex-col items-center py-4 text-center">
+                  <div className="w-24">
+                    <EmptyInboxSpot />
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-ink-primary">
+                    {t.emptyInboxTitle}
+                  </p>
+                </div>
               ) : (
                 messages.map((msg) => (
                   <div

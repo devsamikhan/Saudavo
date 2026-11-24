@@ -9,6 +9,7 @@ import type {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { EmptyCartSpot, SpotState } from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import {
   ApiClientError,
@@ -25,7 +26,7 @@ import { formatPkrFromPaisa } from "../../lib/money";
 
 export default function CartPage() {
   const router = useRouter();
-  const { locale, t, user, refreshCartCount } = useAppContext();
+  const { locale, t, user, refreshCartCount, showToast } = useAppContext();
 
   const [carts, setCarts] = useState<StoreCartDto[]>([]);
   const [addresses, setAddresses] = useState<AddressDto[]>([]);
@@ -121,6 +122,12 @@ export default function CartPage() {
         ...(customerNote.trim() ? { customerNote: customerNote.trim() } : {})
       });
       await refreshCartCount();
+      showToast(
+        locale === "ur"
+          ? "آرڈر کامیابی سے بن گیا۔"
+          : "COD order placed successfully.",
+        "primary"
+      );
       router.push("/orders");
     } catch (err: unknown) {
       setErrorMsg(
@@ -147,6 +154,12 @@ export default function CartPage() {
       setAddresses((prev) => [res.data, ...prev]);
       setSelectedAddressId(res.data.id);
       setShowAddrForm(false);
+      showToast(
+        locale === "ur"
+          ? "ڈلیوری پتہ محفوظ ہو گیا۔"
+          : "Delivery address saved.",
+        "primary"
+      );
     } catch (err: unknown) {
       setErrorMsg(
         err instanceof ApiClientError ? err.message : "Unable to save address."
@@ -196,20 +209,21 @@ export default function CartPage() {
           {t.loadingText}
         </div>
       ) : carts.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-border-subtle bg-surface-card p-8 text-center">
-          <p className="text-sm text-ink-secondary">
-            {locale === "ur"
-              ? "آپ کا کوئی اسٹور کارٹ بھرا ہوا نہیں ہے۔"
-              : "Your store carts are empty."}
-          </p>
-          <Link
-            href="/"
-            className="mt-3 inline-block text-sm font-semibold text-brand-primary underline"
-          >
-            {locale === "ur"
-              ? "میانوالی اسٹورز دیکھیں"
-              : "Browse Mianwali Stores"}
-          </Link>
+        <div className="mt-6">
+          <SpotState
+            illustration={<EmptyCartSpot />}
+            badge={locale === "ur" ? "کارٹ خالی ہے" : "Empty Cart"}
+            title={t.emptyCartTitle}
+            description={t.emptyCartBody}
+            actions={
+              <Link
+                href="/"
+                className="inline-flex rounded-2xl bg-brand-primary px-6 py-3 text-sm font-bold text-white shadow-soft transition-all hover:bg-brand-primary-hover"
+              >
+                {t.browseMarketplaceBtn}
+              </Link>
+            }
+          />
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">

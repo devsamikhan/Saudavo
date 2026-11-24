@@ -23,6 +23,12 @@ import {
   setStoredCsrfToken
 } from "../lib/api-client";
 
+interface ToastItem {
+  id: number;
+  message: string;
+  tone: "primary" | "accent" | "neutral";
+}
+
 interface AppContextValue {
   locale: LocaleCode;
   dir: "ltr" | "rtl";
@@ -34,6 +40,7 @@ interface AppContextValue {
   refreshUser: () => Promise<void>;
   cartItemCount: number;
   refreshCartCount: () => Promise<void>;
+  showToast: (message: string, tone?: "primary" | "accent" | "neutral") => void;
   signOut: () => Promise<void>;
 }
 
@@ -45,6 +52,20 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [cartItemCount, setCartItemCount] = useState(0);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const showToast = useCallback(
+    (message: string, tone: "primary" | "accent" | "neutral" = "primary") => {
+      const id = Date.now() + Math.floor(Math.random() * 1000);
+      setToasts((prev) => [...prev, { id, message, tone }]);
+      if (typeof window !== "undefined") {
+        window.setTimeout(() => {
+          setToasts((prev) => prev.filter((item) => item.id !== id));
+        }, 3200);
+      }
+    },
+    []
+  );
 
   const applyLocaleToDom = useCallback((next: LocaleCode) => {
     if (typeof document !== "undefined") {
@@ -136,6 +157,7 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       refreshUser,
       cartItemCount,
       refreshCartCount,
+      showToast,
       signOut
     }),
     [
@@ -145,12 +167,38 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       refreshCartCount,
       refreshUser,
       setLocale,
+      showToast,
       signOut,
       user
     ]
   );
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+      {toasts.length > 0 && (
+        <div
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-20 end-4 z-50 flex max-w-sm flex-col gap-2 md:bottom-5"
+        >
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`toast-enter pointer-events-auto rounded-2xl px-4 py-3 text-xs font-semibold text-white shadow-soft ${
+                toast.tone === "accent"
+                  ? "bg-brand-accent"
+                  : toast.tone === "neutral"
+                    ? "bg-ink-primary"
+                    : "bg-brand-primary"
+              }`}
+            >
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </AppContext.Provider>
+  );
 }
 
 export function useAppContext(): AppContextValue {

@@ -71,6 +71,22 @@ export interface UiDictionary {
   orderChatBtn: string;
   adminConsoleTitle: string;
   exportCsvLedger: string;
+  exploreMarketplaceBtn: string;
+  openAuthBtn: string;
+  pattern1Title: string;
+  pattern1Body: string;
+  pattern2Title: string;
+  pattern2Body: string;
+  pattern3Title: string;
+  pattern3Body: string;
+  emptyCartTitle: string;
+  emptyCartBody: string;
+  browseMarketplaceBtn: string;
+  emptyInboxTitle: string;
+  emptyInboxBody: string;
+  notFoundTitle: string;
+  notFoundBody: string;
+  backToMarketplaceBtn: string;
   privacyFooterNote: string;
   footerBetaNote: string;
 }
@@ -87,9 +103,9 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     navSignIn: "Sign In",
     navSignOut: "Sign Out",
     heroBadge: "MIANWALI CLOSED BETA • 0% SELLER COMMISSION • COD ONLY",
-    heroTitle: "Discover Trusted Shops & Local Services Across Mianwali",
+    heroTitle: "Local shops, modern digital storefront.",
     heroSubtitle:
-      "Shop verified crafts, home-based kitchens, and services across Mianwali, Isakhel, and Piplan.",
+      "Shop verified crafts, home kitchens, and trusted local services across Mianwali, Isakhel, and Piplan with Cash on Delivery.",
     searchPlaceholder: "Search local shops, crafts, or services in Mianwali...",
     searchButton: "Search",
     allAreasLabel: "All Mianwali Areas",
@@ -129,8 +145,8 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     notificationsTitle: "Notifications",
     notificationsEmpty: "No notifications yet.",
     markAllRead: "Mark all read",
-    ordersPageTitle: "My Orders & Order Messages",
-    ordersEmpty: "No orders placed yet.",
+    ordersPageTitle: "Orders & Inbox",
+    ordersEmpty: "All caught up! No orders yet.",
     sellerStudioTitle: "Saudavo Seller Studio",
     sellerTabOrders: "Overview & Orders",
     sellerTabProducts: "Products",
@@ -149,6 +165,22 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     orderChatBtn: "Order Chat",
     adminConsoleTitle: "Saudavo Trust & Moderation Console",
     exportCsvLedger: "Export Orders Ledger (CSV)",
+    exploreMarketplaceBtn: "Explore Marketplace",
+    openAuthBtn: "Sign In / Join",
+    pattern1Title: "Verified Local Stores",
+    pattern1Body: "Every Mianwali shop and craft maker is moderator-approved before going live.",
+    pattern2Title: "Products & Local Services",
+    pattern2Body: "Order physical goods on COD or book local on-site and remote services in one place.",
+    pattern3Title: "Privacy-First Storefronts",
+    pattern3Body: "Home-based sellers keep personal phone numbers and home addresses hidden by default.",
+    emptyCartTitle: "Your cart is currently empty",
+    emptyCartBody: "Nothing added yet. Discover trusted goods and daily essentials from Mianwali sellers.",
+    browseMarketplaceBtn: "Browse Marketplace",
+    emptyInboxTitle: "All caught up! No messages yet",
+    emptyInboxBody: "Order updates, seller confirmations, and delivery chat replies appear here.",
+    notFoundTitle: "Page not found",
+    notFoundBody: "The page or store link you opened is unavailable or may have moved.",
+    backToMarketplaceBtn: "Back to Marketplace",
     privacyFooterNote:
       "Privacy-first marketplace: seller home addresses and opt-out phone numbers stay hidden.",
     footerBetaNote:
@@ -165,9 +197,9 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     navSignIn: "لاگ ان",
     navSignOut: "لاگ آؤٹ",
     heroBadge: "میانوالی کلوزڈ بیٹا • 0% کمیشن • کیش آن ڈلیوری",
-    heroTitle: "میانوالی کے مقامی دکانداروں اور سروسز سے خریداری کریں",
+    heroTitle: "مقامی دکانیں، جدید ڈیجیٹل اسٹور فرنٹ۔",
     heroSubtitle:
-      "میانوالی، عیسیٰ خیل اور پپلاں میں تصدیق شدہ مقامی مصنوعات اور خدمات آسانی سے تلاش کریں۔",
+      "میانوالی، عیسیٰ خیل اور پپلاں کے تصدیق شدہ مقامی ہنرمندوں اور سروسز سے کیش آن ڈلیوری پر خریداری کریں۔",
     searchPlaceholder: "میانوالی میں مصنوعات یا سروسز تلاش کریں...",
     searchButton: "تلاش",
     allAreasLabel: "تمام علاقے",
@@ -207,8 +239,8 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     notificationsTitle: "اطلاعات",
     notificationsEmpty: "ابھی کوئی اطلاع موجود نہیں۔",
     markAllRead: "سب پڑھا ہوا نشان لگائیں",
-    ordersPageTitle: "میرے آرڈرز اور پیغامات",
-    ordersEmpty: "ابھی تک کوئی آرڈر نہیں دیا گیا۔",
+    ordersPageTitle: "آرڈرز اور انباکس",
+    ordersEmpty: "ابھی تک کوئی آرڈر موجود نہیں۔",
     sellerStudioTitle: "سوداو سیلر اسٹوڈیو",
     sellerTabOrders: "جائزہ اور آرڈرز",
     sellerTabProducts: "مصنوعات",
@@ -227,6 +259,22 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     orderChatBtn: "آرڈر چیٹ",
     adminConsoleTitle: "سوداو ٹرسٹ اور ماڈریشن کنسول",
     exportCsvLedger: "آرڈر لیجر ڈاؤن لوڈ کریں (CSV)",
+    exploreMarketplaceBtn: "مارکیٹ دیکھیں",
+    openAuthBtn: "لاگ ان / اکاؤنٹ بنائیں",
+    pattern1Title: "تصدیق شدہ مقامی اسٹورز",
+    pattern1Body: "میانوالی کے ہر دکاندار اور ہنرمند کی منظوری کے بعد لسٹنگ شائع ہوتی ہے۔",
+    pattern2Title: "مصنوعات اور مقامی سروسز",
+    pattern2Body: "کیش آن ڈلیوری پر اشیاء منگوائیں یا مقامی اور ریموٹ سروسز بک کریں۔",
+    pattern3Title: "رازداری سے محفوظ کاروبار",
+    pattern3Body: "گھریلو سیلرز کا ذاتی فون نمبر اور گھر کا پتہ عوامی طور پر پوشیدہ رہتا ہے۔",
+    emptyCartTitle: "آپ کا کارٹ ابھی خالی ہے",
+    emptyCartBody: "ابھی کچھ شامل نہیں کیا گیا۔ مقامی دکانداروں سے معیاری اشیاء تلاش کریں۔",
+    browseMarketplaceBtn: "مارکیٹ دیکھیں",
+    emptyInboxTitle: "سب مکمل ہے! کوئی پیغام نہیں",
+    emptyInboxBody: "آرڈر اپ ڈیٹس اور سیلر کے پیغامات یہاں ظاہر ہوں گے۔",
+    notFoundTitle: "صفحہ نہیں ملا",
+    notFoundBody: "آپ نے جو لنک کھولا ہے وہ دستیاب نہیں یا تبدیل ہو چکا ہے۔",
+    backToMarketplaceBtn: "مارکیٹ پر واپس جائیں",
     privacyFooterNote:
       "رازداری اولین ترجیح: دکاندار کا ذاتی پتہ اور نجی فون نمبر عوامی طور پر پوشیدہ رہتے ہیں۔",
     footerBetaNote:

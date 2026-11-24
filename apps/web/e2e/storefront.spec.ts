@@ -242,10 +242,18 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
     await expect(skipLink).toHaveAttribute("href", "#main-content");
 
     // Navigate to Auth page
-    await page.getByRole("link", { name: "لاگ ان" }).click();
+    await page.getByRole("link", { name: "لاگ ان", exact: true }).click();
     await expect(page).toHaveURL(/\/auth$/);
     await expect(
       page.getByLabel("ای میل یا موبائل نمبر (مثلاً 03001234567)")
     ).toBeVisible();
+
+    // Verify 404 Spot Illustration page and inline working search redirect (/?q=...)
+    await page.goto("/nonexistent-404-page");
+    await expect(page.getByText("404", { exact: true })).toBeVisible();
+    await page.locator('input[type="search"]').fill("Shawl");
+    await page.locator('form button[type="submit"]').click();
+    await expect(page).toHaveURL(/\/\?q=Shawl$/);
+    await expect(page.getByText("Handmade Phulkari Shawl")).toBeVisible();
   });
 });

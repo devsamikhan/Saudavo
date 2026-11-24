@@ -7,6 +7,7 @@ import type {
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { HeroMarketplaceIllustration } from "../components/illustrations";
 import { useAppContext } from "../components/locale-provider";
 import { CategoryArtwork, SkeletonCard, TrustPill } from "../components/ui-primitives";
 import {
@@ -79,6 +80,13 @@ export default function HomePage() {
   ]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      const initialQ = sp.get("q");
+      if (initialQ) {
+        setQueryText(initialQ);
+      }
+    }
     let active = true;
     async function init() {
       try {
@@ -111,22 +119,151 @@ export default function HomePage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Hero Banner matching Gate D Figma frame 8:2 / 8:64 */}
-      <section className="rounded-2xl bg-brand-primary p-6 text-white shadow-sm sm:p-9">
-        <span className="inline-block rounded-full bg-brand-accent px-3.5 py-1 text-xs font-semibold tracking-wide text-white">
-          {t.heroBadge}
-        </span>
-        <h1 className="mt-4 max-w-3xl text-2xl font-bold leading-snug sm:text-4xl">
-          {t.heroTitle}
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm text-brand-primary-soft sm:text-base">
-          {t.heroSubtitle}
-        </p>
+    <main className="fade-slide">
+      {/* Corporate Memphis 2-Column Hero */}
+      <section className="hero-dot-pattern border-b border-border-subtle bg-brand-primary-soft/50">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12">
+            <div className="space-y-5 lg:col-span-6">
+              <span className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-surface-card px-3.5 py-1.5 text-xs font-bold tracking-wide text-brand-primary shadow-sm">
+                <span className="h-2 w-2 rounded-full bg-brand-accent" />
+                {t.heroBadge}
+              </span>
 
+              <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-ink-primary sm:text-5xl">
+                {t.heroTitle}
+              </h1>
+
+              <p className="max-w-xl text-sm leading-relaxed text-ink-secondary sm:text-base">
+                {t.heroSubtitle}
+              </p>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <a
+                  href="#catalog"
+                  className="rounded-2xl bg-brand-primary px-6 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-primary-hover"
+                >
+                  {t.exploreMarketplaceBtn}
+                </a>
+                <Link
+                  href="/auth"
+                  className="rounded-2xl border border-border-subtle bg-surface-card px-6 py-3 text-sm font-semibold text-ink-primary shadow-sm transition hover:border-brand-primary"
+                >
+                  {t.openAuthBtn}
+                </Link>
+              </div>
+
+              <div className="grid max-w-md grid-cols-3 gap-3 pt-2">
+                <div className="rounded-2xl border border-border-subtle bg-surface-card p-3.5 shadow-card">
+                  <div className="text-base font-extrabold text-brand-primary">
+                    0%
+                  </div>
+                  <div className="text-[11px] font-medium text-ink-secondary">
+                    {locale === "ur" ? "بیٹا کمیشن" : "Beta Commission"}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border-subtle bg-surface-card p-3.5 shadow-card">
+                  <div className="text-base font-extrabold text-brand-accent">
+                    COD
+                  </div>
+                  <div className="text-[11px] font-medium text-ink-secondary">
+                    {locale === "ur" ? "محفوظ ادائیگی" : "Verified Cash"}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border-subtle bg-surface-card p-3.5 shadow-card">
+                  <div className="text-base font-extrabold text-brand-primary">
+                    100%
+                  </div>
+                  <div className="text-[11px] font-medium text-ink-secondary">
+                    {locale === "ur" ? "مقامی تحفظ" : "Privacy First"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-6">
+              <div className="relative overflow-hidden rounded-3xl border-2 border-white bg-surface-card p-3 shadow-soft">
+                <HeroMarketplaceIllustration />
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-border-subtle bg-surface-canvas px-4 py-2.5 text-xs">
+                  <div>
+                    <p className="font-bold text-ink-primary">
+                      {t.verifiedStoreBadge}
+                    </p>
+                    <p className="text-ink-secondary">
+                      {t.privacyShieldBadge}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-brand-accent-soft px-3 py-1 font-bold text-brand-accent">
+                    {t.pilotBadge}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3 Compact Feature Highlight Cards */}
+      <section className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedType("PRODUCT");
+              document
+                .getElementById("catalog")
+                ?.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="rounded-3xl border border-border-subtle bg-surface-card p-5 text-start shadow-card transition hover:-translate-y-0.5 hover:border-brand-primary"
+          >
+            <h2 className="text-base font-bold text-ink-primary">
+              {t.pattern1Title}
+            </h2>
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-secondary">
+              {t.pattern1Body}
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedType("SERVICE");
+              document
+                .getElementById("catalog")
+                ?.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="rounded-3xl border border-border-subtle bg-surface-card p-5 text-start shadow-card transition hover:-translate-y-0.5 hover:border-brand-accent"
+          >
+            <h2 className="text-base font-bold text-ink-primary">
+              {t.pattern2Title}
+            </h2>
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-secondary">
+              {t.pattern2Body}
+            </p>
+          </button>
+
+          <Link
+            href="/seller"
+            className="rounded-3xl border border-border-subtle bg-surface-card p-5 text-start shadow-card transition hover:-translate-y-0.5 hover:border-brand-primary"
+          >
+            <h2 className="text-base font-bold text-ink-primary">
+              {t.pattern3Title}
+            </h2>
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-secondary">
+              {t.pattern3Body}
+            </p>
+          </Link>
+        </div>
+      </section>
+
+      {/* Catalog & Search */}
+      <div
+        id="catalog"
+        className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
+      >
         <form
           onSubmit={handleSearchSubmit}
-          className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center"
+          className="flex flex-col gap-3 rounded-3xl border border-border-subtle bg-surface-card p-4 shadow-card sm:flex-row sm:items-center"
         >
           <input
             type="search"
@@ -134,19 +271,18 @@ export default function HomePage() {
             onChange={(e) => setQueryText(e.target.value)}
             placeholder={t.searchPlaceholder}
             aria-label={t.searchPlaceholder}
-            className="w-full rounded-xl border border-border-subtle bg-surface-card px-4 py-3 text-sm text-ink-primary placeholder:text-ink-secondary focus:outline-none focus:ring-2 focus:ring-brand-accent sm:max-w-lg"
+            className="w-full flex-1 rounded-2xl border border-border-subtle bg-surface-canvas px-4 py-3 text-sm text-ink-primary placeholder:text-ink-secondary focus:border-brand-primary focus:outline-none"
           />
           <button
             type="submit"
-            className="rounded-xl bg-brand-accent px-6 py-3 text-sm font-semibold text-white transition hover:opacity-95"
+            className="rounded-2xl bg-brand-accent px-6 py-3 text-sm font-semibold text-white transition hover:opacity-95"
           >
             {t.searchButton}
           </button>
         </form>
-      </section>
 
       {/* Area Zones & Category Filters */}
-      <section aria-label="Marketplace filters" className="mt-6 space-y-3">
+      <section aria-label="Marketplace filters" className="mt-5 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -418,6 +554,7 @@ export default function HomePage() {
           </div>
         )}
       </section>
+      </div>
     </main>
   );
 }
