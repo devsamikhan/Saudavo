@@ -9,6 +9,7 @@ import type {
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { EmptyInboxSpot, SpotState } from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import {
   ConfirmActionButton,
@@ -182,19 +183,35 @@ export default function AdminConsolePage() {
 
   if (!user) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 text-center">
-        <Link
-          href="/auth"
-          className="inline-block rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white"
-        >
-          Sign In as Staff
-        </Link>
+      <main className="mx-auto max-w-4xl px-4 py-10 pb-24 md:pb-10">
+        <SpotState
+          illustration={<EmptyInboxSpot />}
+          badge={t.adminConsoleTitle}
+          title={
+            locale === "ur"
+              ? "اسٹاف اکاؤنٹ درکار ہے"
+              : "Staff Authentication Required"
+          }
+          description={
+            locale === "ur"
+              ? "ماڈریشن، سیلر منظوری اور تنازعات دیکھنے کے لیے اپنے اسٹاف اکاؤنٹ سے لاگ ان کریں (PQ-06)۔"
+              : "Sign in with your verified Saudavo moderator or admin account (TOTP MFA protected • PQ-06)."
+          }
+          actions={
+            <Link
+              href="/auth"
+              className="inline-flex rounded-2xl bg-brand-primary px-6 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-brand-primary-hover"
+            >
+              Sign In as Staff
+            </Link>
+          }
+        />
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <main className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:px-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-ink-primary">
           {t.adminConsoleTitle}
@@ -312,10 +329,18 @@ export default function AdminConsolePage() {
             />
           </div>
 
-          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card">
             <h2 className="text-lg font-bold text-ink-primary">
-              Pending Sellers ({queue?.sellers.length ?? 0})
+              {locale === "ur" ? "زیرِ التواء سیلرز" : "Pending Sellers"} (
+              {queue?.sellers.length ?? 0})
             </h2>
+            {(queue?.sellers.length ?? 0) === 0 ? (
+              <p className="mt-3 rounded-2xl bg-surface-muted/60 px-4 py-3 text-xs text-ink-secondary">
+                {locale === "ur"
+                  ? "کوئی سیلر درخواست باقی نہیں — سب منظور یا مکمل ہو چکی ہیں۔"
+                  : "Queue clear — no pending seller profiles awaiting review."}
+              </p>
+            ) : (
             <div className="mt-4 space-y-3">
               {(queue?.sellers ?? []).map((seller) => (
                 <div
@@ -358,13 +383,21 @@ export default function AdminConsolePage() {
                 </div>
               ))}
             </div>
+            )}
           </section>
 
-          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card">
             <h2 className="text-lg font-bold text-ink-primary">
-              Pending Listings (
+              {locale === "ur" ? "زیرِ التواء لسٹنگز" : "Pending Listings"} (
               {(queue?.products.length ?? 0) + (queue?.services.length ?? 0)})
             </h2>
+            {(queue?.products.length ?? 0) + (queue?.services.length ?? 0) === 0 ? (
+              <p className="mt-3 rounded-2xl bg-surface-muted/60 px-4 py-3 text-xs text-ink-secondary">
+                {locale === "ur"
+                  ? "کوئی پروڈکٹ یا سروس منظوری کے لیے باقی نہیں۔"
+                  : "Queue clear — no pending products or services awaiting moderation."}
+              </p>
+            ) : (
             <div className="mt-4 space-y-3">
               {(queue?.products ?? []).map((prod) => (
                 <div
@@ -445,9 +478,10 @@ export default function AdminConsolePage() {
                 </div>
               ))}
             </div>
+            )}
           </section>
 
-          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-3">
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-ink-primary">

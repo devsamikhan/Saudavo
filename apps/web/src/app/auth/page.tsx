@@ -36,8 +36,16 @@ export default function AuthPage() {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("intent") === "seller") {
-      setMode("REGISTER");
       setAccountIntent("SELLER");
+      setMode(sp.get("mode") === "login" ? "LOGIN" : "REGISTER");
+    }
+    try {
+      const saved = window.sessionStorage.getItem("saudavo_prefill_store_name");
+      if (saved) {
+        setShopNamePrefill((prev) => prev || saved);
+      }
+    } catch {
+      // Ignore storage unavailability
     }
   }, []);
 
@@ -59,7 +67,7 @@ export default function AuthPage() {
         showToast(
           locale === "ur" ? "سوداو میں خوش آمدید!" : "Welcome back to Saudavo!"
         );
-        router.push("/");
+        router.push(accountIntent === "SELLER" ? "/seller" : "/");
       }
     } catch (err: unknown) {
       setErrorMsg(

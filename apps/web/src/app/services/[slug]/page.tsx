@@ -2,19 +2,27 @@
 
 import type {
   AddressDto,
+  DistrictDto,
   OrderCreatedSummary,
   PublicServiceDetailDto
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { NotFoundSpot, SpotState } from "../../../components/illustrations";
 import { useAppContext } from "../../../components/locale-provider";
 import { OrderConfirmedModal } from "../../../components/order-confirmed-modal";
-import { ReportListingButton, TrustPill } from "../../../components/ui-primitives";
+import {
+  DetailPageSkeleton,
+  ReportListingButton,
+  TrustPill
+} from "../../../components/ui-primitives";
 import {
   ApiClientError,
+  createAddress,
   createServiceOrder,
   fetchAddresses,
+  fetchDistricts,
   fetchPublicService
 } from "../../../lib/api-client";
 import { formatPkrFromPaisa } from "../../../lib/money";
@@ -26,9 +34,16 @@ export default function ServiceDetailPage() {
 
   const [service, setService] = useState<PublicServiceDetailDto | null>(null);
   const [addresses, setAddresses] = useState<AddressDto[]>([]);
+  const [districts, setDistricts] = useState<DistrictDto[]>([]);
   const [selectedPkgId, setSelectedPkgId] = useState("");
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [requirements, setRequirements] = useState("");
+  const [showQuickAddr, setShowQuickAddr] = useState(false);
+  const [areaZoneId, setAreaZoneId] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [savingAddr, setSavingAddr] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<OrderCreatedSummary | null>(
@@ -45,10 +60,15 @@ export default function ServiceDetailPage() {
         setService(res.data);
         setSelectedPkgId(res.data.packages[0]?.id ?? "");
         if (user) {
-          const addrRes = await fetchAddresses().catch(() => ({ data: [] }));
+          const [addrRes, distRes] = await Promise.all([
+            fetchAddresses().catch(() => ({ data: [] })),
+            fetchDistricts().catch(() => ({ data: [] }))
+          ]);
           if (!active) return;
           setAddresses(addrRes.data);
           setSelectedAddressId(addrRes.data[0]?.id ?? "");
+          setDistricts(distRes.data);
+          setAreaZoneId(distRes.data[0]?.areaZones[0]?.id ?? "");
         }
       } catch (err: unknown) {
         if (!active) return;
@@ -64,6 +84,47 @@ export default function ServiceDetailPage() {
       active = false;
     };
   }, [params.slug, user]);
+
+  const handleQuickSaveAddress = async () => {
+    const districtId = districts[0]?.id;
+    if (!districtId || !areaZoneId || !recipientName.trim() || !recipientPhone.trim() || !streetAddress.trim()) {
+      setErrorMsg(
+        locale === "ur"
+          ? "برائے مہربانی نام، فون نمبر اور میانوالی کا پتہ مکمل درج کریں۔"
+          : "Enter recipient name, Pakistani phone number, and street address."
+      );
+      return;
+    }
+    setErrorMsg(null);
+    setSavingAddr(true);
+    try {
+      const res = await createAddress({
+        label: "Mianwali Service Address",
+        districtId,
+        areaZoneId,
+        recipientName: recipientName.trim(),
+        recipientPhone: recipientPhone.trim(),
+        streetAddress: streetAddress.trim(),
+        isDefault: true
+      });
+      setAddresses((prev) => [res.data, ...prev]);
+      setSelectedAddressId(res.data.id);
+      setShowQuickAddr(false);
+      setRecipientName("");
+      setRecipientPhone("");
+      setStreetAddress("");
+      showToast(
+        locale === "ur" ? "سروس کا پتہ محفوظ ہو گیا!" : "Mianwali address saved!",
+        "primary"
+      );
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : "Unable to save address."
+      );
+    } finally {
+      setSavingAddr(false);
+    }
+  };
 
   const handleBookService = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -100,16 +161,34 @@ export default function ServiceDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 text-sm text-ink-secondary">
-        {t.loadingText}
+      <main className="mx-auto max-w-5xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:px-8">
+        <DetailPageSkeleton />
       </main>
     );
   }
 
   if (!service) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 text-sm text-red-700">
-        {errorMsg ?? "Service not found."}
+      <main className="mx-auto max-w-4xl px-4 py-10 pb-24 md:pb-10">
+        <SpotState
+          illustration={<NotFoundSpot />}
+          badge={t.navStorefront}
+          title={t.notFoundTitle}
+          description={
+            errorMsg ??
+            (locale === "ur"
+              ? "یہ سروس دستیاب نہیں یا ہٹا دی گئی ہے۔"
+              : "Service not found.")
+          }
+          actions={
+            <Link
+              href="/"
+              className="inline-flex rounded-2xl bg-brand-primary px-6 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-brand-primary-hover"
+            >
+              {t.backToMarketplaceBtn}
+            </Link>
+          }
+        />
       </main>
     );
   }
@@ -220,31 +299,38 @@ export default function ServiceDetailPage() {
           </div>
 
           {!isRemote && (
-            <div>
-              <label className="block text-xs font-semibold text-ink-secondary">
-                {locale === "ur"
-                  ? "سروس کا پتہ (ضلع میانوالی)"
-                  : "Service Location (Mianwali Address)"}
-              </label>
-              {addresses.length === 0 ? (
-                <p className="mt-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-semibold text-ink-secondary">
                   {locale === "ur"
-                    ? "کوئی محفوظ پتہ موجود نہیں۔ "
-                    : "No saved address yet. "}
-                  <Link href="/cart" className="font-bold underline">
-                    {locale === "ur"
-                      ? "کارٹ صفحے پر پتہ شامل کریں"
-                      : "Save a Mianwali address in Cart"}
-                  </Link>
-                </p>
-              ) : (
+                    ? "سروس کا پتہ (ضلع میانوالی)"
+                    : "Service Location (Mianwali Address)"}
+                </label>
+                {user && addresses.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAddr((prev) => !prev)}
+                    className="text-xs font-semibold text-brand-primary underline"
+                  >
+                    {showQuickAddr
+                      ? t.cancelBtn
+                      : locale === "ur"
+                        ? "+ نیا پتہ شامل کریں"
+                        : "+ New Address"}
+                  </button>
+                )}
+              </div>
+
+              {addresses.length > 0 && (
                 <select
                   required
                   value={selectedAddressId}
                   onChange={(e) => setSelectedAddressId(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2.5 text-sm"
+                  className="w-full rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2.5 text-sm"
                 >
-                  <option value="">Select address...</option>
+                  <option value="">
+                    {locale === "ur" ? "پتہ منتخب کریں..." : "Select address..."}
+                  </option>
                   {addresses.map((addr) => (
                     <option key={addr.id} value={addr.id}>
                       {addr.label ?? "Address"} — {addr.streetAddress} ({addr.areaZoneName})
@@ -252,12 +338,80 @@ export default function ServiceDetailPage() {
                   ))}
                 </select>
               )}
+
+              {user && (addresses.length === 0 || showQuickAddr) && (
+                <div className="space-y-2.5 rounded-2xl border border-border-subtle bg-surface-muted/70 p-4">
+                  <p className="text-xs font-bold text-ink-primary">
+                    {locale === "ur"
+                      ? "اپنا میانوالی پتہ یہیں محفوظ کریں"
+                      : "Quick Save Mianwali Service Address"}
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <select
+                      value={areaZoneId}
+                      onChange={(e) => setAreaZoneId(e.target.value)}
+                      className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                    >
+                      {(districts[0]?.areaZones ?? []).map((z) => (
+                        <option key={z.id} value={z.id}>
+                          {locale === "ur" ? z.nameUr : z.nameEn}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder={locale === "ur" ? "وصول کنندہ کا نام" : "Recipient Name"}
+                      value={recipientName}
+                      onChange={(e) => setRecipientName(e.target.value)}
+                      className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                    />
+                    <input
+                      type="tel"
+                      placeholder="03001234567"
+                      value={recipientPhone}
+                      onChange={(e) => setRecipientPhone(e.target.value)}
+                      className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                    />
+                    <input
+                      type="text"
+                      placeholder={
+                        locale === "ur"
+                          ? "گلی / محلہ (ضلع میانوالی)"
+                          : "Street & Mohallah in Mianwali"
+                      }
+                      value={streetAddress}
+                      onChange={(e) => setStreetAddress(e.target.value)}
+                      className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={savingAddr}
+                    onClick={() => void handleQuickSaveAddress()}
+                    className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-primary-hover disabled:opacity-60"
+                  >
+                    {savingAddr
+                      ? "..."
+                      : locale === "ur"
+                        ? "میانوالی پتہ محفوظ کریں"
+                        : "Save Mianwali Address"}
+                  </button>
+                </div>
+              )}
+
+              {!user && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+                  {locale === "ur"
+                    ? "سروس بک کرنے کے لیے پہلے لاگ ان کریں۔"
+                    : "Sign in to select or save your Mianwali service location."}
+                </p>
+              )}
             </div>
           )}
 
           <div>
             <label className="block text-xs font-semibold text-ink-secondary">
-              Project Requirements
+              {locale === "ur" ? "کام کی تفصیل اور ضروریات" : "Project Requirements"}
             </label>
             <textarea
               required

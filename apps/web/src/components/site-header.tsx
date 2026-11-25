@@ -3,7 +3,7 @@
 import type { NotificationDto } from "@saudavo/contracts";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -104,6 +104,7 @@ export function SiteHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const notifContainerRef = useRef<HTMLDivElement>(null);
 
   const toggleLocale = () => {
     setLocale(locale === "en" ? "ur" : "en");
@@ -131,7 +132,31 @@ export function SiteHeader() {
   useEffect(() => {
     void loadHeaderCounts();
     setMobileMenuOpen(false);
+    setNotifOpen(false);
   }, [loadHeaderCounts, pathname]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setNotifOpen(false);
+      }
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        notifContainerRef.current &&
+        !notifContainerRef.current.contains(event.target as Node)
+      ) {
+        setNotifOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [notifOpen]);
 
   const handleOpenNotification = async (item: NotificationDto) => {
     const target = formatNotificationText(item, locale);
@@ -180,17 +205,33 @@ export function SiteHeader() {
           aria-label="Primary navigation"
           className="hidden items-center gap-1 rounded-xl bg-brand-primary-soft/65 p-1 md:flex"
         >
-          <Link href="/" className={navTabClass("/")}>
+          <Link
+            href="/"
+            aria-current={pathname === "/" ? "page" : undefined}
+            className={navTabClass("/")}
+          >
             {t.navStorefront}
           </Link>
-          <Link href="/orders" className={navTabClass("/orders")}>
+          <Link
+            href="/orders"
+            aria-current={pathname === "/orders" ? "page" : undefined}
+            className={navTabClass("/orders")}
+          >
             {t.navOrders}
           </Link>
-          <Link href="/seller" className={navTabClass("/seller")}>
+          <Link
+            href="/seller"
+            aria-current={pathname === "/seller" ? "page" : undefined}
+            className={navTabClass("/seller")}
+          >
             {t.navSeller}
           </Link>
-          {(isStaff || !user) && (
-            <Link href="/admin" className={navTabClass("/admin")}>
+          {isStaff && (
+            <Link
+              href="/admin"
+              aria-current={pathname === "/admin" ? "page" : undefined}
+              className={navTabClass("/admin")}
+            >
               {t.navAdmin}
             </Link>
           )}
@@ -201,7 +242,7 @@ export function SiteHeader() {
           <Link
             href="/?saved=1#catalog"
             aria-label={t.savedItemsFilter}
-            className="relative hidden rounded-xl bg-brand-primary-soft/75 p-2 text-brand-primary transition hover:bg-brand-primary-soft sm:inline-flex"
+            className="relative inline-flex rounded-xl bg-brand-primary-soft/75 p-2 text-brand-primary transition hover:bg-brand-primary-soft"
           >
             <svg
               className="h-4 w-4"
@@ -255,11 +296,13 @@ export function SiteHeader() {
           </button>
 
           {user ? (
-            <div className="relative flex items-center gap-2">
+            <div ref={notifContainerRef} className="relative flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setNotifOpen((prev) => !prev)}
                 aria-label={t.notificationsTitle}
+                aria-expanded={notifOpen}
+                aria-haspopup="true"
                 className="relative rounded-xl border border-border-subtle bg-surface-card p-2 text-ink-primary transition hover:border-brand-primary"
               >
                 <svg
@@ -376,23 +419,43 @@ export function SiteHeader() {
       {/* Responsive Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="grid grid-cols-2 gap-2 border-t border-border-subtle bg-surface-card px-4 py-3 text-xs font-bold md:hidden">
-          <Link href="/" className={navTabClass("/")}>
+          <Link
+            href="/"
+            aria-current={pathname === "/" ? "page" : undefined}
+            className={navTabClass("/")}
+          >
             {t.navStorefront}
           </Link>
-          <Link href="/cart" className={navTabClass("/cart")}>
+          <Link
+            href="/cart"
+            aria-current={pathname === "/cart" ? "page" : undefined}
+            className={navTabClass("/cart")}
+          >
             {t.navCart} {cartItemCount > 0 ? `(${cartItemCount})` : ""}
           </Link>
-          <Link href="/orders" className={navTabClass("/orders")}>
+          <Link
+            href="/orders"
+            aria-current={pathname === "/orders" ? "page" : undefined}
+            className={navTabClass("/orders")}
+          >
             {t.navOrders}
           </Link>
-          <Link href="/seller" className={navTabClass("/seller")}>
+          <Link
+            href="/seller"
+            aria-current={pathname === "/seller" ? "page" : undefined}
+            className={navTabClass("/seller")}
+          >
             {t.navSeller}
           </Link>
           <Link href="/?saved=1#catalog" className={navTabClass("/saved")}>
             {t.savedItemsFilter} ({wishlistIds.length})
           </Link>
-          {(isStaff || !user) && (
-            <Link href="/admin" className={navTabClass("/admin")}>
+          {isStaff && (
+            <Link
+              href="/admin"
+              aria-current={pathname === "/admin" ? "page" : undefined}
+              className={navTabClass("/admin")}
+            >
               {t.navAdmin}
             </Link>
           )}

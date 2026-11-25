@@ -123,6 +123,21 @@ export interface UiDictionary {
   serviceTrackStep4Sub: string;
   becomeSellerBtn: string;
   inCartLabel: string;
+  sellerHeroBadge: string;
+  sellerHeroTitle: string;
+  sellerHeroSubtitle: string;
+  sellerStepAccountBadge: string;
+  sellerStepSetupBadge: string;
+  sellerOnboardingHeading: string;
+  sellerSignInGateBody: string;
+  sellerCreateAccountBtn: string;
+  sellerExistingSignInBtn: string;
+  sellerViewPublicStoreBtn: string;
+  sellerEmptyOrdersTitle: string;
+  sellerEmptyOrdersBody: string;
+  sellerShareQrCta: string;
+  sellerEmptyProductsNote: string;
+  sellerEmptyServicesNote: string;
 }
 
 export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
@@ -254,7 +269,27 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     serviceTrackStep4Title: "Delivered & Accepted",
     serviceTrackStep4Sub: "Completed & offline payment confirmed",
     becomeSellerBtn: "Become a Local Seller",
-    inCartLabel: "In Cart"
+    inCartLabel: "In Cart",
+    sellerHeroBadge: "MIANWALI SELLER STUDIO • 0% BETA COMMISSION",
+    sellerHeroTitle: "Turn your local shop or craft into a digital storefront.",
+    sellerHeroSubtitle:
+      "Reach buyers across Mianwali, Isakhel, and Piplan on Cash on Delivery — with strict privacy defaults for home-based sellers (PQ-07).",
+    sellerStepAccountBadge: "Step 1 of 2 • Seller Account",
+    sellerStepSetupBadge: "Step 2 of 2 • Store Setup",
+    sellerOnboardingHeading: "Apply for a Local Mianwali Storefront",
+    sellerSignInGateBody:
+      "Create a free Saudavo account or sign in first — your store name below will be saved automatically for setup.",
+    sellerCreateAccountBtn: "Create Seller Account",
+    sellerExistingSignInBtn: "Already have an account? Sign In",
+    sellerViewPublicStoreBtn: "View Public Store",
+    sellerEmptyOrdersTitle: "No store orders yet",
+    sellerEmptyOrdersBody:
+      "Share your store link or printable QR sticker on WhatsApp so local Mianwali buyers can place their first Cash on Delivery order.",
+    sellerShareQrCta: "Open Store & QR Growth",
+    sellerEmptyProductsNote:
+      "No physical products listed yet. Add your first item below (photos are automatically EXIF-stripped for privacy).",
+    sellerEmptyServicesNote:
+      "No service listings yet. Create tiered on-site, hybrid, or remote packages below."
   },
   ur: {
     brandName: "سوداو",
@@ -384,7 +419,27 @@ export const DICTIONARIES: Record<LocaleCode, UiDictionary> = {
     serviceTrackStep4Title: "سروس مکمل",
     serviceTrackStep4Sub: "کام قبول اور ادائیگی کی تصدیق ہو گئی",
     becomeSellerBtn: "مقامی سیلر بنیں",
-    inCartLabel: "کارٹ میں شامل"
+    inCartLabel: "کارٹ میں شامل",
+    sellerHeroBadge: "میانوالی سیلر اسٹوڈیو • 0% بیٹا کمیشن",
+    sellerHeroTitle: "اپنی مقامی دکان یا ہنر کو ڈیجیٹل اسٹور میں بدلیں۔",
+    sellerHeroSubtitle:
+      "میانوالی، عیسیٰ خیل اور پپلاں کے خریداروں تک کیش آن ڈلیوری رسائی — گھریلو ہنرمندوں کے لیے مکمل رازداری کے ساتھ (PQ-07)۔",
+    sellerStepAccountBadge: "مرحلہ 1 از 2 • سیلر اکاؤنٹ",
+    sellerStepSetupBadge: "مرحلہ 2 از 2 • اسٹور سیٹ اپ",
+    sellerOnboardingHeading: "میانوالی میں اپنا مقامی اسٹور رجسٹر کریں",
+    sellerSignInGateBody:
+      "پہلے مفت سوداو اکاؤنٹ بنائیں یا لاگ ان کریں — آپ کے اسٹور کا نام خودکار طور پر محفوظ رہے گا۔",
+    sellerCreateAccountBtn: "سیلر اکاؤنٹ بنائیں",
+    sellerExistingSignInBtn: "پہلے سے اکاؤنٹ موجود ہے؟ لاگ ان کریں",
+    sellerViewPublicStoreBtn: "عوامی اسٹور دیکھیں",
+    sellerEmptyOrdersTitle: "ابھی کوئی اسٹور آرڈر نہیں آیا",
+    sellerEmptyOrdersBody:
+      "اپنا اسٹور لنک یا پرنٹیبل QR اسٹیکر واٹس ایپ پر شیئر کریں تاکہ مقامی خریدار پہلا آرڈر دے سکیں۔",
+    sellerShareQrCta: "اسٹور اور QR شیئر کھولیں",
+    sellerEmptyProductsNote:
+      "ابھی کوئی پروڈکٹ شامل نہیں کی گئی۔ نیچے اپنی پہلی پروڈکٹ درج کریں۔",
+    sellerEmptyServicesNote:
+      "ابھی کوئی سروس لسٹنگ موجود نہیں۔ نیچے اپنا پہلا سروس پیکج بنائیں۔"
   }
 };
 

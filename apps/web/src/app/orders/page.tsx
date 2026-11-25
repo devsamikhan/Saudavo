@@ -16,6 +16,7 @@ import { useAppContext } from "../../components/locale-provider";
 import type { UiDictionary } from "../../i18n/dictionaries";
 import {
   ConfirmActionButton,
+  ListCardSkeleton,
   OrderTimeline,
   StatusBadge
 } from "../../components/ui-primitives";
@@ -272,7 +273,7 @@ export default function OrdersPage() {
   const trackingInfo = activeOrder ? getLiveTrackingData(activeOrder, t) : null;
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:px-8">
       <h1 className="text-2xl font-bold text-ink-primary">
         {t.ordersPageTitle}
       </h1>
@@ -290,8 +291,8 @@ export default function OrdersPage() {
       )}
 
       {loading ? (
-        <div className="mt-6 rounded-2xl border border-border-subtle bg-surface-card p-8 text-sm text-ink-secondary">
-          {t.loadingText}
+        <div className="mt-6">
+          <ListCardSkeleton rows={3} />
         </div>
       ) : orders.length === 0 ? (
         <div className="mt-6">

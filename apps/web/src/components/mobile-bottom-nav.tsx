@@ -20,7 +20,17 @@ export function MobileBottomNav() {
       aria-label="Mobile navigation"
       className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border-subtle bg-surface-card/95 px-2 py-1 backdrop-blur md:hidden"
     >
-      <Link href="/" className={itemClass("/")}>
+      <Link
+        href="/"
+        aria-current={pathname === "/" ? "page" : undefined}
+        className={itemClass("/")}
+      >
+        {pathname === "/" && (
+          <span
+            aria-hidden="true"
+            className="absolute top-0 h-0.5 w-8 rounded-full bg-brand-primary"
+          />
+        )}
         <svg
           className="h-4 w-4"
           viewBox="0 0 24 24"
@@ -34,7 +44,17 @@ export function MobileBottomNav() {
         <span>{t.navStorefront}</span>
       </Link>
 
-      <Link href="/cart" className={itemClass("/cart")}>
+      <Link
+        href="/cart"
+        aria-current={pathname === "/cart" ? "page" : undefined}
+        className={itemClass("/cart")}
+      >
+        {pathname === "/cart" && (
+          <span
+            aria-hidden="true"
+            className="absolute top-0 h-0.5 w-8 rounded-full bg-brand-primary"
+          />
+        )}
         <div className="relative">
           <svg
             className="h-4 w-4"
@@ -57,7 +77,17 @@ export function MobileBottomNav() {
         <span>{t.navCart}</span>
       </Link>
 
-      <Link href="/orders" className={itemClass("/orders")}>
+      <Link
+        href="/orders"
+        aria-current={pathname === "/orders" ? "page" : undefined}
+        className={itemClass("/orders")}
+      >
+        {pathname === "/orders" && (
+          <span
+            aria-hidden="true"
+            className="absolute top-0 h-0.5 w-8 rounded-full bg-brand-primary"
+          />
+        )}
         <svg
           className="h-4 w-4"
           viewBox="0 0 24 24"
@@ -72,7 +102,17 @@ export function MobileBottomNav() {
         <span>{t.navOrders}</span>
       </Link>
 
-      <Link href="/seller" className={itemClass("/seller")}>
+      <Link
+        href="/seller"
+        aria-current={pathname === "/seller" ? "page" : undefined}
+        className={itemClass("/seller")}
+      >
+        {pathname === "/seller" && (
+          <span
+            aria-hidden="true"
+            className="absolute top-0 h-0.5 w-8 rounded-full bg-brand-primary"
+          />
+        )}
         <svg
           className="h-4 w-4"
           viewBox="0 0 24 24"

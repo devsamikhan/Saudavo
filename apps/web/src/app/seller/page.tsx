@@ -16,11 +16,20 @@ import type {
   ServicePackageInput
 } from "@saudavo/contracts";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import {
+  EmptyCatalogSpot,
+  EmptyInboxSpot,
+  SaudaBuddyAvatar,
+  SellerStudioIllustration,
+  SpotState
+} from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import { StoreShareAndQrCard } from "../../components/qr-poster";
 import {
   ConfirmActionButton,
+  ListCardSkeleton,
   OrderTimeline,
   StatusBadge,
   TrustPill
@@ -58,8 +67,16 @@ import {
 
 type SellerTab = "ORDERS" | "PRODUCTS" | "SERVICES" | "GROWTH";
 
+function slugifyStoreName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export default function SellerStudioPage() {
-  const { locale, t, user, refreshUser } = useAppContext();
+  const router = useRouter();
+  const { locale, t, user, refreshUser, showToast } = useAppContext();
 
   const [profile, setProfile] = useState<SellerProfileDto | null>(null);
   const [store, setStore] = useState<PrivateStoreDto | null>(null);
@@ -190,13 +207,7 @@ export default function SellerStudioPage() {
         const prefill = window.sessionStorage.getItem("saudavo_prefill_store_name");
         if (prefill) {
           setStoreName((prev) => prev || prefill);
-          setStoreSlug((prev) => {
-            if (prev) return prev;
-            return prefill
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-|-$/g, "");
-          });
+          setStoreSlug((prev) => prev || slugifyStoreName(prefill));
           window.sessionStorage.removeItem("saudavo_prefill_store_name");
         }
       } catch {
@@ -208,6 +219,22 @@ export default function SellerStudioPage() {
   useEffect(() => {
     void loadSellerWorkspace();
   }, [loadSellerWorkspace]);
+
+  const navigateToSellerAuth = (mode: "register" | "login") => {
+    if (typeof window !== "undefined" && storeName.trim().length > 0) {
+      try {
+        window.sessionStorage.setItem(
+          "saudavo_prefill_store_name",
+          storeName.trim()
+        );
+      } catch {
+        // Ignore storage unavailability
+      }
+    }
+    router.push(
+      mode === "login" ? "/auth?intent=seller&mode=login" : "/auth?intent=seller"
+    );
+  };
 
   const handleOnboard = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -227,6 +254,11 @@ export default function SellerStudioPage() {
           showPublicAddress: false
         }
       });
+      showToast(
+        locale === "ur"
+          ? "آپ کا مقامی اسٹور جائزے کے لیے جمع ہو گیا!"
+          : "Store submitted for moderator review!"
+      );
       await refreshUser();
       await loadSellerWorkspace();
     } catch (err: unknown) {
@@ -426,19 +458,6 @@ export default function SellerStudioPage() {
     }
   };
 
-  if (!user) {
-    return (
-      <main className="mx-auto max-w-4xl px-4 py-10 text-center">
-        <Link
-          href="/auth"
-          className="inline-block rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white"
-        >
-          Sign In for Seller Studio
-        </Link>
-      </main>
-    );
-  }
-
   const pendingCodTotalPaisa = orders.reduce((sum, order) => {
     if (
       order.status !== "CANCELLED" &&
@@ -450,134 +469,313 @@ export default function SellerStudioPage() {
   }, 0);
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-primary">
-            {t.sellerStudioTitle}
-          </h1>
-          <p className="text-xs text-ink-secondary">
-            {locale === "ur"
-              ? "رازداری اولین ترجیح: ذاتی شناختی کارڈ یا گھریلو پتہ ظاہر کیے بغیر مقامی کاروبار چلائیں (PQ-07)"
-              : "Privacy-first Mianwali store management (No CNIC collected in closed beta • PQ-07)"}
-          </p>
-        </div>
-        {profile && store && (
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={profile.verificationStatus} />
-            <StatusBadge status={store.status} />
-          </div>
-        )}
-      </div>
-
-      {errorMsg && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {errorMsg}
-        </div>
-      )}
-
-      {statusNotice && (
-        <div
-          role="status"
-          className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-        >
-          <span>{statusNotice}</span>
-          <button
-            type="button"
-            onClick={() => setStatusNotice(null)}
-            className="text-xs font-bold text-emerald-900 hover:underline"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
+    <main className="fade-slide mx-auto max-w-7xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:px-8 space-y-6">
       {loading ? (
-        <p className="text-sm text-ink-secondary">Loading Seller Studio...</p>
-      ) : !profile || !store ? (
-        <form
-          onSubmit={handleOnboard}
-          className="max-w-xl space-y-4 rounded-2xl border border-border-subtle bg-surface-card p-6"
-        >
-          <h2 className="text-lg font-bold text-ink-primary">
-            Apply for a Local Mianwali Storefront
-          </h2>
-
-          <div>
-            <label className="block text-xs font-semibold text-ink-secondary">
-              Seller Type
-            </label>
-            <select
-              value={sellerType}
-              onChange={(e) => setSellerType(e.target.value as SellerType)}
-              className="mt-1 w-full rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-sm"
-            >
-              <option value="HOME_MAKER">Home-Based Seller (Privacy Protected)</option>
-              <option value="LOCAL_SHOP">Local Mianwali Shop</option>
-              <option value="INDIVIDUAL_SELLER">Individual Seller</option>
-              <option value="SERVICE_PROVIDER">Service Provider</option>
-            </select>
-          </div>
-
-          <input
-            type="text"
-            required
-            placeholder="Store Display Name (e.g. Mianwali Handloom)"
-            value={storeName}
-            onChange={(e) => setStoreName(e.target.value)}
-            className="w-full rounded-xl border border-border-subtle px-3.5 py-2.5 text-sm"
-          />
-          <input
-            type="text"
-            required
-            placeholder="Store URL Slug (e.g. mianwali-handloom)"
-            value={storeSlug}
-            onChange={(e) => setStoreSlug(e.target.value.toLowerCase())}
-            className="w-full rounded-xl border border-border-subtle px-3.5 py-2.5 text-sm"
-          />
-
-          <div>
-            <p className="text-xs font-semibold text-ink-secondary">
-              Mianwali Service Area Coverage (PQ-08):
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(districts[0]?.areaZones ?? []).map((zone) => {
-                const active = selectedZoneIds.includes(zone.id);
-                return (
-                  <button
-                    key={zone.id}
-                    type="button"
-                    onClick={() =>
-                      setSelectedZoneIds((prev) =>
-                        active
-                          ? prev.filter((id) => id !== zone.id)
-                          : [...prev, zone.id]
-                      )
-                    }
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      active
-                        ? "bg-brand-primary text-white"
-                        : "border border-border-subtle bg-surface-muted text-ink-primary"
-                    }`}
-                  >
-                    {zone.nameEn}
-                  </button>
-                );
-              })}
+        <ListCardSkeleton rows={2} />
+      ) : !user || !profile || !store ? (
+        <div className="grid min-h-[580px] grid-cols-1 overflow-hidden rounded-3xl border border-border-subtle bg-surface-card shadow-soft lg:grid-cols-12">
+          {/* Split-Screen Left Visual Panel (Saudavo Deep Emerald Gradient) */}
+          <section className="relative flex flex-col justify-between gap-6 overflow-hidden bg-gradient-to-br from-[#094232] via-[#0F6B52] to-[#073528] p-7 text-white sm:p-10 lg:col-span-6">
+            <div className="relative z-10 space-y-3">
+              <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-bold tracking-wide text-[#FDE68A]">
+                {t.sellerHeroBadge}
+              </span>
+              <h1 className="text-2xl font-extrabold leading-snug sm:text-3xl">
+                {t.sellerHeroTitle}
+              </h1>
+              <p className="text-sm leading-relaxed text-white/85">
+                {t.sellerHeroSubtitle}
+              </p>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            className="w-full rounded-xl bg-brand-primary py-3 text-sm font-semibold text-white"
-          >
-            Submit Store for Review
-          </button>
-        </form>
+            <div className="glass-promo relative z-10 rounded-3xl p-3">
+              <SellerStudioIllustration />
+            </div>
+
+            <div className="relative z-10 grid grid-cols-2 gap-3 text-xs">
+              <div className="glass-promo rounded-2xl p-3">
+                <p className="font-bold text-white">{t.privacyShieldBadge}</p>
+                <p className="mt-0.5 text-white/80">
+                  {locale === "ur"
+                    ? "شناختی کارڈ کے بغیر آغاز (PQ-07)"
+                    : "No CNIC required in beta (PQ-07)"}
+                </p>
+              </div>
+              <div className="glass-promo rounded-2xl p-3">
+                <p className="font-bold text-white">
+                  {locale === "ur" ? "واٹس ایپ اور QR اسٹیکر" : "WhatsApp & QR Ready"}
+                </p>
+                <p className="mt-0.5 text-white/80">
+                  {locale === "ur"
+                    ? "کیش آن ڈلیوری آرڈرز"
+                    : "Mianwali Zone COD Delivery"}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Split-Screen Right Onboarding Panel */}
+          <section className="flex flex-col justify-center p-6 sm:p-10 lg:col-span-6">
+            {errorMsg && (
+              <div
+                role="alert"
+                className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700"
+              >
+                {errorMsg}
+              </div>
+            )}
+
+            {statusNotice && (
+              <div
+                role="status"
+                className="mb-4 flex items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800"
+              >
+                <span>{statusNotice}</span>
+                <button
+                  type="button"
+                  onClick={() => setStatusNotice(null)}
+                  className="text-xs font-bold text-emerald-900 hover:underline"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {!user ? (
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <span className="inline-block rounded-full bg-brand-primary-soft px-3.5 py-1 text-xs font-bold text-brand-primary">
+                    {t.sellerStepAccountBadge}
+                  </span>
+                  <h2 className="text-2xl font-extrabold text-ink-primary">
+                    {t.sellerOnboardingHeading}
+                  </h2>
+                  <p className="text-sm leading-relaxed text-ink-secondary">
+                    {t.sellerSignInGateBody}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="seller-prefill-store-name"
+                    className="block text-xs font-semibold text-ink-secondary"
+                  >
+                    {locale === "ur"
+                      ? "دکان یا کاروبار کا نام (اختیاری)"
+                      : "Shop or Business Name (Optional)"}
+                  </label>
+                  <input
+                    id="seller-prefill-store-name"
+                    type="text"
+                    maxLength={80}
+                    placeholder="e.g. Mianwali Handloom"
+                    value={storeName}
+                    onChange={(e) => setStoreName(e.target.value)}
+                    className="mt-1.5 w-full rounded-2xl border border-border-subtle px-4 py-3 text-sm focus:border-brand-primary focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => navigateToSellerAuth("register")}
+                    className="w-full rounded-2xl bg-brand-primary py-3.5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-primary-hover"
+                  >
+                    {t.sellerCreateAccountBtn}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateToSellerAuth("login")}
+                    className="w-full rounded-2xl border border-border-subtle bg-surface-canvas py-3 text-sm font-semibold text-ink-primary transition hover:border-brand-primary"
+                  >
+                    {t.sellerExistingSignInBtn}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleOnboard} className="space-y-4">
+                <div className="space-y-1.5">
+                  <span className="inline-block rounded-full bg-brand-primary-soft px-3.5 py-1 text-xs font-bold text-brand-primary">
+                    {t.sellerStepSetupBadge}
+                  </span>
+                  <h2 className="text-xl font-extrabold text-ink-primary">
+                    {t.sellerOnboardingHeading}
+                  </h2>
+                  <p className="text-xs text-ink-secondary">
+                    {locale === "ur"
+                      ? "رازداری اولین ترجیح: ذاتی شناختی کارڈ یا گھریلو پتہ ظاہر کیے بغیر مقامی کاروبار چلائیں (PQ-07)"
+                      : "Privacy-first Mianwali store management (No CNIC collected in closed beta • PQ-07)"}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-ink-secondary">
+                    {locale === "ur" ? "سیلر کی قسم" : "Seller Type"}
+                  </label>
+                  <select
+                    value={sellerType}
+                    onChange={(e) => setSellerType(e.target.value as SellerType)}
+                    className="mt-1 w-full rounded-2xl border border-border-subtle bg-surface-card px-4 py-2.5 text-sm focus:border-brand-primary focus:outline-none"
+                  >
+                    <option value="HOME_MAKER">
+                      {locale === "ur"
+                        ? "گھریلو ہنرمند (مکمل رازداری محفوظ)"
+                        : "Home-Based Seller (Privacy Protected)"}
+                    </option>
+                    <option value="LOCAL_SHOP">
+                      {locale === "ur" ? "مقامی میانوالی دکان" : "Local Mianwali Shop"}
+                    </option>
+                    <option value="INDIVIDUAL_SELLER">
+                      {locale === "ur" ? "انفرادی سیلر" : "Individual Seller"}
+                    </option>
+                    <option value="SERVICE_PROVIDER">
+                      {locale === "ur" ? "سروس فراہم کنندہ" : "Service Provider"}
+                    </option>
+                  </select>
+                </div>
+
+                <input
+                  type="text"
+                  required
+                  placeholder={
+                    locale === "ur"
+                      ? "اسٹور کا نام (مثلاً میانوالی ہینڈ لوم)"
+                      : "Store Display Name (e.g. Mianwali Handloom)"
+                  }
+                  value={storeName}
+                  onChange={(e) => {
+                    const nextName = e.target.value;
+                    setStoreSlug((prevSlug) =>
+                      !prevSlug || prevSlug === slugifyStoreName(storeName)
+                        ? slugifyStoreName(nextName)
+                        : prevSlug
+                    );
+                    setStoreName(nextName);
+                  }}
+                  className="w-full rounded-2xl border border-border-subtle px-4 py-2.5 text-sm focus:border-brand-primary focus:outline-none"
+                />
+                <input
+                  type="text"
+                  required
+                  placeholder={
+                    locale === "ur"
+                      ? "اسٹور لنک سلگ (مثلاً mianwali-handloom)"
+                      : "Store URL Slug (e.g. mianwali-handloom)"
+                  }
+                  value={storeSlug}
+                  onChange={(e) => setStoreSlug(e.target.value.toLowerCase())}
+                  className="w-full rounded-2xl border border-border-subtle px-4 py-2.5 text-sm focus:border-brand-primary focus:outline-none"
+                />
+
+                <div>
+                  <p className="text-xs font-semibold text-ink-secondary">
+                    {locale === "ur"
+                      ? "میانوالی ڈلیوری علاقہ جات (PQ-08):"
+                      : "Mianwali Service Area Coverage (PQ-08):"}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(districts[0]?.areaZones ?? []).map((zone) => {
+                      const active = selectedZoneIds.includes(zone.id);
+                      return (
+                        <button
+                          key={zone.id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedZoneIds((prev) =>
+                              active
+                                ? prev.filter((id) => id !== zone.id)
+                                : [...prev, zone.id]
+                            )
+                          }
+                          className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                            active
+                              ? "bg-brand-primary text-white shadow-sm"
+                              : "border border-border-subtle bg-surface-muted text-ink-primary hover:border-brand-primary"
+                          }`}
+                        >
+                          {locale === "ur" ? zone.nameUr : zone.nameEn}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full rounded-2xl bg-brand-primary py-3.5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-primary-hover"
+                >
+                  {locale === "ur"
+                    ? "اسٹور منظوری کے لیے جمع کرائیں"
+                    : "Submit Store for Review"}
+                </button>
+              </form>
+            )}
+          </section>
+        </div>
       ) : (
         <div className="space-y-6">
+          {/* Sleek Deep Emerald Studio Header Strip */}
+          <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-[#094232] via-[#0F6B52] to-[#073528] p-5 text-white shadow-soft sm:p-6">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 shrink-0 rounded-2xl border border-white/25 bg-white/10 p-1">
+                <SaudaBuddyAvatar />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#FDE68A]">
+                  {t.sellerStudioTitle}
+                </p>
+                <h1 dir="auto" className="text-xl font-extrabold sm:text-2xl">
+                  {store.displayName}
+                </h1>
+                <p className="mt-0.5 text-xs text-white/80">
+                  {locale === "ur"
+                    ? "رازداری اولین ترجیح: ذاتی شناختی کارڈ یا گھریلو پتہ ظاہر کیے بغیر مقامی کاروبار چلائیں (PQ-07)"
+                    : "Privacy-first Mianwali store management (No CNIC collected in closed beta • PQ-07)"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={profile.verificationStatus} />
+              <StatusBadge status={store.status} />
+              {store.status === "ACTIVE" && (
+                <Link
+                  href={`/stores/${store.slug}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
+                >
+                  {t.sellerViewPublicStoreBtn} ↗
+                </Link>
+              )}
+            </div>
+          </header>
+
+          {errorMsg && (
+            <div
+              role="alert"
+              className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {errorMsg}
+            </div>
+          )}
+
+          {statusNotice && (
+            <div
+              role="status"
+              className="flex items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+            >
+              <span>{statusNotice}</span>
+              <button
+                type="button"
+                onClick={() => setStatusNotice(null)}
+                className="text-xs font-bold text-emerald-900 hover:underline"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {/* Seller Workspace Tabs */}
-          <div className="flex flex-wrap gap-2 border-b border-border-subtle pb-3">
+          <div className="flex flex-wrap gap-2.5 border-b border-border-subtle pb-3">
             {(
               [
                 {
@@ -602,10 +800,10 @@ export default function SellerStudioPage() {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                className={`rounded-2xl px-4 py-2 text-xs font-semibold transition ${
                   activeTab === tab.key
-                    ? "bg-brand-primary text-white shadow-sm"
-                    : "border border-border-subtle bg-surface-card text-ink-secondary hover:text-ink-primary"
+                    ? "clay-pill-active text-white"
+                    : "clay-pill text-ink-secondary hover:text-brand-primary"
                 }`}
               >
                 {tab.label}
@@ -623,7 +821,7 @@ export default function SellerStudioPage() {
                 />
               )}
 
-              <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
+              <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
                 <h2 className="text-lg font-bold text-ink-primary">
                   {locale === "ur"
                     ? "اسٹور پروفائل اور رازداری سیٹنگز"
@@ -732,33 +930,33 @@ export default function SellerStudioPage() {
                 </button>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-border-subtle bg-surface-card p-5">
+                <div className="rounded-3xl border border-border-subtle bg-surface-card p-5 shadow-card">
                   <p className="text-xs text-ink-secondary">
-                    Completed Gross Sales
+                    {locale === "ur" ? "مکمل فروخت (گراس)" : "Completed Gross Sales"}
                   </p>
                   <p className="mt-1 text-2xl font-bold text-ink-primary">
                     {formatPkrFromPaisa(summary.completedGrossPaisa, locale)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border-subtle bg-surface-card p-5">
+                <div className="rounded-3xl border border-border-subtle bg-surface-card p-5 shadow-card">
                   <p className="text-xs text-ink-secondary">
-                    Pending COD / Offline
+                    {locale === "ur" ? "واجب الادا COD / آف لائن" : "Pending COD / Offline"}
                   </p>
                   <p className="mt-1 text-2xl font-bold text-brand-accent">
                     {formatPkrFromPaisa(pendingCodTotalPaisa, locale)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border-subtle bg-surface-card p-5">
+                <div className="rounded-3xl border border-border-subtle bg-surface-card p-5 shadow-card">
                   <p className="text-xs text-ink-secondary">
-                    Accrued Commission
+                    {locale === "ur" ? "مجموعی کمیشن" : "Accrued Commission"}
                   </p>
                   <p className="mt-1 text-2xl font-bold text-brand-primary">
                     {formatPkrFromPaisa(summary.accruedCommissionPaisa, locale)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border-subtle bg-surface-card p-5">
+                <div className="rounded-3xl border border-border-subtle bg-surface-card p-5 shadow-card">
                   <p className="text-xs text-ink-secondary">
-                    Outstanding Commission Owed
+                    {locale === "ur" ? "بقایا کمیشن" : "Outstanding Commission Owed"}
                   </p>
                   <p className="mt-1 text-2xl font-bold text-ink-secondary">
                     {formatPkrFromPaisa(
@@ -772,8 +970,25 @@ export default function SellerStudioPage() {
           )}
 
           {/* Seller Orders & Split COD Confirmation */}
-          {activeTab === "ORDERS" && (
-          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6">
+          {activeTab === "ORDERS" &&
+            (orders.length === 0 ? (
+              <SpotState
+                illustration={<EmptyInboxSpot />}
+                badge={t.sellerStudioTitle}
+                title={t.sellerEmptyOrdersTitle}
+                description={t.sellerEmptyOrdersBody}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("GROWTH")}
+                    className="rounded-2xl bg-brand-primary px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-brand-primary-hover"
+                  >
+                    {t.sellerShareQrCta}
+                  </button>
+                }
+              />
+            ) : (
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card">
             <h2 className="text-lg font-bold text-ink-primary">
               Store Orders ({orders.length})
             </h2>
@@ -1076,16 +1291,23 @@ export default function SellerStudioPage() {
               ))}
             </div>
           </section>
-          )}
+            ))}
 
           {/* Seller Products List + Add Product Form */}
           {activeTab === "PRODUCTS" && (
-          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
             <h2 className="text-lg font-bold text-ink-primary">
               Physical Products ({products.length} listed)
             </h2>
 
-            {products.length > 0 && (
+            {products.length === 0 ? (
+              <div className="rounded-2xl border border-border-subtle bg-surface-muted/40 p-5 text-center">
+                <EmptyCatalogSpot />
+                <p className="mt-2 text-xs text-ink-secondary">
+                  {t.sellerEmptyProductsNote}
+                </p>
+              </div>
+            ) : (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {products.map((prod) => (
                   <div
@@ -1297,12 +1519,19 @@ export default function SellerStudioPage() {
 
           {/* Service Listings & Add Service Form */}
           {activeTab === "SERVICES" && (
-          <section className="rounded-2xl border border-border-subtle bg-surface-card p-6 space-y-4">
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
             <h2 className="text-lg font-bold text-ink-primary">
               Service Listings ({services.length} listed)
             </h2>
 
-            {services.length > 0 && (
+            {services.length === 0 ? (
+              <div className="rounded-2xl border border-border-subtle bg-surface-muted/40 p-5 text-center">
+                <EmptyCatalogSpot />
+                <p className="mt-2 text-xs text-ink-secondary">
+                  {t.sellerEmptyServicesNote}
+                </p>
+              </div>
+            ) : (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {services.map((svc) => (
                   <div

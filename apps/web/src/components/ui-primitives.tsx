@@ -25,14 +25,40 @@ const STATUS_STYLE_MAP: Record<string, string> = {
   FAILED_REFUSED: "bg-red-50 text-red-800 border-red-200"
 };
 
+const STATUS_LABELS: Record<string, { en: string; ur: string }> = {
+  ACTIVE: { en: "Active", ur: "فعال" },
+  APPROVED: { en: "Approved", ur: "منظور شدہ" },
+  COMPLETED: { en: "Completed", ur: "مکمل" },
+  COLLECTED: { en: "Cash Collected", ur: "رقم وصول" },
+  CONFIRMED: { en: "Confirmed", ur: "کنفرم" },
+  IN_PROGRESS: { en: "In Progress", ur: "کام جاری" },
+  READY_FOR_DISPATCH: { en: "Ready for Dispatch", ur: "ترسیل کے لیے تیار" },
+  DELIVERED: { en: "Delivered", ur: "ڈلیور ہو گیا" },
+  DELIVERY_SUBMITTED: { en: "Delivery Submitted", ur: "کام جمع ہو گیا" },
+  PENDING_REVIEW: { en: "Pending Review", ur: "جائزے میں" },
+  PENDING_CONFIRMATION: { en: "Pending Confirmation", ur: "تصدیق باقی" },
+  PENDING_COLLECTION: { en: "Cash Pending", ur: "رقم باقی" },
+  REVISION_REQUESTED: { en: "Revision Requested", ur: "ترمیم کی درخواست" },
+  DISPUTED: { en: "Disputed", ur: "تنازعہ" },
+  REJECTED: { en: "Rejected", ur: "مسترد" },
+  CANCELLED: { en: "Cancelled", ur: "منسوخ" },
+  FAILED_REFUSED: { en: "COD Refused", ur: "انکار" },
+  OPEN: { en: "Open", ur: "کھلا" },
+  RESOLVED: { en: "Resolved", ur: "حل شدہ" },
+  DRAFT: { en: "Draft", ur: "مسودہ" }
+};
+
 export function StatusBadge({ status }: { status: string }) {
+  const { locale } = useAppContext();
   const tone =
     STATUS_STYLE_MAP[status] ?? "bg-surface-muted text-ink-secondary border-border-subtle";
+  const mapped = STATUS_LABELS[status];
+  const label = mapped ? mapped[locale] : status.replace(/_/g, " ");
   return (
     <span
       className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${tone}`}
     >
-      {status.replace(/_/g, " ")}
+      {label}
     </span>
   );
 }
@@ -62,11 +88,56 @@ export function TrustPill({
 
 export function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-2xl border border-border-subtle bg-surface-card p-4 space-y-3">
-      <div className="h-36 w-full rounded-xl bg-surface-muted" />
-      <div className="h-4 w-3/4 rounded bg-surface-muted" />
-      <div className="h-3 w-1/2 rounded bg-surface-muted" />
-      <div className="h-6 w-1/3 rounded bg-surface-muted" />
+    <div className="animate-pulse rounded-3xl border border-border-subtle bg-surface-card p-5 shadow-card space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="h-5 w-24 rounded-full bg-surface-muted" />
+        <div className="h-7 w-7 rounded-xl bg-surface-muted" />
+      </div>
+      <div className="h-48 w-full rounded-2xl bg-surface-muted" />
+      <div className="space-y-2">
+        <div className="h-4 w-3/4 rounded bg-surface-muted" />
+        <div className="h-3 w-1/2 rounded bg-surface-muted" />
+      </div>
+      <div className="flex items-center justify-between border-t border-border-subtle pt-3.5">
+        <div className="h-6 w-24 rounded bg-surface-muted" />
+        <div className="h-9 w-28 rounded-xl bg-surface-muted" />
+      </div>
+    </div>
+  );
+}
+
+export function ListCardSkeleton({ rows = 2 }: { rows?: number }) {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: rows }).map((_, idx) => (
+        <div
+          key={idx}
+          className="animate-pulse rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-3"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="h-5 w-44 rounded bg-surface-muted" />
+            <div className="h-7 w-24 rounded-full bg-surface-muted" />
+          </div>
+          <div className="h-4 w-2/3 rounded bg-surface-muted" />
+          <div className="h-14 w-full rounded-2xl bg-surface-muted" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function DetailPageSkeleton() {
+  return (
+    <div className="animate-pulse grid grid-cols-1 gap-8 rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card sm:p-8 lg:grid-cols-2">
+      <div className="h-72 rounded-2xl bg-surface-muted lg:h-96" />
+      <div className="space-y-4">
+        <div className="h-6 w-36 rounded-full bg-surface-muted" />
+        <div className="h-8 w-3/4 rounded bg-surface-muted" />
+        <div className="h-4 w-1/2 rounded bg-surface-muted" />
+        <div className="h-10 w-40 rounded bg-surface-muted" />
+        <div className="h-24 w-full rounded-2xl bg-surface-muted" />
+        <div className="h-12 w-full rounded-2xl bg-surface-muted" />
+      </div>
     </div>
   );
 }

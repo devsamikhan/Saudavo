@@ -556,4 +556,247 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
     );
     expect(fitsMobileWidth).toBe(true);
   });
+
+  test("renders Split-Screen Seller Studio onboarding for guests and SpotState for active seller with zero orders", async ({
+    page
+  }) => {
+    let signedInSeller = false;
+    const districtId = "0193a8b2-2000-7000-8000-000000000001";
+    const areaZoneId = "0193a8b2-2001-7000-8000-000000000010";
+    const userId = "0193a8b2-0000-7000-8000-000000000111";
+    const profileId = "0193a8b2-4000-7000-8000-000000000111";
+    const storeId = "0193a8b2-4100-7000-8000-000000000111";
+    const nowIso = "2026-11-24T10:00:00.000Z";
+
+    await page.route("**/api/v1/**", async (route) => {
+      const url = route.request().url();
+
+      if (url.includes("/auth/me")) {
+        if (!signedInSeller) {
+          await route.fulfill({
+            status: 401,
+            contentType: "application/json",
+            body: JSON.stringify({
+              error: {
+                code: "UNAUTHORIZED",
+                message: "Not signed in",
+                requestId: "req_seller_unauth"
+              }
+            })
+          });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              user: {
+                id: userId,
+                email: "seller@saudavo.pk",
+                phone: null,
+                displayName: "Sami",
+                preferredLocale: "en",
+                roles: ["USER", "SELLER"],
+                mfaRequired: false,
+                mfaVerified: false
+              },
+              csrfToken: "csrf_seller_e2e"
+            },
+            meta: { requestId: "req_seller_auth" }
+          })
+        });
+        return;
+      }
+
+      if (url.includes("/notifications")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: [],
+            meta: { unreadCount: 0, requestId: "req_seller_notif" }
+          })
+        });
+        return;
+      }
+
+      if (url.includes("/locations/districts")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: [
+              {
+                id: districtId,
+                code: "MIANWALI",
+                nameEn: "Mianwali",
+                nameUr: "میانوالی",
+                slug: "mianwali",
+                province: "Punjab",
+                countryCode: "PK",
+                areaZones: [
+                  {
+                    id: areaZoneId,
+                    nameEn: "Mianwali",
+                    nameUr: "میانوالی",
+                    slug: "mianwali-tehsil",
+                    zoneType: "TEHSIL"
+                  }
+                ]
+              }
+            ],
+            meta: { requestId: "req_seller_dist" }
+          })
+        });
+        return;
+      }
+
+      if (url.includes("/categories")) {
+        const isService = url.includes("SERVICE");
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: [
+              {
+                id: isService
+                  ? "0193a8b2-3000-7000-8000-000000000002"
+                  : "0193a8b2-3000-7000-8000-000000000001",
+                parentId: null,
+                applicableTo: isService ? "SERVICE" : "PRODUCT",
+                slug: isService ? "local-repairs" : "handicrafts",
+                nameEn: isService ? "Local Repairs" : "Handicrafts",
+                nameUr: isService ? "مقامی مرمت" : "دستکاری",
+                sortOrder: 10
+              }
+            ],
+            meta: { requestId: "req_seller_cat" }
+          })
+        });
+        return;
+      }
+
+      if (url.includes("/seller/profile")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              id: profileId,
+              userId,
+              sellerType: "LOCAL_SHOP",
+              verificationStatus: "APPROVED",
+              rejectionReason: null,
+              verifiedAt: nowIso,
+              createdAt: nowIso,
+              updatedAt: nowIso
+            },
+            meta: { requestId: "req_seller_prof" }
+          })
+        });
+        return;
+      }
+
+      if (url.includes("/seller/store")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              id: storeId,
+              sellerProfileId: profileId,
+              districtId,
+              districtNameEn: "Mianwali",
+              slug: "sami-crafts",
+              displayName: "Sami Crafts",
+              description: null,
+              showPublicPhone: false,
+              publicContactPhone: null,
+              showPublicAddress: false,
+              publicBusinessAddress: null,
+              defaultDeliveryFeePaisa: 15000,
+              currency: "PKR",
+              status: "ACTIVE",
+              serviceAreas: [],
+              createdAt: nowIso,
+              updatedAt: nowIso
+            },
+            meta: { requestId: "req_seller_store" }
+          })
+        });
+        return;
+      }
+
+      if (
+        url.includes("/seller/products") ||
+        url.includes("/seller/services") ||
+        url.includes("/seller/orders")
+      ) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: [],
+            meta: { requestId: "req_seller_empty" }
+          })
+        });
+        return;
+      }
+
+      if (url.includes("/seller/commission-summary")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              storeId,
+              currency: "PKR",
+              accountingDisclaimer: "Commission ledger is for tracking only.",
+              completedGrossPaisa: 0,
+              accruedCommissionPaisa: 0,
+              settledCommissionPaisa: 0,
+              outstandingCommissionOwedPaisa: 0,
+              promotionalBetaNote: "0% closed beta rate active."
+            },
+            meta: { requestId: "req_seller_sum" }
+          })
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    // 1. Guest visitor sees Split-Screen Seller Studio onboarding & illustration
+    await page.goto("/seller");
+    await expect(
+      page.getByText("MIANWALI SELLER STUDIO • 0% BETA COMMISSION")
+    ).toBeVisible();
+    await expect(
+      page.locator('img[alt="Saudavo Mianwali local seller studio illustration"]')
+    ).toBeVisible();
+
+    await page.locator("#seller-prefill-store-name").fill("Sami Crafts");
+    await page.getByRole("button", { name: "Create Seller Account" }).click();
+    await expect(page).toHaveURL(/\/auth\?intent=seller$/);
+    await expect(page.locator("#auth-reg-shop-name")).toHaveValue("Sami Crafts");
+
+    // 2. Signed-in active seller sees sleek header strip, Empty Orders SpotState & QR Growth CTA
+    signedInSeller = true;
+    await page.goto("/seller");
+    await expect(page.getByRole("heading", { name: "Sami Crafts" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /View Public Store/i })).toBeVisible();
+    await expect(page.getByText("No store orders yet")).toBeVisible();
+
+    await page.getByRole("button", { name: "Open Store & QR Growth" }).click();
+    await expect(page.getByText("Share Store on WhatsApp")).toBeVisible();
+
+    // Mobile (375px) zero horizontal overflow verification
+    await page.setViewportSize({ width: 375, height: 812 });
+    const fitsMobileWidth = await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    );
+    expect(fitsMobileWidth).toBe(true);
+  });
 });

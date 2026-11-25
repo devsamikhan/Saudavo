@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { EmptyCartSpot, SpotState } from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import { OrderConfirmedModal } from "../../components/order-confirmed-modal";
+import { ListCardSkeleton } from "../../components/ui-primitives";
 import {
   ApiClientError,
   createAddress,
@@ -236,7 +237,7 @@ export default function CartPage() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:px-8">
       <h1 className="text-2xl font-bold text-ink-primary">
         {locale === "ur"
           ? "اسٹور کارٹس اور سنگل سیلر کیش آن ڈلیوری چیک آؤٹ"
@@ -255,8 +256,8 @@ export default function CartPage() {
       )}
 
       {loading ? (
-        <div className="mt-6 rounded-2xl border border-border-subtle bg-surface-card p-8 text-sm text-ink-secondary">
-          {t.loadingText}
+        <div className="mt-6">
+          <ListCardSkeleton rows={2} />
         </div>
       ) : carts.length === 0 ? (
         <div className="mt-6">
@@ -293,7 +294,8 @@ export default function CartPage() {
                       {cart.storeDisplayName}
                     </h2>
                     <p className="text-xs text-ink-secondary">
-                      Subtotal: {formatPkrFromPaisa(cart.subtotalPaisa, locale)}
+                      {locale === "ur" ? "ذیلی کل:" : "Subtotal:"}{" "}
+                      {formatPkrFromPaisa(cart.subtotalPaisa, locale)}
                     </p>
                   </div>
                   <button
@@ -309,8 +311,12 @@ export default function CartPage() {
                     }`}
                   >
                     {selectedCartStoreId === cart.storeId
-                      ? "Selected for Checkout"
-                      : "Checkout This Store"}
+                      ? locale === "ur"
+                        ? "چیک آؤٹ کے لیے منتخب"
+                        : "Selected for Checkout"
+                      : locale === "ur"
+                        ? "اس اسٹور کا آرڈر دیں"
+                        : "Checkout This Store"}
                   </button>
                 </div>
 
@@ -326,7 +332,8 @@ export default function CartPage() {
                         </p>
                         {item.variantTitle && (
                           <p className="text-xs text-ink-secondary">
-                            Variant: {item.variantTitle}
+                            {locale === "ur" ? "ویرینٹ:" : "Variant:"}{" "}
+                            {item.variantTitle}
                           </p>
                         )}
                       </div>
@@ -368,7 +375,7 @@ export default function CartPage() {
                           onClick={() => void removeCartItem(item.id).then(loadData)}
                           className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                         >
-                          Remove
+                          {locale === "ur" ? "ہٹائیں" : "Remove"}
                         </button>
                       </div>
                     </div>
@@ -380,7 +387,9 @@ export default function CartPage() {
 
           <aside className="h-fit space-y-4 rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card">
             <h2 className="text-lg font-bold text-ink-primary">
-              Single-Seller Checkout (COD)
+              {locale === "ur"
+                ? "سنگل سیلر چیک آؤٹ (COD)"
+                : "Single-Seller Checkout (COD)"}
             </h2>
 
             <div className="flex gap-2">
@@ -399,8 +408,12 @@ export default function CartPage() {
                   }`}
                 >
                   {mode === "SELLER_DELIVERY"
-                    ? "Seller Delivery"
-                    : "Customer Pickup"}
+                    ? locale === "ur"
+                      ? "سیلر ڈلیوری"
+                      : "Seller Delivery"
+                    : locale === "ur"
+                      ? "خود وصولی (پک اپ)"
+                      : "Customer Pickup"}
                 </button>
               ))}
             </div>
@@ -409,14 +422,14 @@ export default function CartPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-ink-secondary">
-                    Mianwali Address
+                    {locale === "ur" ? "میانوالی پتہ" : "Mianwali Address"}
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowAddrForm((v) => !v)}
                     className="text-xs font-semibold text-brand-primary underline"
                   >
-                    + New Address
+                    {locale === "ur" ? "+ نیا پتہ" : "+ New Address"}
                   </button>
                 </div>
 
@@ -428,7 +441,11 @@ export default function CartPage() {
                   }}
                   className="w-full rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
                 >
-                  <option value="">Select delivery address...</option>
+                  <option value="">
+                    {locale === "ur"
+                      ? "ڈلیوری پتہ منتخب کریں..."
+                      : "Select delivery address..."}
+                  </option>
                   {addresses.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.recipientName} — {a.streetAddress} ({a.areaZoneName})
@@ -450,14 +467,14 @@ export default function CartPage() {
                 >
                   {(districts[0]?.areaZones ?? []).map((z) => (
                     <option key={z.id} value={z.id}>
-                      {z.nameEn}
+                      {locale === "ur" ? z.nameUr : z.nameEn}
                     </option>
                   ))}
                 </select>
                 <input
                   type="text"
                   required
-                  placeholder="Recipient Name"
+                  placeholder={locale === "ur" ? "وصول کنندہ کا نام" : "Recipient Name"}
                   value={recipientName}
                   onChange={(e) => setRecipientName(e.target.value)}
                   className="w-full rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1.5 text-xs"
@@ -473,7 +490,11 @@ export default function CartPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Street & Mohallah in Mianwali"
+                  placeholder={
+                    locale === "ur"
+                      ? "گلی اور محلہ (میانوالی)"
+                      : "Street & Mohallah in Mianwali"
+                  }
                   value={streetAddress}
                   onChange={(e) => setStreetAddress(e.target.value)}
                   className="w-full rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1.5 text-xs"
@@ -482,14 +503,18 @@ export default function CartPage() {
                   type="submit"
                   className="w-full rounded-lg bg-brand-primary py-1.5 text-xs font-semibold text-white"
                 >
-                  Save Mianwali Address
+                  {locale === "ur" ? "میانوالی پتہ محفوظ کریں" : "Save Mianwali Address"}
                 </button>
               </form>
             )}
 
             <textarea
               rows={2}
-              placeholder="Delivery note (optional)"
+              placeholder={
+                locale === "ur"
+                  ? "ڈلیوری نوٹ یا قریبی نشان (اختیاری)"
+                  : "Delivery note (optional)"
+              }
               value={customerNote}
               onChange={(e) => setCustomerNote(e.target.value)}
               className="w-full rounded-xl border border-border-subtle px-3 py-2 text-xs"
@@ -500,21 +525,23 @@ export default function CartPage() {
               onClick={() => void handleQuote()}
               className="w-full rounded-xl border border-brand-primary py-2.5 text-xs font-semibold text-brand-primary hover:bg-brand-primary-soft"
             >
-              Calculate Server Quote
+              {locale === "ur" ? "کل رقم اور ڈلیوری چیک کریں" : "Calculate Server Quote"}
             </button>
 
             {quote && (
               <div className="space-y-1.5 rounded-xl bg-surface-muted p-4 text-xs">
                 <div className="flex justify-between">
-                  <span>Subtotal</span>
+                  <span>{locale === "ur" ? "اشیاء کا کل" : "Subtotal"}</span>
                   <span>{formatPkrFromPaisa(quote.subtotalPaisa, locale)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Seller Delivery Fee</span>
+                  <span>{locale === "ur" ? "ڈلیوری فیس" : "Seller Delivery Fee"}</span>
                   <span>{formatPkrFromPaisa(quote.deliveryFeePaisa, locale)}</span>
                 </div>
                 <div className="flex justify-between border-t border-border-subtle pt-2 text-sm font-bold text-brand-primary">
-                  <span>Total Cash on Delivery</span>
+                  <span>
+                    {locale === "ur" ? "کل کیش آن ڈلیوری" : "Total Cash on Delivery"}
+                  </span>
                   <span>{formatPkrFromPaisa(quote.totalPaisa, locale)}</span>
                 </div>
               </div>

@@ -42,6 +42,9 @@ export function SiteFooter() {
             <Link href="/seller" className="hover:text-brand-primary">
               {t.navSeller}
             </Link>
+            <Link href="/admin" className="text-ink-secondary/80 hover:text-brand-primary">
+              {locale === "ur" ? "اسٹاف ماڈریشن کنسول" : "Staff Moderation Console"}
+            </Link>
           </div>
         </div>
 

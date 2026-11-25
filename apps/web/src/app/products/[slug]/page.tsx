@@ -4,9 +4,11 @@ import type { PublicProductDetailDto } from "@saudavo/contracts";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { NotFoundSpot, SpotState } from "../../../components/illustrations";
 import { useAppContext } from "../../../components/locale-provider";
 import {
   CategoryArtwork,
+  DetailPageSkeleton,
   ReportListingButton,
   TrustPill
 } from "../../../components/ui-primitives";
@@ -101,7 +103,11 @@ export default function ProductDetailPage() {
         quantity
       });
       await refreshCartCount();
-      setFeedback("Added to this store's saved cart.");
+      setFeedback(
+        locale === "ur"
+          ? "اسٹور کارٹ میں شامل ہو گیا۔"
+          : "Added to this store's saved cart."
+      );
       showToast(`${product.title} — ${t.inCartLabel}!`, "primary");
     } catch (err: unknown) {
       setErrorMsg(
@@ -112,24 +118,34 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10 text-sm text-ink-secondary">
-        {t.loadingText}
+      <main className="mx-auto max-w-5xl px-4 py-8 pb-24 sm:px-6 md:pb-8 lg:px-8">
+        <DetailPageSkeleton />
       </main>
     );
   }
 
   if (!product) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-10">
-        <div className="rounded-2xl border border-border-subtle bg-surface-card p-8 text-center">
-          <p className="text-sm text-red-700">{errorMsg ?? "Product not found."}</p>
-          <Link
-            href="/"
-            className="mt-4 inline-block text-sm font-semibold text-brand-primary underline"
-          >
-            Back to Storefront
-          </Link>
-        </div>
+      <main className="mx-auto max-w-4xl px-4 py-10 pb-24 md:pb-10">
+        <SpotState
+          illustration={<NotFoundSpot />}
+          badge={t.navStorefront}
+          title={t.notFoundTitle}
+          description={
+            errorMsg ??
+            (locale === "ur"
+              ? "یہ پروڈکٹ دستیاب نہیں یا ہٹا دی گئی ہے۔"
+              : "Product not found.")
+          }
+          actions={
+            <Link
+              href="/"
+              className="inline-flex rounded-2xl bg-brand-primary px-6 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-brand-primary-hover"
+            >
+              {t.backToMarketplaceBtn}
+            </Link>
+          }
+        />
       </main>
     );
   }
@@ -274,27 +290,47 @@ export default function ProductDetailPage() {
 
           {product.variants.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-ink-secondary">
-                Select Variant
-              </label>
-              <select
-                value={selectedVariantId}
-                onChange={(e) => setSelectedVariantId(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2.5 text-sm"
-              >
-                {product.variants.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.title} — {formatPkrFromPaisa(v.pricePaisa, locale)} (Stock:{" "}
-                    {v.stockQuantity})
-                  </option>
-                ))}
-              </select>
+              <p className="block text-xs font-semibold text-ink-secondary">
+                {locale === "ur" ? "ویرینٹ منتخب کریں" : "Select Variant"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {product.variants.map((v) => {
+                  const isSelected = selectedVariantId === v.id;
+                  const outOfStock = v.stockQuantity <= 0;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      disabled={outOfStock}
+                      onClick={() => setSelectedVariantId(v.id)}
+                      aria-pressed={isSelected}
+                      className={`rounded-2xl border px-3.5 py-2 text-start text-xs transition ${
+                        isSelected
+                          ? "border-brand-primary bg-brand-primary-soft/60 text-brand-primary ring-1 ring-brand-primary"
+                          : "border-border-subtle bg-surface-canvas text-ink-primary hover:border-brand-primary"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      <span className="block font-bold">{v.title}</span>
+                      <span className="mt-0.5 block text-[11px] opacity-85">
+                        {formatPkrFromPaisa(v.pricePaisa, locale)} •{" "}
+                        {outOfStock
+                          ? locale === "ur"
+                            ? "ختم"
+                            : "Out of stock"
+                          : locale === "ur"
+                            ? `اسٹاک: ${v.stockQuantity}`
+                            : `${v.stockQuantity} left`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           <div className="flex items-center gap-3">
             <label className="text-xs font-semibold text-ink-secondary">
-              Qty
+              {locale === "ur" ? "تعداد" : "Qty"}
             </label>
             <div className="flex items-center gap-2">
               <button
@@ -333,7 +369,7 @@ export default function ProductDetailPage() {
             <p className="rounded-xl bg-brand-primary-soft px-4 py-2 text-xs font-semibold text-brand-primary">
               {feedback}{" "}
               <Link href="/cart" className="underline">
-                Go to Cart
+                {locale === "ur" ? "کارٹ دیکھیں" : "Go to Cart"}
               </Link>
             </p>
           )}

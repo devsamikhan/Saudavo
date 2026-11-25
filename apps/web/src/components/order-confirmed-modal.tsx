@@ -58,6 +58,11 @@ export function OrderConfirmedModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="order-confirmed-heading"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && onClose) {
+          onClose();
+        }
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#094232]/65 p-4 backdrop-blur-sm"
     >
       <div className="fade-slide relative w-full max-w-md overflow-hidden rounded-3xl border border-border-subtle bg-surface-card p-8 text-center shadow-soft">

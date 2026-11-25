@@ -376,6 +376,97 @@ export function NotFoundSpot() {
   );
 }
 
+function SellerStudioVectorFallback() {
+  return (
+    <svg
+      viewBox="0 0 420 300"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="mx-auto h-auto w-full max-w-sm select-none"
+      role="img"
+      aria-label="Saudavo Mianwali local seller studio illustration"
+    >
+      <circle cx="210" cy="150" r="126" fill="#FFFFFF" fillOpacity="0.12" />
+      <rect x="76" y="72" width="268" height="176" rx="24" fill="#FFFFFF" />
+      <path
+        d="M76 96C76 82.75 86.75 72 100 72H320C333.25 72 344 82.75 344 96V114H76V96Z"
+        fill="#0F6B52"
+      />
+      <circle cx="110" cy="114" r="15" fill="#D96B27" />
+      <circle cx="144" cy="114" r="15" fill="#FCEFE6" />
+      <circle cx="178" cy="114" r="15" fill="#D96B27" />
+      <circle cx="212" cy="114" r="15" fill="#FCEFE6" />
+      <circle cx="246" cy="114" r="15" fill="#D96B27" />
+      <circle cx="280" cy="114" r="15" fill="#FCEFE6" />
+      <circle cx="312" cy="114" r="15" fill="#D96B27" />
+      <rect x="98" y="144" width="96" height="78" rx="14" fill="#E7F4EF" />
+      <rect x="122" y="164" width="48" height="38" rx="8" fill="#0F6B52" />
+      <rect x="210" y="144" width="112" height="32" rx="10" fill="#FCEFE6" />
+      <rect x="210" y="186" width="76" height="36" rx="10" fill="#0F6B52" />
+      <rect x="294" y="186" width="28" height="36" rx="10" fill="#D96B27" />
+    </svg>
+  );
+}
+
+/**
+ * Corporate Memphis Local Storefront & Onboarding Illustration for Seller Studio
+ */
+export function SellerStudioIllustration() {
+  return (
+    <ThemedIllustration
+      src="/illustrations/seller-studio-onboarding.webp"
+      alt="Saudavo Mianwali local seller studio illustration"
+      width={800}
+      height={447}
+      eager
+      className="mx-auto h-auto max-h-72 w-full rounded-2xl object-contain select-none"
+      fallback={<SellerStudioVectorFallback />}
+    />
+  );
+}
+
+/**
+ * Spot Illustration: Empty Seller Catalog (Products / Services)
+ */
+export function EmptyCatalogSpot() {
+  return (
+    <svg
+      viewBox="0 0 220 160"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="mx-auto h-32 w-40 select-none"
+      aria-hidden="true"
+    >
+      <circle cx="110" cy="82" r="64" fill="#E7F4EF" />
+      <rect
+        x="48"
+        y="46"
+        width="124"
+        height="76"
+        rx="16"
+        fill="#FFFFFF"
+        stroke="#0F6B52"
+        strokeWidth="3.5"
+      />
+      <path
+        d="M48 60C48 52.27 54.27 46 62 46H158C165.73 46 172 52.27 172 60V70H48V60Z"
+        fill="#0F6B52"
+      />
+      <circle cx="72" cy="70" r="9" fill="#D96B27" />
+      <circle cx="96" cy="70" r="9" fill="#FCEFE6" />
+      <circle cx="120" cy="70" r="9" fill="#D96B27" />
+      <circle cx="144" cy="70" r="9" fill="#FCEFE6" />
+      <rect x="64" y="88" width="54" height="10" rx="5" fill="#E7F4EF" />
+      <rect x="64" y="104" width="38" height="8" rx="4" fill="#DDE5E2" />
+      <path
+        d="M142 84H162L168 96L152 112L134 94L142 84Z"
+        fill="#D96B27"
+      />
+      <circle cx="155" cy="94" r="3" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
 /**
  * Reusable Centered Spot State Card
  */

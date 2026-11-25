@@ -1,16 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { SaudaBuddyAvatar } from "./illustrations";
 import { useAppContext } from "./locale-provider";
 
 export function SaudaBuddy() {
+  const pathname = usePathname();
   const { locale, t } = useAppContext();
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const hasStickyMobileBar =
+    pathname.startsWith("/products/") || pathname.startsWith("/services/");
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [open]);
 
   return (
-    <div className="fixed bottom-20 start-4 z-40 md:bottom-5 md:start-5">
+    <div
+      ref={containerRef}
+      className={`fixed bottom-20 start-4 z-40 md:bottom-5 md:start-5 ${
+        hasStickyMobileBar ? "hidden md:block" : ""
+      }`}
+    >
       {open && (
         <div
           role="dialog"
@@ -74,6 +112,7 @@ export function SaudaBuddy() {
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
+        aria-label={t.buddyName}
         className="flex items-center gap-2 rounded-full border-2 border-brand-accent bg-surface-card py-1.5 pe-4 ps-1.5 shadow-soft transition hover:scale-[1.03]"
       >
         <span className="h-9 w-9 overflow-hidden rounded-full bg-brand-primary-soft">
