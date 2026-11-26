@@ -131,11 +131,15 @@ export function StoreShareAndQrCard({
       </div>
 
       {qrSvg && (
-        <div
-          aria-label={`QR code for ${storeDisplayName}`}
-          className="shrink-0 self-center rounded-xl border border-border-subtle bg-white p-2 shadow-sm"
-          dangerouslySetInnerHTML={{ __html: qrSvg }}
-        />
+        <div className="shrink-0 self-center rounded-xl border border-border-subtle bg-white p-2 shadow-sm">
+          <img
+            src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(qrSvg)}`}
+            alt={`QR code for ${storeDisplayName}`}
+            width={156}
+            height={156}
+            className="block h-[156px] w-[156px]"
+          />
+        </div>
       )}
     </div>
   );
