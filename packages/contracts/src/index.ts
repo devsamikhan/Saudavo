@@ -12,3 +12,8 @@ export * from "./finance";
 export * from "./media";
 export * from "./trust";
 export * from "./notifications";
+export * from "./subscriptions";
+export * from "./messenger";
+export * from "./features";
+export * from "./demands";
+export * from "./deals";

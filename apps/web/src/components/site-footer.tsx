@@ -8,7 +8,7 @@ export function SiteFooter() {
   const { locale, t } = useAppContext();
 
   return (
-    <footer className="mt-16 border-t border-border-subtle bg-surface-card pb-24 md:pb-8">
+    <footer className="mt-16 border-t border-border-subtle bg-surface-card pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 py-10 text-xs text-ink-secondary sm:px-6 md:grid-cols-12 lg:px-8">
         <div className="space-y-2.5 md:col-span-5">
           <div className="flex items-center gap-2.5">
@@ -42,9 +42,20 @@ export function SiteFooter() {
             <Link href="/seller" className="hover:text-brand-primary">
               {t.navSeller}
             </Link>
+            <Link href="/account" className="hover:text-brand-primary">
+              {locale === "ur" ? "میرا اکاؤنٹ اور پتے" : "Account & Saved Addresses"}
+            </Link>
             <Link href="/admin" className="text-ink-secondary/80 hover:text-brand-primary">
               {locale === "ur" ? "اسٹاف ماڈریشن کنسول" : "Staff Moderation Console"}
             </Link>
+            <div className="flex flex-wrap gap-3 pt-2 text-[11px]">
+              <Link href="/terms" className="underline-offset-2 hover:text-brand-primary hover:underline">
+                {locale === "ur" ? "شرائط و ضوابط" : "Terms"}
+              </Link>
+              <Link href="/privacy" className="underline-offset-2 hover:text-brand-primary hover:underline">
+                {locale === "ur" ? "پرائیویسی پالیسی" : "Privacy"}
+              </Link>
+            </div>
           </div>
         </div>
 

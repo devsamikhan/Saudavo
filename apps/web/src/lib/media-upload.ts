@@ -100,3 +100,52 @@ export async function uploadImageAssetToS3(
   });
   return confirmed.data;
 }
+
+const ALLOWED_AUDIO_MIMES = new Set<string>([
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg"
+]);
+
+/**
+ * Uploads a recorded audio voice note Blob to private S3/R2 storage for Saudavo Messenger.
+ */
+export async function uploadVoiceNoteToS3(
+  blob: Blob
+): Promise<MediaAssetDto> {
+  const baseMime = (blob.type.split(";")[0] || "audio/webm").trim().toLowerCase();
+  const mimeType = (
+    ALLOWED_AUDIO_MIMES.has(baseMime) ? baseMime : "audio/webm"
+  ) as MediaMimeType;
+
+  if (blob.size <= 0 || blob.size > 2 * 1024 * 1024) {
+    throw new Error("Voice note must be 2 MB or smaller.");
+  }
+
+  const presignRes = await requestMediaUploadUrl({
+    purpose: "CHAT_VOICE_NOTE",
+    mimeType,
+    sizeBytes: blob.size,
+    fileName: `voice-note.${mimeType === "audio/mp4" ? "m4a" : mimeType === "audio/ogg" ? "ogg" : "webm"}`
+  });
+
+  const putRes = await fetch(presignRes.data.uploadUrl, {
+    method: "PUT",
+    headers: presignRes.data.requiredHeaders,
+    body: blob
+  });
+  if (!putRes.ok) {
+    throw new Error(
+      `Voice upload failed (${String(putRes.status)}). Verify object storage configuration.`
+    );
+  }
+
+  const headBytes = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+  const magicBytesHex = bytesToMagicHex(headBytes, 12);
+
+  const confirmed = await confirmMediaUpload(presignRes.data.asset.id, {
+    exifStripped: true,
+    magicBytesHex
+  });
+  return confirmed.data;
+}

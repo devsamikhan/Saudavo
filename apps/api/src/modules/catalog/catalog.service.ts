@@ -29,6 +29,7 @@ import {
   toPublicStoreDto
 } from "../seller/seller.mapper";
 import { SellerService } from "../seller/seller.service";
+import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 import {
   PRODUCT_WITH_VARIANTS_INCLUDE,
   PUBLIC_PRODUCT_INCLUDE,
@@ -47,7 +48,8 @@ export class CatalogService {
     private readonly prisma: PrismaService,
     private readonly sellerService: SellerService,
     private readonly outboxService: OutboxService,
-    private readonly s3Presigner: S3PresignerService
+    private readonly s3Presigner: S3PresignerService,
+    private readonly subscriptionsService: SubscriptionsService
   ) {}
 
   async listCategories(
@@ -93,6 +95,7 @@ export class CatalogService {
     requestId: string
   ): Promise<{ data: ProductDto; meta: { requestId: string } }> {
     const store = await this.sellerService.requireApprovedOwnStore(userId);
+    await this.subscriptionsService.assertCanCreateListing(store.id, "PRODUCT");
     await this.requireValidCategory(dto.categoryId, "PRODUCT");
 
     const baseSlug = dto.slug ?? slugifyTitle(dto.title);
@@ -321,6 +324,7 @@ export class CatalogService {
     requestId: string
   ): Promise<{ data: ServiceListingDto; meta: { requestId: string } }> {
     const store = await this.sellerService.requireApprovedOwnStore(userId);
+    await this.subscriptionsService.assertCanCreateListing(store.id, "SERVICE");
     await this.requireValidCategory(dto.categoryId, "SERVICE");
 
     const baseSlug = dto.slug ?? slugifyTitle(dto.title);

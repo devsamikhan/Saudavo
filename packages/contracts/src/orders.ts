@@ -57,7 +57,8 @@ export type CartsResponse = z.infer<typeof CartsResponseSchema>;
 export const CheckoutQuoteRequestSchema = z.object({
   storeId: z.string().uuid(),
   fulfilmentMode: z.enum(["SELLER_DELIVERY", "CUSTOMER_PICKUP"]),
-  addressId: z.string().uuid().optional()
+  addressId: z.string().uuid().optional(),
+  couponCode: z.string().trim().toUpperCase().max(40).optional()
 });
 export type CheckoutQuoteRequest = z.infer<typeof CheckoutQuoteRequestSchema>;
 
@@ -68,6 +69,7 @@ export const CheckoutQuoteDtoSchema = z.object({
   subtotalPaisa: z.number().int().nonnegative(),
   deliveryFeePaisa: z.number().int().nonnegative(),
   discountPaisa: z.number().int().nonnegative(),
+  appliedPromoCode: z.string().nullable().optional(),
   totalPaisa: z.number().int().nonnegative(),
   itemCount: z.number().int().nonnegative()
 });
@@ -78,6 +80,7 @@ export const CreatePhysicalOrderRequestSchema = z.object({
   fulfilmentMode: z.enum(["SELLER_DELIVERY", "CUSTOMER_PICKUP"]),
   addressId: z.string().uuid().optional(),
   paymentMethod: z.literal("COD").default("COD"),
+  couponCode: z.string().trim().toUpperCase().max(40).optional(),
   customerNote: z.string().trim().max(1000).optional()
 });
 export type CreatePhysicalOrderRequest = z.infer<
@@ -148,6 +151,8 @@ export const DeliveryDtoSchema = z.object({
   deliveryStatus: DeliveryStatusSchema,
   pickupInstructions: z.string().nullable(),
   trackingNote: z.string().nullable(),
+  handoverPin: z.string().nullable().optional(),
+  handoverPinVerifiedAt: z.string().datetime().nullable().optional(),
   dispatchedAt: z.string().datetime().nullable(),
   deliveredAt: z.string().datetime().nullable(),
   failedReason: z.string().nullable()
@@ -224,6 +229,11 @@ export const UpdateSellerOrderStatusRequestSchema = z.object({
   ]),
   trackingNote: z.string().trim().max(500).optional(),
   pickupInstructions: z.string().trim().max(500).optional(),
+  handoverPin: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "Handover PIN must be 4 digits.")
+    .optional(),
   failedReason: z.string().trim().max(500).optional(),
   deliverySummary: z.string().trim().max(3000).optional(),
   reason: z.string().trim().max(500).optional()

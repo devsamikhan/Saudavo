@@ -320,6 +320,64 @@ describe("Auth, CSRF, RBAC, MFA, RateLimit & Locations (e2e)", () => {
       .expect(200);
   });
 
+  it("dispatches password reset emails via Resend when RESEND_API_KEY and MAIL_FROM are configured", async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+
+    await request(server)
+      .post("/api/v1/auth/register")
+      .send({
+        email: "mailer@saudavo.pk",
+        password: "OldPassword!1",
+        displayName: "Mailer User"
+      })
+      .expect(201);
+
+    const prevKey = process.env.RESEND_API_KEY;
+    const prevFrom = process.env.MAIL_FROM;
+    const prevFetch = globalThis.fetch;
+    const sentRequests: Array<{ url: string; init: RequestInit | undefined }> = [];
+
+    process.env.RESEND_API_KEY = "re_test_key_123";
+    process.env.MAIL_FROM = "Saudavo <noreply@saudavo.pk>";
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      sentRequests.push({ url: String(input), init });
+      return new Response(JSON.stringify({ id: "email_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }) as typeof fetch;
+
+    try {
+      await request(server)
+        .post("/api/v1/auth/password-reset/request")
+        .send({ identifier: "mailer@saudavo.pk" })
+        .expect(200);
+
+      expect(sentRequests).toHaveLength(1);
+      expect(sentRequests[0]?.url).toBe("https://api.resend.com/emails");
+      const sentBody = JSON.parse(String(sentRequests[0]?.init?.body ?? "{}")) as {
+        from?: string;
+        to?: string[];
+        html?: string;
+      };
+      expect(sentBody.from).toBe("Saudavo <noreply@saudavo.pk>");
+      expect(sentBody.to).toEqual(["mailer@saudavo.pk"]);
+      expect(sentBody.html).toContain("/auth?mode=reset&token=");
+    } finally {
+      globalThis.fetch = prevFetch;
+      if (prevKey === undefined) {
+        delete process.env.RESEND_API_KEY;
+      } else {
+        process.env.RESEND_API_KEY = prevKey;
+      }
+      if (prevFrom === undefined) {
+        delete process.env.MAIL_FROM;
+      } else {
+        process.env.MAIL_FROM = prevFrom;
+      }
+    }
+  });
+
   it("enforces suspended account rejection, staff RBAC (403), and staff TOTP MFA (403 -> 200 + audit log)", async () => {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
 

@@ -1,6 +1,11 @@
 "use client";
 
-import type { AuthUser, LocaleCode } from "@saudavo/contracts";
+import {
+  type AuthUser,
+  DEFAULT_FEATURE_FLAGS_MAP,
+  type FeatureFlagsMap,
+  type LocaleCode
+} from "@saudavo/contracts";
 import {
   createContext,
   type ReactNode,
@@ -18,6 +23,7 @@ import {
 import {
   fetchCarts,
   fetchCurrentUser,
+  fetchPublicFeatureFlags,
   getStoredCsrfToken,
   logoutAccount,
   setStoredCsrfToken
@@ -38,6 +44,8 @@ interface AppContextValue {
   authLoading: boolean;
   setUser: (user: AuthUser | null) => void;
   refreshUser: () => Promise<void>;
+  features: FeatureFlagsMap;
+  refreshFeatures: () => Promise<void>;
   cartItemCount: number;
   refreshCartCount: () => Promise<void>;
   wishlistIds: string[];
@@ -55,6 +63,9 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<LocaleCode>("en");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [features, setFeatures] = useState<FeatureFlagsMap>(
+    DEFAULT_FEATURE_FLAGS_MAP
+  );
   const [cartItemCount, setCartItemCount] = useState(0);
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -138,6 +149,15 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshFeatures = useCallback(async () => {
+    try {
+      const res = await fetchPublicFeatureFlags();
+      setFeatures(res.data);
+    } catch {
+      // Keep defaults when API is unreachable
+    }
+  }, []);
+
   const refreshUser = useCallback(async () => {
     setAuthLoading(true);
     try {
@@ -183,9 +203,13 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Ignore storage errors
       }
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      }
     }
     void refreshUser();
-  }, [applyLocaleToDom, refreshUser]);
+    void refreshFeatures();
+  }, [applyLocaleToDom, refreshFeatures, refreshUser]);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -197,6 +221,8 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       authLoading,
       setUser,
       refreshUser,
+      features,
+      refreshFeatures,
       cartItemCount,
       refreshCartCount,
       wishlistIds,
@@ -208,9 +234,11 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
     [
       authLoading,
       cartItemCount,
+      features,
       isWishlisted,
       locale,
       refreshCartCount,
+      refreshFeatures,
       refreshUser,
       setLocale,
       showToast,
@@ -227,12 +255,12 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
       {toasts.length > 0 && (
         <div
           aria-live="polite"
-          className="pointer-events-none fixed bottom-20 end-4 z-50 flex max-w-sm flex-col gap-2 md:bottom-5"
+          className="pointer-events-none fixed inset-x-3 top-16 z-50 flex flex-col items-center gap-2 md:inset-x-auto md:bottom-5 md:end-5 md:top-auto md:max-w-sm md:items-end"
         >
           {toasts.map((toast) => (
             <div
               key={toast.id}
-              className={`toast-enter pointer-events-auto rounded-2xl px-4 py-3 text-xs font-semibold text-white shadow-soft ${
+              className={`toast-enter pointer-events-auto w-full max-w-sm rounded-2xl px-4 py-3 text-xs font-semibold text-white shadow-soft md:w-auto ${
                 toast.tone === "accent"
                   ? "bg-brand-accent"
                   : toast.tone === "neutral"

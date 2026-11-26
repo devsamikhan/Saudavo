@@ -6,19 +6,39 @@ import "@fontsource/inter/800.css";
 import "@fontsource/noto-sans-arabic/400.css";
 import "@fontsource/noto-sans-arabic/600.css";
 import "@fontsource/noto-sans-arabic/700.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { LocaleAndAuthProvider } from "../components/locale-provider";
 import { MobileBottomNav } from "../components/mobile-bottom-nav";
 import { SaudaBuddy } from "../components/sauda-buddy";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
+import { getPublicSiteUrl } from "../lib/seo";
 import "./globals.css";
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0F6B52"
+};
+
 export const metadata: Metadata = {
-  title: "Saudavo — Mianwali Local Marketplace",
+  metadataBase: new URL(getPublicSiteUrl()),
+  title: {
+    default: "Saudavo — Mianwali Local Marketplace",
+    template: "%s | Saudavo"
+  },
   description:
-    "Shop trusted local sellers, crafts, and services in Mianwali District with Cash on Delivery."
+    "Shop trusted local sellers, crafts, and services in Mianwali District with Cash on Delivery.",
+  manifest: "/manifest.webmanifest",
+  openGraph: {
+    type: "website",
+    siteName: "Saudavo",
+    title: "Saudavo — Mianwali Local Marketplace",
+    description:
+      "Trusted local shops, home-based makers, and services in Mianwali District with Cash on Delivery."
+  }
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

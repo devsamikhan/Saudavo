@@ -18,13 +18,12 @@ import {
   RequestMediaUploadUrlSchema
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";
-import { CurrentUser, Roles } from "../../common/auth/decorators";
+import { CurrentUser } from "../../common/auth/decorators";
 import { DomainException } from "../../common/errors/domain.exception";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { type AppRequest, getRequestId } from "../../common/request-context";
 import { MediaService } from "./media.service";
 
-@Roles("SELLER")
 @Controller("media")
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}

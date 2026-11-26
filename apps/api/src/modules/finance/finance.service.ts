@@ -392,6 +392,37 @@ export class FinanceService {
     };
   }
 
+  async listAdminSettlements(
+    requestId: string
+  ): Promise<{ data: SellerSettlementRecordDto[]; meta: { requestId: string } }> {
+    const rows = await this.prisma.sellerSettlementRecord.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50
+    });
+
+    return {
+      data: rows.map((row) => this.toSettlementDto(row)),
+      meta: { requestId }
+    };
+  }
+
+  async listAdminStores(requestId: string): Promise<{
+    data: Array<{ id: string; slug: string; displayName: string; status: string }>;
+    meta: { requestId: string };
+  }> {
+    const stores = await this.prisma.store.findMany({
+      where: { deletedAt: null },
+      select: { id: true, slug: true, displayName: true, status: true },
+      orderBy: { displayName: "asc" },
+      take: 100
+    });
+
+    return {
+      data: stores,
+      meta: { requestId }
+    };
+  }
+
   async createCommissionRule(
     dto: CreateCommissionRuleRequest,
     auth: AuthContext,

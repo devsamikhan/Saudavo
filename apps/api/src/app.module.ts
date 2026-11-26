@@ -17,15 +17,20 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { CartModule } from "./modules/cart/cart.module";
 import { CatalogModule } from "./modules/catalog/catalog.module";
 import { CustomerModule } from "./modules/customer/customer.module";
+import { DealsModule } from "./modules/deals/deals.module";
+import { DemandsModule } from "./modules/demands/demands.module";
+import { FeatureFlagsModule } from "./modules/features/feature-flags.module";
 import { FinanceModule } from "./modules/finance/finance.module";
 import { LocationsModule } from "./modules/locations/locations.module";
 import { MediaModule } from "./modules/media/media.module";
+import { MessengerModule } from "./modules/messenger/messenger.module";
 import { ModerationModule } from "./modules/moderation/moderation.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { OpenApiModule } from "./modules/openapi/openapi.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { OutboxModule } from "./modules/outbox/outbox.module";
 import { SellerModule } from "./modules/seller/seller.module";
+import { SubscriptionsModule } from "./modules/subscriptions/subscriptions.module";
 import { TrustModule } from "./modules/trust/trust.module";
 import { UsersModule } from "./modules/users/users.module";
 
@@ -34,17 +39,22 @@ import { UsersModule } from "./modules/users/users.module";
     PrismaModule,
     IdempotencyModule,
     AuditModule,
+    FeatureFlagsModule,
     OutboxModule,
     LocationsModule,
     UsersModule,
     AuthModule,
     CustomerModule,
     SellerModule,
+    SubscriptionsModule,
     CatalogModule,
     MediaModule,
     CartModule,
     FinanceModule,
+    DealsModule,
     OrdersModule,
+    MessengerModule,
+    DemandsModule,
     TrustModule,
     ModerationModule,
     NotificationsModule,

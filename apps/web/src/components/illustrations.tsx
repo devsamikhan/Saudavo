@@ -503,3 +503,175 @@ export function SpotState({
     </div>
   );
 }
+
+/**
+ * Illustrated Console Header: Admin 1-Click Platform Feature Control Center
+ */
+export function FeatureFlagsIllustration() {
+  return (
+    <svg
+      viewBox="0 0 240 160"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-28 w-44 shrink-0 select-none"
+      aria-hidden="true"
+    >
+      <circle cx="120" cy="82" r="66" fill="#E7F4EF" />
+      <rect
+        x="36"
+        y="30"
+        width="168"
+        height="104"
+        rx="20"
+        fill="#FFFFFF"
+        stroke="#0F6B52"
+        strokeWidth="3.5"
+      />
+      <rect x="52" y="48" width="136" height="24" rx="12" fill="#E7F4EF" />
+      <rect x="62" y="57" width="66" height="6" rx="3" fill="#0F6B52" />
+      <rect x="148" y="53" width="32" height="14" rx="7" fill="#0F6B52" />
+      <circle cx="173" cy="60" r="5" fill="#FFFFFF" />
+      <rect x="52" y="82" width="136" height="24" rx="12" fill="#FCEFE6" />
+      <rect x="62" y="91" width="58" height="6" rx="3" fill="#D96B27" />
+      <rect x="148" y="87" width="32" height="14" rx="7" fill="#D96B27" />
+      <circle cx="155" cy="94" r="5" fill="#FFFFFF" />
+      <circle cx="196" cy="36" r="14" fill="#D96B27" />
+      <path
+        d="M196 29V43M189 36H203"
+        stroke="#FFFFFF"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Illustrated Hero: Mujhy Chahiye Local Mianwali Demand Board
+ */
+export function DemandBoardIllustration() {
+  return (
+    <svg
+      viewBox="0 0 240 165"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-32 w-48 shrink-0 select-none"
+      aria-hidden="true"
+    >
+      <ellipse cx="120" cy="145" rx="84" ry="10" fill="#E7F4EF" />
+      <rect
+        x="34"
+        y="22"
+        width="172"
+        height="114"
+        rx="20"
+        fill="#FFFFFF"
+        stroke="#0F6B52"
+        strokeWidth="3.5"
+      />
+      <rect x="34" y="22" width="172" height="24" rx="12" fill="#0F6B52" />
+      <circle cx="54" cy="34" r="4" fill="#D96B27" />
+      <circle cx="68" cy="34" r="4" fill="#FCEFE6" />
+      <rect x="52" y="58" width="90" height="28" rx="10" fill="#E7F4EF" />
+      <rect x="62" y="67" width="54" height="5" rx="2.5" fill="#0F6B52" />
+      <rect x="62" y="76" width="36" height="4" rx="2" fill="#6F8A81" />
+      <rect x="52" y="94" width="112" height="28" rx="10" fill="#FCEFE6" />
+      <rect x="62" y="103" width="68" height="5" rx="2.5" fill="#D96B27" />
+      <rect x="62" y="112" width="44" height="4" rx="2" fill="#9E572C" />
+      <circle cx="176" cy="72" r="18" fill="#D96B27" />
+      <path
+        d="M169 72L174 77L184 67"
+        stroke="#FFFFFF"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Illustrated Badge: Flash Deals & Store Coupons
+ */
+export function FlashDealsIllustration() {
+  return (
+    <svg
+      viewBox="0 0 220 150"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-24 w-36 shrink-0 select-none"
+      aria-hidden="true"
+    >
+      <circle cx="110" cy="76" r="58" fill="#FCEFE6" />
+      <path
+        d="M54 44H132L174 86L122 134L44 56V44Z"
+        fill="#FFFFFF"
+        stroke="#D96B27"
+        strokeWidth="3.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="68" cy="62" r="7" fill="#0F6B52" />
+      <path
+        d="M114 54L98 82H114L104 108L134 74H117L126 54H114Z"
+        fill="#D96B27"
+      />
+      <rect x="134" y="24" width="52" height="24" rx="12" fill="#0F6B52" />
+      <circle cx="148" cy="36" r="5" fill="#FCEFE6" />
+      <rect x="157" y="34" width="20" height="4" rx="2" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
+/**
+ * Illustrated Trust Shield: 4-Digit Zero-SMS Handover PIN
+ */
+export function HandoverPinIllustration() {
+  return (
+    <svg
+      viewBox="0 0 180 120"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-16 w-24 shrink-0 select-none"
+      aria-hidden="true"
+    >
+      <path
+        d="M90 10L150 30V64C150 90 123 108 90 114C57 108 30 90 30 64V30L90 10Z"
+        fill="#E7F4EF"
+        stroke="#0F6B52"
+        strokeWidth="3"
+      />
+      <rect x="46" y="46" width="88" height="34" rx="10" fill="#FFFFFF" stroke="#0F6B52" strokeWidth="2.5" />
+      <circle cx="63" cy="63" r="5" fill="#0F6B52" />
+      <circle cx="81" cy="63" r="5" fill="#0F6B52" />
+      <circle cx="99" cy="63" r="5" fill="#0F6B52" />
+      <circle cx="117" cy="63" r="5" fill="#D96B27" />
+    </svg>
+  );
+}
+
+/**
+ * Illustrated Icon Badge: Private Urdu Voice Note in Messenger
+ */
+export function VoiceMessengerSpot() {
+  return (
+    <svg
+      viewBox="0 0 120 40"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-7 w-20 shrink-0 select-none"
+      aria-hidden="true"
+    >
+      <rect x="2" y="4" width="116" height="32" rx="16" fill="#E7F4EF" />
+      <circle cx="20" cy="20" r="10" fill="#0F6B52" />
+      <rect x="17" y="14" width="6" height="10" rx="3" fill="#FFFFFF" />
+      <rect x="38" y="15" width="4" height="10" rx="2" fill="#0F6B52" />
+      <rect x="46" y="10" width="4" height="20" rx="2" fill="#0F6B52" />
+      <rect x="54" y="13" width="4" height="14" rx="2" fill="#D96B27" />
+      <rect x="62" y="9" width="4" height="22" rx="2" fill="#0F6B52" />
+      <rect x="70" y="14" width="4" height="12" rx="2" fill="#0F6B52" />
+      <rect x="78" y="11" width="4" height="18" rx="2" fill="#D96B27" />
+      <rect x="86" y="15" width="4" height="10" rx="2" fill="#0F6B52" />
+      <rect x="94" y="17" width="12" height="6" rx="3" fill="#6F8A81" />
+    </svg>
+  );
+}

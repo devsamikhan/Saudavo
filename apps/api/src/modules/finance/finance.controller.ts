@@ -65,6 +65,23 @@ export class FinanceController {
     return this.financeService.listCommissionRules(getRequestId(req));
   }
 
+  @Roles("ADMIN", "SUPER_ADMIN")
+  @Get("admin/settlements")
+  async listAdminSettlements(
+    @Req() req: AppRequest
+  ): Promise<{ data: SellerSettlementRecordDto[]; meta: { requestId: string } }> {
+    return this.financeService.listAdminSettlements(getRequestId(req));
+  }
+
+  @Roles("ADMIN", "SUPER_ADMIN")
+  @Get("admin/stores")
+  async listAdminStores(@Req() req: AppRequest): Promise<{
+    data: Array<{ id: string; slug: string; displayName: string; status: string }>;
+    meta: { requestId: string };
+  }> {
+    return this.financeService.listAdminStores(getRequestId(req));
+  }
+
   @Roles("SUPER_ADMIN")
   @Post("admin/commission-rules")
   async createCommissionRule(

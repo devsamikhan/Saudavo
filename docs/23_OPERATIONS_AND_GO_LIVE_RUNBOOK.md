@@ -25,6 +25,7 @@ Ensure all required variables from `.env.example` are injected via the hosting p
 - `SESSION_SECRET` & `CSRF_SECRET` (independent 32+ byte random keys)
 - `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`
 - `SENTRY_DSN` (PII-scrubbed error reporting via `ErrorReporterService`)
+- `RESEND_API_KEY` & `MAIL_FROM` (optional transactional password-reset email delivery; falls back cleanly to encrypted `OutboxEvent` queueing when unset)
 
 ---
 
@@ -77,10 +78,14 @@ Ensure all required variables from `.env.example` are injected via the hosting p
 
 ## 6. Incident Response Procedures
 
-### A. Admin MFA Loss / Account Recovery (`PQ-06`)
-1. Staff member must contact a `SUPER_ADMIN` out-of-band (verified identity check).
-2. `SUPER_ADMIN` temporarily revokes active sessions (`user_sessions.revoked_at = NOW()`), resets `mfa_enabled = false` / `mfa_secret_encrypted = NULL` inside an audited administrative maintenance window, and rotates credentials.
-3. Staff re-enrolls TOTP immediately and verifies via `POST /api/v1/auth/admin/mfa/verify` (`STAFF_MFA_VERIFIED` written to `admin_audit_logs`).
+### A. User Password Recovery & Admin MFA Loss (`PQ-05` / `PQ-06`)
+1. Email-registered users reset via `/auth` → **"Forgot password?"** (`POST /api/v1/auth/password-reset/request` + `/confirm`). Phone-only accounts (`PQ-05`) or local developers without SMTP configured can ask an authorized operator with DB/shell access to issue a single-use 30-minute reset link:
+   ```bash
+   pnpm --filter @saudavo/api auth:recover -- <email-or-pakistan-phone>
+   ```
+2. For staff MFA loss, the staff member must contact a `SUPER_ADMIN` out-of-band (verified identity check).
+3. `SUPER_ADMIN` temporarily revokes active sessions (`user_sessions.revoked_at = NOW()`), resets `mfa_enabled = false` / `mfa_secret_encrypted = NULL` inside an audited administrative maintenance window, and rotates credentials.
+4. Staff re-enrolls TOTP immediately and verifies via `POST /api/v1/auth/admin/mfa/verify` (`STAFF_MFA_VERIFIED` written to `admin_audit_logs`).
 
 ### B. Payment / COD / Manual Offline Dispute Incident
 1. **COD-only policy:** Platform never holds customer funds, wallets, or escrow (`D-014`, `PQ-13`, `PQ-14`).
@@ -98,7 +103,11 @@ Ensure all required variables from `.env.example` are injected via the hosting p
 
 ## 7. Scheduled Background Operations & Founder Sign-Off Status
 ### Scheduled Sweeps
-- **7-Day Service Auto-Completion (`PQ-10`, `D-036`):** Run `POST /api/v1/admin/orders/auto-complete-services` daily via trusted scheduled job/Admin ops to auto-complete `DELIVERY_SUBMITTED` service orders older than 7 days with `COLLECTED` payment and no open revision/dispute.
+- **DB-Backed Outbox Processor (`OutboxProcessorService`):** Polls due `PENDING` `OutboxEvent` rows every 60 seconds in development/production (`ENABLE_BACKGROUND_WORKERS !== "false"`, inert in `test`), marking processed bus items and applying exponential backoff up to 5 attempts before `FAILED`.
+- **7-Day Service Auto-Completion (`PQ-10`, `D-036`):** Automated 6-hour scheduler (`OrdersSchedulerService`) and manual Admin trigger `POST /api/v1/admin/orders/auto-complete-services` both run `autoCompleteExpiredServiceOrders` to complete `DELIVERY_SUBMITTED` service orders older than 7 days with `COLLECTED` payment and no open revision/dispute.
+- **Public SEO, Trust & Account Routes:** `/robots.txt`, `/sitemap.xml`, `/terms`, `/privacy`, `/account`, `/messages`, plus `public/sw.js` static-shell caching (never caches `/api/`).
+- **Admin Finance & Subscriptions Console (`/admin`):** Manage versioned `CommissionRule` policies (`SUPER_ADMIN`), log offline `SellerSettlementRecord` receipts, approve/reject 30-day `SubscriptionRenewalRequest` transfers (`RAAST_MANUAL`, `JAZZCASH_MANUAL`, `EASYPAISA_MANUAL`, `BANK_TRANSFER`, `CASH_OFFICE`), and toggle all 7 `PlatformFeatureFlag` modules in 1 click (Monthly Seller Subscriptions + 5 Saudavo differentiators start `OFF` by default until explicitly enabled by Admin).
+- **Pending Database Rollout (`202611260001_messenger_and_subscriptions` & `202611260002_feature_flags_and_differentiators`):** Run `pnpm --filter @saudavo/api exec prisma migrate deploy && pnpm --filter @saudavo/api prisma:seed` upon human approval before live Messenger, Feature Control Center, Demand Board, Flash Deals, Voice Notes, and Handover PIN usage.
 
 ### Approved vs. Remaining Open Pre-Public Items
 Locked by Founder (`2026-11-21`):

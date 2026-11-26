@@ -27,7 +27,8 @@ import {
 import { formatPkrFromPaisa } from "../../lib/money";
 
 export default function CartPage() {
-  const { locale, t, user, refreshCartCount, showToast } = useAppContext();
+  const { locale, t, user, features, refreshCartCount, showToast } =
+    useAppContext();
 
   const [carts, setCarts] = useState<StoreCartDto[]>([]);
   const [addresses, setAddresses] = useState<AddressDto[]>([]);
@@ -37,6 +38,7 @@ export default function CartPage() {
     "SELLER_DELIVERY" | "CUSTOMER_PICKUP"
   >("SELLER_DELIVERY");
   const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [couponCode, setCouponCode] = useState("");
   const [quote, setQuote] = useState<CheckoutQuoteDto | null>(null);
   const [customerNote, setCustomerNote] = useState("");
   const [confirmedOrder, setConfirmedOrder] = useState<OrderCreatedSummary | null>(
@@ -108,6 +110,9 @@ export default function CartPage() {
       fulfilmentMode,
       ...(fulfilmentMode === "SELLER_DELIVERY" && selectedAddressId
         ? { addressId: selectedAddressId }
+        : {}),
+      ...(features.flash_deals_coupons_enabled && couponCode.trim()
+        ? { couponCode: couponCode.trim().toUpperCase() }
         : {})
     })
       .then((res) => {
@@ -119,7 +124,15 @@ export default function CartPage() {
     return () => {
       active = false;
     };
-  }, [carts, fulfilmentMode, selectedAddressId, selectedCartStoreId, user]);
+  }, [
+    carts,
+    couponCode,
+    features.flash_deals_coupons_enabled,
+    fulfilmentMode,
+    selectedAddressId,
+    selectedCartStoreId,
+    user
+  ]);
 
   const handleQuote = async () => {
     if (!selectedCartStoreId) return;
@@ -130,6 +143,9 @@ export default function CartPage() {
         fulfilmentMode,
         ...(fulfilmentMode === "SELLER_DELIVERY" && selectedAddressId
           ? { addressId: selectedAddressId }
+          : {}),
+        ...(features.flash_deals_coupons_enabled && couponCode.trim()
+          ? { couponCode: couponCode.trim().toUpperCase() }
           : {})
       });
       setQuote(res.data);
@@ -153,6 +169,9 @@ export default function CartPage() {
           ? { addressId: selectedAddressId }
           : {}),
         paymentMethod: "COD",
+        ...(features.flash_deals_coupons_enabled && couponCode.trim()
+          ? { couponCode: couponCode.trim().toUpperCase() }
+          : {}),
         ...(customerNote.trim() ? { customerNote: customerNote.trim() } : {})
       });
       setConfirmedOrder(res.data);
@@ -324,10 +343,10 @@ export default function CartPage() {
                   {cart.items.map((item) => (
                     <div
                       key={item.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border-subtle bg-surface-canvas px-4 py-3 text-sm"
+                      className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-border-subtle bg-surface-canvas px-4 py-3 text-sm sm:flex-row sm:items-center"
                     >
-                      <div>
-                        <p dir="auto" className="font-bold text-ink-primary">
+                      <div className="min-w-0">
+                        <p dir="auto" className="truncate font-bold text-ink-primary">
                           {item.productTitle}
                         </p>
                         {item.variantTitle && (
@@ -338,45 +357,49 @@ export default function CartPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          type="button"
-                          aria-label={`Decrease quantity for ${item.productTitle}`}
-                          onClick={() =>
-                            void updateCartItem(
-                              item.id,
-                              Math.max(1, item.quantity - 1)
-                            ).then(loadData)
-                          }
-                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-sm font-bold text-ink-primary transition hover:border-brand-primary"
-                        >
-                          −
-                        </button>
-                        <span className="w-6 text-center text-xs font-extrabold">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label={`Increase quantity for ${item.productTitle}`}
-                          onClick={() =>
-                            void updateCartItem(item.id, item.quantity + 1).then(
-                              loadData
-                            )
-                          }
-                          className="flex h-8 w-8 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-sm font-bold text-ink-primary transition hover:border-brand-primary"
-                        >
-                          +
-                        </button>
-                        <span className="ms-2 font-extrabold text-brand-primary">
-                          {formatPkrFromPaisa(item.lineTotalPaisa, locale)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => void removeCartItem(item.id).then(loadData)}
-                          className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                        >
-                          {locale === "ur" ? "ہٹائیں" : "Remove"}
-                        </button>
+                      <div className="flex items-center justify-between gap-2 sm:justify-end sm:gap-2.5">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label={`Decrease quantity for ${item.productTitle}`}
+                            onClick={() =>
+                              void updateCartItem(
+                                item.id,
+                                Math.max(1, item.quantity - 1)
+                              ).then(loadData)
+                            }
+                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-sm font-bold text-ink-primary transition hover:border-brand-primary sm:h-8 sm:w-8"
+                          >
+                            −
+                          </button>
+                          <span className="w-6 text-center text-xs font-extrabold">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Increase quantity for ${item.productTitle}`}
+                            onClick={() =>
+                              void updateCartItem(item.id, item.quantity + 1).then(
+                                loadData
+                              )
+                            }
+                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-subtle bg-surface-card text-sm font-bold text-ink-primary transition hover:border-brand-primary sm:h-8 sm:w-8"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-brand-primary">
+                            {formatPkrFromPaisa(item.lineTotalPaisa, locale)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void removeCartItem(item.id).then(loadData)}
+                            className="min-h-[36px] rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                          >
+                            {locale === "ur" ? "ہٹائیں" : "Remove"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -520,6 +543,29 @@ export default function CartPage() {
               className="w-full rounded-xl border border-border-subtle px-3 py-2 text-xs"
             />
 
+            {features.flash_deals_coupons_enabled && (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder={
+                    locale === "ur"
+                      ? "اسٹور پرومو کوڈ (مثال: MIANWALI10)"
+                      : "Store Promo Code (optional)"
+                  }
+                  className="flex-1 rounded-xl border border-border-subtle px-3 py-2 text-xs uppercase"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleQuote()}
+                  className="rounded-xl bg-brand-primary-soft px-3 py-2 text-xs font-bold text-brand-primary"
+                >
+                  {locale === "ur" ? "لاگو کریں" : "Apply"}
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => void handleQuote()}
@@ -538,6 +584,15 @@ export default function CartPage() {
                   <span>{locale === "ur" ? "ڈلیوری فیس" : "Seller Delivery Fee"}</span>
                   <span>{formatPkrFromPaisa(quote.deliveryFeePaisa, locale)}</span>
                 </div>
+                {quote.discountPaisa > 0 && (
+                  <div className="flex justify-between font-bold text-emerald-700">
+                    <span>
+                      {locale === "ur" ? "پرومو ڈسکاؤنٹ" : "Promo Discount"}
+                      {quote.appliedPromoCode ? ` (${quote.appliedPromoCode})` : ""}
+                    </span>
+                    <span>-{formatPkrFromPaisa(quote.discountPaisa, locale)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t border-border-subtle pt-2 text-sm font-bold text-brand-primary">
                   <span>
                     {locale === "ur" ? "کل کیش آن ڈلیوری" : "Total Cash on Delivery"}

@@ -3,6 +3,7 @@ import { DICTIONARIES, getLocaleDirection } from "../src/i18n/dictionaries";
 import {
   ApiClientError,
   archiveSellerProduct,
+  confirmPasswordReset,
   createOrderDispute,
   createOrderReview,
   fetchAdminDisputes,
@@ -13,6 +14,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   parseApiResponse,
+  requestPasswordReset,
   requestServiceRevision,
   resolveAdminDispute,
   resolveAdminReport,
@@ -265,6 +267,49 @@ describe("@saudavo/web i18n, integer PKR formatting, and API client", () => {
     );
     expect(String(fetchMock.mock.calls[7]?.[0])).toContain(
       "/notifications/read-all"
+    );
+  });
+
+  it("wires password reset request and confirm API client calls", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: { accepted: true, message: "Queued" },
+            meta: { requestId: "req_pw_1" }
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: { reset: true },
+            meta: { requestId: "req_pw_2" }
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      );
+
+    await requestPasswordReset({ identifier: "samikhanniazi285@gmail.com" });
+    await confirmPasswordReset({
+      token: "tok_recovery_1234567890",
+      newPassword: "StrongPassword!99"
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/auth/password-reset/request"
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "/auth/password-reset/confirm"
     );
   });
 });

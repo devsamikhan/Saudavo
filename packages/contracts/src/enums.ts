@@ -99,6 +99,8 @@ export const ApiErrorCodeSchema = z.enum([
   "RATE_LIMIT_EXCEEDED",
   "ORDER_SINGLE_SELLER_VIOLATION",
   "INVALID_STATE_TRANSITION",
+  "PLAN_LIMIT_REACHED",
+  "FEATURE_DISABLED",
   "INTERNAL_SERVER_ERROR"
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;

@@ -7,19 +7,48 @@ import { AuthSplitIllustration } from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import {
   ApiClientError,
+  confirmPasswordReset,
   loginAccount,
   registerAccount,
+  requestPasswordReset,
   verifyAdminMfa
 } from "../../lib/api-client";
+
+function resolveAuthErrorMessage(
+  err: unknown,
+  locale: "en" | "ur",
+  fallback: string
+): string {
+  if (err instanceof ApiClientError) {
+    if (err.code === "API_UNREACHABLE") {
+      return locale === "ur"
+        ? "اس وقت سوداو API سرور سے رابطہ نہیں ہو سکا۔ یقینی بنائیں کہ بیک اینڈ سرور چل رہا ہے اور دوبارہ کوشش کریں۔"
+        : "Cannot reach Saudavo API server right now. Check that the backend API (localhost:4000) is running and retry.";
+    }
+    if (err.code === "INVALID_OR_EXPIRED_TOKEN") {
+      return locale === "ur"
+        ? "یہ ریکوری ٹوکن غلط یا مدت ختم ہو چکی ہے۔ نیا ریکوری لنک/ٹوکن حاصل کریں۔"
+        : "This recovery token is invalid or expired. Request or generate a fresh reset link.";
+    }
+    return err.message;
+  }
+  return fallback;
+}
 
 export default function AuthPage() {
   const router = useRouter();
   const { locale, t, user, setUser, refreshUser, showToast } = useAppContext();
 
-  const [mode, setMode] = useState<"LOGIN" | "REGISTER">("LOGIN");
+  const [mode, setMode] = useState<"LOGIN" | "REGISTER" | "FORGOT">("LOGIN");
+  const [resetStep, setResetStep] = useState<"REQUEST" | "CONFIRM">("REQUEST");
   const [accountIntent, setAccountIntent] = useState<"BUYER" | "SELLER">("BUYER");
   const [shopNamePrefill, setShopNamePrefill] = useState("");
   const [identifier, setIdentifier] = useState("");
+  const [resetIdentifier, setResetIdentifier] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -38,6 +67,15 @@ export default function AuthPage() {
     if (sp.get("intent") === "seller") {
       setAccountIntent("SELLER");
       setMode(sp.get("mode") === "login" ? "LOGIN" : "REGISTER");
+    }
+    const urlMode = sp.get("mode");
+    const urlToken = sp.get("token");
+    if (urlMode === "reset" || urlMode === "forgot" || urlToken) {
+      setMode("FORGOT");
+      if (urlToken) {
+        setResetToken(urlToken);
+        setResetStep("CONFIRM");
+      }
     }
     try {
       const saved = window.sessionStorage.getItem("saudavo_prefill_store_name");
@@ -71,7 +109,11 @@ export default function AuthPage() {
       }
     } catch (err: unknown) {
       setErrorMsg(
-        err instanceof ApiClientError ? err.message : "Unable to sign in."
+        resolveAuthErrorMessage(
+          err,
+          locale,
+          locale === "ur" ? "لاگ ان نہیں ہو سکا۔" : "Unable to sign in."
+        )
       );
     } finally {
       setSubmitting(false);
@@ -114,9 +156,120 @@ export default function AuthPage() {
       router.push(accountIntent === "SELLER" ? "/seller" : "/");
     } catch (err: unknown) {
       setErrorMsg(
-        err instanceof ApiClientError
-          ? err.message
-          : "Registration failed. Check email or Pakistani phone (+923XXXXXXXXX / 03XXXXXXXXX)."
+        resolveAuthErrorMessage(
+          err,
+          locale,
+          locale === "ur"
+            ? "رجسٹریشن مکمل نہیں ہو سکی۔ ای میل یا پاکستانی موبائل نمبر (+923XXXXXXXXX / 03XXXXXXXXX) چیک کریں۔"
+            : "Registration failed. Check email or Pakistani phone (+923XXXXXXXXX / 03XXXXXXXXX)."
+        )
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openForgotPassword = () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    if (identifier.trim().length > 0 && !resetIdentifier.trim()) {
+      setResetIdentifier(identifier.trim());
+    }
+    setResetStep("REQUEST");
+    setMode("FORGOT");
+  };
+
+  const handleRequestPasswordReset = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
+    e.preventDefault();
+    const cleanId = resetIdentifier.trim();
+    if (cleanId.length < 3) {
+      setErrorMsg(
+        locale === "ur"
+          ? "برائے مہربانی درست ای میل یا موبائل نمبر درج کریں۔"
+          : "Enter your registered email or Pakistani mobile number."
+      );
+      return;
+    }
+    setSubmitting(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      await requestPasswordReset({ identifier: cleanId });
+      setSuccessMsg(
+        locale === "ur"
+          ? "اگر فعال اکاؤنٹ موجود ہوا تو 30 منٹ کے لیے ریکوری لنک/ٹوکن جاری کر دیا گیا ہے۔ ای میل انباکس چیک کریں (یا لوکل ڈویلپمنٹ میں CLI ریکوری لنک استعمال کریں) اور نیچے ٹوکن درج کریں۔"
+          : "If a matching active account exists, a 30-minute reset link/token has been queued. Check your email (or use the local operator CLI reset link if email dispatch is not configured) and enter the token below."
+      );
+      setResetStep("CONFIRM");
+    } catch (err: unknown) {
+      setErrorMsg(
+        resolveAuthErrorMessage(
+          err,
+          locale,
+          locale === "ur"
+            ? "اس وقت پاس ورڈ ریکوری کی درخواست مکمل نہیں ہو سکی۔"
+            : "Unable to request password recovery right now."
+        )
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleConfirmPasswordReset = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
+    e.preventDefault();
+    const cleanToken = resetToken.trim();
+    if (cleanToken.length < 16) {
+      setErrorMsg(
+        locale === "ur"
+          ? "برائے مہربانی کم از کم 16 حروف کا درست ریکوری ٹوکن درج کریں۔"
+          : "Enter a valid recovery token (at least 16 characters)."
+      );
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setErrorMsg(
+        locale === "ur"
+          ? "دونوں نئے پاس ورڈ آپس میں میل نہیں کھاتے۔"
+          : "New passwords do not match."
+      );
+      return;
+    }
+    setSubmitting(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      await confirmPasswordReset({
+        token: cleanToken,
+        newPassword
+      });
+      if (resetIdentifier.trim().length > 0) {
+        setIdentifier(resetIdentifier.trim());
+      }
+      setPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setResetToken("");
+      setMode("LOGIN");
+      const doneMsg =
+        locale === "ur"
+          ? "پاس ورڈ کامیابی سے تبدیل ہو گیا! اب نئے پاس ورڈ سے لاگ ان کریں۔"
+          : "Password updated! Please sign in with your new password.";
+      setSuccessMsg(doneMsg);
+      showToast(doneMsg, "primary");
+    } catch (err: unknown) {
+      setErrorMsg(
+        resolveAuthErrorMessage(
+          err,
+          locale,
+          locale === "ur"
+            ? "ریکوری ٹوکن غلط یا مدت ختم ہو چکی ہے۔ نیا ٹوکن حاصل کریں۔"
+            : "Invalid or expired recovery token. Request a fresh token."
+        )
       );
     } finally {
       setSubmitting(false);
@@ -134,7 +287,11 @@ export default function AuthPage() {
       router.push("/admin");
     } catch (err: unknown) {
       setErrorMsg(
-        err instanceof ApiClientError ? err.message : "Invalid MFA code."
+        resolveAuthErrorMessage(
+          err,
+          locale,
+          locale === "ur" ? "MFA کوڈ غلط ہے۔" : "Invalid MFA code."
+        )
       );
     } finally {
       setSubmitting(false);
@@ -142,8 +299,20 @@ export default function AuthPage() {
   };
 
   const visualCopy =
-    mode === "LOGIN"
+    mode === "FORGOT"
       ? {
+          badge: locale === "ur" ? "اکاؤنٹ ریکوری" : "Account Recovery",
+          heading:
+            locale === "ur"
+              ? "اپنے اکاؤنٹ تک محفوظ رسائی واپس پائیں"
+              : "Recover your Saudavo access safely",
+          body:
+            locale === "ur"
+              ? "30 منٹ کے سنگل یوز ٹوکن کے ذریعے اپنا نیا پاس ورڈ مقرر کریں اور پرانے سیشن خودکار بند کریں۔"
+              : "Reset your password with a single-use 30-minute recovery token — active sessions are revoked automatically."
+        }
+      : mode === "LOGIN"
+        ? {
           badge: t.pilotBadge,
           heading:
             locale === "ur"
@@ -179,38 +348,38 @@ export default function AuthPage() {
           };
 
   return (
-    <main className="fade-slide mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:py-12">
-      <div className="grid min-h-[590px] grid-cols-1 overflow-hidden rounded-3xl border border-border-subtle bg-surface-card shadow-soft lg:grid-cols-12">
-        {/* Split-Screen Left Visual Panel (Saudavo Deep Emerald Gradient) */}
-        <section className="relative flex flex-col justify-between gap-6 overflow-hidden bg-gradient-to-br from-[#094232] via-[#0F6B52] to-[#073528] p-7 text-white sm:p-10 lg:col-span-6">
-          <div className="relative z-10 space-y-3">
-            <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-bold tracking-wide text-[#FDE68A]">
+    <main className="fade-slide mx-auto max-w-5xl px-3 py-5 pb-24 sm:px-6 sm:py-8 md:pb-8 lg:py-12">
+      <div className="grid grid-cols-1 overflow-hidden rounded-3xl border border-border-subtle bg-surface-card shadow-soft lg:min-h-[590px] lg:grid-cols-12">
+        {/* Split-Screen Left Visual Panel (Placed below form on phones for faster sign-in) */}
+        <section className="relative order-2 flex flex-col justify-between gap-4 overflow-hidden bg-gradient-to-br from-[#094232] via-[#0F6B52] to-[#073528] p-5 text-white sm:gap-6 sm:p-8 lg:order-1 lg:col-span-6 lg:p-10">
+          <div className="relative z-10 space-y-2.5 sm:space-y-3">
+            <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wide text-[#FDE68A] sm:px-3.5 sm:text-xs">
               {visualCopy.badge}
             </span>
-            <h1 className="text-2xl font-extrabold leading-snug sm:text-3xl">
+            <h1 className="text-xl font-extrabold leading-snug sm:text-3xl">
               {visualCopy.heading}
             </h1>
-            <p className="text-sm leading-relaxed text-white/85">
+            <p className="text-xs leading-relaxed text-white/85 sm:text-sm">
               {visualCopy.body}
             </p>
           </div>
 
-          <div className="glass-promo relative z-10 rounded-3xl p-3">
+          <div className="glass-promo relative z-10 rounded-2xl p-2.5 sm:rounded-3xl sm:p-3">
             <AuthSplitIllustration />
           </div>
 
-          <div className="relative z-10 grid grid-cols-2 gap-3 text-xs">
-            <div className="glass-promo rounded-2xl p-3">
+          <div className="relative z-10 grid grid-cols-2 gap-2.5 text-xs sm:gap-3">
+            <div className="glass-promo rounded-2xl p-2.5 sm:p-3">
               <p className="font-bold text-white">{t.codBadge}</p>
-              <p className="mt-0.5 text-white/80">
+              <p className="mt-0.5 text-[11px] text-white/80 sm:text-xs">
                 {locale === "ur"
                   ? "ڈلیوری کے بعد نقد ادائیگی"
                   : "Pay on verified delivery"}
               </p>
             </div>
-            <div className="glass-promo rounded-2xl p-3">
+            <div className="glass-promo rounded-2xl p-2.5 sm:p-3">
               <p className="font-bold text-white">{t.privacyShieldBadge}</p>
-              <p className="mt-0.5 text-white/80">
+              <p className="mt-0.5 text-[11px] text-white/80 sm:text-xs">
                 {locale === "ur"
                   ? "ذاتی تفصیلات مکمل محفوظ"
                   : "Private contact protection"}
@@ -219,8 +388,37 @@ export default function AuthPage() {
           </div>
         </section>
 
-        {/* Split-Screen Right Form Panel */}
-        <section className="p-6 sm:p-10 lg:col-span-6">
+        {/* Split-Screen Right Form Panel (First on mobile viewports) */}
+        <section className="order-1 p-5 sm:p-8 lg:order-2 lg:col-span-6 lg:p-10">
+          {mode === "FORGOT" ? (
+            <div className="flex items-center justify-between gap-2 border-b border-border-subtle pb-3">
+              <div>
+                <h2 className="text-base font-extrabold text-ink-primary">
+                  {locale === "ur" ? "پاس ورڈ ریکور کریں" : "Recover Password"}
+                </h2>
+                <p className="text-xs text-ink-secondary">
+                  {resetStep === "REQUEST"
+                    ? locale === "ur"
+                      ? "مرحلہ 1 از 2 • ریکوری لنک یا ٹوکن حاصل کریں"
+                      : "Step 1 of 2 • Request recovery link or token"
+                    : locale === "ur"
+                      ? "مرحلہ 2 از 2 • ٹوکن اور نیا پاس ورڈ درج کریں"
+                      : "Step 2 of 2 • Enter token & set new password"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("LOGIN");
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className="min-h-[36px] rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold text-brand-primary transition hover:border-brand-primary"
+              >
+                {locale === "ur" ? "لاگ ان پر واپس" : "← Back to Sign In"}
+              </button>
+            </div>
+          ) : (
           <div className="flex gap-2 rounded-2xl bg-surface-muted p-1">
             <button
               type="button"
@@ -251,6 +449,7 @@ export default function AuthPage() {
               {locale === "ur" ? "نیا اکاؤنٹ" : "Create Account"}
             </button>
           </div>
+          )}
 
           {errorMsg && (
             <div
@@ -261,12 +460,195 @@ export default function AuthPage() {
             </div>
           )}
           {successMsg && (
-            <div className="mt-4 rounded-2xl border border-brand-primary/30 bg-brand-primary-soft px-4 py-3 text-xs font-semibold text-brand-primary">
+            <div
+              role="status"
+              className="mt-4 rounded-2xl border border-brand-primary/30 bg-brand-primary-soft px-4 py-3 text-xs font-semibold text-brand-primary"
+            >
               {successMsg}
             </div>
           )}
 
-          {mode === "LOGIN" ? (
+          {mode === "FORGOT" ? (
+            <div className="mt-6 space-y-5">
+              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-surface-muted p-1 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetStep("REQUEST");
+                    setErrorMsg(null);
+                  }}
+                  className={`rounded-xl py-2 transition ${
+                    resetStep === "REQUEST"
+                      ? "bg-surface-card text-brand-primary shadow-sm"
+                      : "text-ink-secondary hover:text-ink-primary"
+                  }`}
+                >
+                  {locale === "ur" ? "1. ریکوری طلب کریں" : "1. Request Token"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetStep("CONFIRM");
+                    setErrorMsg(null);
+                  }}
+                  className={`rounded-xl py-2 transition ${
+                    resetStep === "CONFIRM"
+                      ? "bg-surface-card text-brand-primary shadow-sm"
+                      : "text-ink-secondary hover:text-ink-primary"
+                  }`}
+                >
+                  {locale === "ur" ? "2. نیا پاس ورڈ بنائیں" : "2. Set New Password"}
+                </button>
+              </div>
+
+              {resetStep === "REQUEST" ? (
+                <form onSubmit={handleRequestPasswordReset} className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="auth-reset-identifier"
+                      className="block text-xs font-semibold text-ink-secondary"
+                    >
+                      {locale === "ur"
+                        ? "رجسٹرڈ ای میل یا موبائل نمبر"
+                        : "Registered Email or Pakistani Mobile Number"}
+                    </label>
+                    <input
+                      id="auth-reset-identifier"
+                      type="text"
+                      required
+                      value={resetIdentifier}
+                      onChange={(e) => setResetIdentifier(e.target.value)}
+                      placeholder="name@example.com or 03001234567"
+                      className="mt-1.5 w-full rounded-2xl border border-border-subtle px-4 py-3 text-sm focus:border-brand-primary focus:outline-none"
+                    />
+                  </div>
+
+                  <p className="rounded-2xl bg-surface-muted/70 px-3.5 py-2.5 text-[11px] leading-relaxed text-ink-secondary">
+                    {locale === "ur"
+                      ? "ای میل والے اکاؤنٹس کو 30 منٹ کے لیے سنگل یوز ریکوری لنک جاری ہوتا ہے۔ اگر لوکل سرور پر ای میل سروس (Resend) سیٹ نہ ہو تو ایڈمن CLI کے ذریعے لنک جاری کیا جا سکتا ہے۔"
+                      : "Email accounts receive a single-use 30-minute recovery link/token when email delivery (Resend) is configured. Phone-only accounts or unconfigured local dev environments use support/CLI recovery."}
+                  </p>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="min-h-[44px] w-full rounded-2xl bg-brand-primary py-3.5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-primary-hover disabled:opacity-50"
+                  >
+                    {submitting
+                      ? "..."
+                      : locale === "ur"
+                        ? "ریکوری لنک / ٹوکن بھیجیں"
+                        : "Send Recovery Link"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg(null);
+                      setResetStep("CONFIRM");
+                    }}
+                    className="w-full py-1 text-center text-xs font-semibold text-brand-primary hover:underline"
+                  >
+                    {locale === "ur"
+                      ? "پہلے سے ریکوری ٹوکن موجود ہے؟ یہاں درج کریں"
+                      : "I already have a reset token →"}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleConfirmPasswordReset} className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="auth-reset-token"
+                      className="block text-xs font-semibold text-ink-secondary"
+                    >
+                      {locale === "ur" ? "ریکوری ٹوکن" : "Recovery Token"}
+                    </label>
+                    <input
+                      id="auth-reset-token"
+                      type="text"
+                      required
+                      minLength={16}
+                      value={resetToken}
+                      onChange={(e) => setResetToken(e.target.value)}
+                      placeholder={
+                        locale === "ur"
+                          ? "ای میل یا ٹرمینل سے موصول ٹوکن پیسٹ کریں"
+                          : "Paste your single-use recovery token"
+                      }
+                      className="mt-1.5 w-full rounded-2xl border border-border-subtle px-4 py-3 font-mono text-xs focus:border-brand-primary focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="auth-reset-new-password"
+                      className="block text-xs font-semibold text-ink-secondary"
+                    >
+                      {locale === "ur"
+                        ? "نیا پاس ورڈ (کم از کم 8 حروف)"
+                        : "New Password (min 8 characters)"}
+                    </label>
+                    <div className="relative mt-1.5">
+                      <input
+                        id="auth-reset-new-password"
+                        type={showNewPassword ? "text" : "password"}
+                        required
+                        minLength={8}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full rounded-2xl border border-border-subtle px-4 py-3 pe-16 text-sm focus:border-brand-primary focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((prev) => !prev)}
+                        className="absolute inset-y-0 end-2 my-auto h-fit rounded-lg px-2.5 py-1 text-xs font-semibold text-brand-primary hover:bg-surface-muted"
+                      >
+                        {showNewPassword
+                          ? locale === "ur"
+                            ? "چھپائیں"
+                            : "Hide"
+                          : locale === "ur"
+                            ? "دکھائیں"
+                            : "Show"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="auth-reset-confirm-password"
+                      className="block text-xs font-semibold text-ink-secondary"
+                    >
+                      {locale === "ur"
+                        ? "نئے پاس ورڈ کی تصدیق"
+                        : "Confirm New Password"}
+                    </label>
+                    <input
+                      id="auth-reset-confirm-password"
+                      type={showNewPassword ? "text" : "password"}
+                      required
+                      minLength={8}
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      className="mt-1.5 w-full rounded-2xl border border-border-subtle px-4 py-3 text-sm focus:border-brand-primary focus:outline-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="min-h-[44px] w-full rounded-2xl bg-brand-primary py-3.5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-primary-hover disabled:opacity-50"
+                  >
+                    {submitting
+                      ? "..."
+                      : locale === "ur"
+                        ? "نیا پاس ورڈ محفوظ کریں"
+                        : "Save New Password"}
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : mode === "LOGIN" ? (
             <form onSubmit={handleLogin} className="mt-6 space-y-4">
               <div>
                 <label
@@ -289,12 +671,21 @@ export default function AuthPage() {
               </div>
 
               <div>
-                <label
-                  htmlFor="auth-login-password"
-                  className="block text-xs font-semibold text-ink-secondary"
-                >
-                  {locale === "ur" ? "پاس ورڈ" : "Password"}
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor="auth-login-password"
+                    className="block text-xs font-semibold text-ink-secondary"
+                  >
+                    {locale === "ur" ? "پاس ورڈ" : "Password"}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={openForgotPassword}
+                    className="text-xs font-semibold text-brand-primary hover:underline"
+                  >
+                    {locale === "ur" ? "پاس ورڈ بھول گئے؟" : "Forgot password?"}
+                  </button>
+                </div>
                 <div className="relative mt-1.5">
                   <input
                     id="auth-login-password"
@@ -323,7 +714,7 @@ export default function AuthPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-2xl bg-brand-primary py-3.5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-primary-hover disabled:opacity-50"
+                className="min-h-[44px] w-full rounded-2xl bg-brand-primary py-3.5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-primary-hover disabled:opacity-50"
               >
                 {submitting
                   ? "..."

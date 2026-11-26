@@ -27,6 +27,8 @@ import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { ClientMetadata } from "../auth/auth.service";
 import { CustomerService } from "../customer/customer.service";
+import { DealsService } from "../deals/deals.service";
+import { FeatureFlagsService } from "../features/feature-flags.service";
 import { FinanceService } from "../finance/finance.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { OutboxService } from "../outbox/outbox.service";
@@ -55,7 +57,9 @@ export class OrdersService {
     private readonly financeService: FinanceService,
     private readonly outboxService: OutboxService,
     private readonly auditService: AuditService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly featureFlags: FeatureFlagsService,
+    private readonly dealsService: DealsService
   ) {}
 
   async quoteCheckout(
@@ -66,8 +70,16 @@ export class OrdersService {
     const { subtotalPaisa, deliveryFeePaisa, itemCount } =
       await this.evaluatePhysicalCart(userId, dto.storeId, dto.fulfilmentMode, dto.addressId);
 
+    const { discountPaisa, appliedPromoCode } =
+      await this.dealsService.computeCouponDiscountPaisa(
+        dto.storeId,
+        subtotalPaisa,
+        dto.couponCode
+      );
+
     const subtotalNum = bigIntToSafeNumber(subtotalPaisa, "subtotalPaisa");
     const deliveryNum = bigIntToSafeNumber(deliveryFeePaisa, "deliveryFeePaisa");
+    const discountNum = bigIntToSafeNumber(discountPaisa, "discountPaisa");
 
     return {
       data: {
@@ -76,8 +88,9 @@ export class OrdersService {
         fulfilmentMode: dto.fulfilmentMode,
         subtotalPaisa: subtotalNum,
         deliveryFeePaisa: deliveryNum,
-        discountPaisa: 0,
-        totalPaisa: subtotalNum + deliveryNum,
+        discountPaisa: discountNum,
+        appliedPromoCode,
+        totalPaisa: subtotalNum + deliveryNum - discountNum,
         itemCount
       },
       meta: { requestId }
@@ -105,6 +118,29 @@ export class OrdersService {
           tx
         );
 
+        if (
+          dto.fulfilmentMode === "SELLER_DELIVERY" &&
+          evalResult.store.requireCleanCodHistory &&
+          (await this.featureFlags.isEnabled("cod_refusal_shield_enabled"))
+        ) {
+          const codStatsMap = await this.loadBuyerCodStatsMap([userId]);
+          const stats = codStatsMap.get(userId);
+          if (stats && stats.refusedCodCount >= 2) {
+            throw new DomainException(
+              "FORBIDDEN",
+              HttpStatus.FORBIDDEN,
+              "This store requires a clean COD delivery record for home delivery. Please choose Self Pickup or complete existing orders cleanly."
+            );
+          }
+        }
+
+        const { discountPaisa, appliedPromoCode } =
+          await this.dealsService.computeCouponDiscountPaisa(
+            dto.storeId,
+            evalResult.subtotalPaisa,
+            dto.couponCode
+          );
+
         const rule = await this.financeService.resolveApplicableRule(
           "PHYSICAL",
           tx
@@ -112,7 +148,7 @@ export class OrdersService {
         const financials = this.financeService.calculateOrderFinancials({
           subtotalPaisa: evalResult.subtotalPaisa,
           deliveryFeePaisa: evalResult.deliveryFeePaisa,
-          discountPaisa: 0n,
+          discountPaisa,
           commissionRuleId: rule.id,
           rateBps: rule.rateBps
         });
@@ -174,7 +210,8 @@ export class OrdersService {
             currency: "PKR",
             subtotalPaisa: evalResult.subtotalPaisa,
             deliveryFeePaisa: evalResult.deliveryFeePaisa,
-            discountPaisa: 0n,
+            discountPaisa,
+            appliedPromoCode,
             totalPaisa: financials.totalPaisa,
             commissionRuleId: financials.commissionRuleId,
             commissionRateBps: financials.commissionRateBps,
@@ -561,7 +598,10 @@ export class OrdersService {
 
     return {
       data: orders.map((order) =>
-        toOrderDetailDto(order, { revealPickupInstructions: true })
+        toOrderDetailDto(order, {
+          revealPickupInstructions: true,
+          revealHandoverPin: true
+        })
       ),
       meta: { requestId }
     };
@@ -585,7 +625,10 @@ export class OrdersService {
     }
 
     return {
-      data: toOrderDetailDto(order, { revealPickupInstructions: true }),
+      data: toOrderDetailDto(order, {
+        revealPickupInstructions: true,
+        revealHandoverPin: true
+      }),
       meta: { requestId }
     };
   }
@@ -1308,6 +1351,33 @@ export class OrdersService {
       assertServiceSellerTransition(order.status, dto.toStatus);
     }
 
+    const handoverPinEnabled =
+      order.orderType === "PHYSICAL"
+        ? await this.featureFlags.isEnabled("handover_pin_enabled")
+        : false;
+
+    if (
+      order.orderType === "PHYSICAL" &&
+      dto.toStatus === "DELIVERED" &&
+      handoverPinEnabled &&
+      order.delivery?.handoverPin
+    ) {
+      if (!dto.handoverPin || dto.handoverPin !== order.delivery.handoverPin) {
+        throw new DomainException(
+          "VALIDATION_ERROR",
+          HttpStatus.BAD_REQUEST,
+          "Valid 4-digit customer Handover PIN is required before marking this parcel delivered."
+        );
+      }
+    }
+
+    const generatedPin =
+      handoverPinEnabled &&
+      (dto.toStatus === "READY_FOR_DISPATCH" || dto.toStatus === "OUT_FOR_DELIVERY") &&
+      !order.delivery?.handoverPin
+        ? String(Math.floor(1000 + Math.random() * 9000))
+        : undefined;
+
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
       const res = await tx.order.updateMany({
@@ -1350,8 +1420,15 @@ export class OrdersService {
               ? { deliveryStatus: "OUT_FOR_DELIVERY", dispatchedAt: now }
               : {}),
             ...(dto.toStatus === "DELIVERED"
-              ? { deliveryStatus: "DELIVERED", deliveredAt: now }
+              ? {
+                  deliveryStatus: "DELIVERED",
+                  deliveredAt: now,
+                  ...(order.delivery.handoverPin && handoverPinEnabled
+                    ? { handoverPinVerifiedAt: now }
+                    : {})
+                }
               : {}),
+            ...(generatedPin ? { handoverPin: generatedPin } : {}),
             ...(dto.toStatus === "DELIVERY_FAILED"
               ? {
                   deliveryStatus: "FAILED",

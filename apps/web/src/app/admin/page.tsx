@@ -1,15 +1,25 @@
 "use client";
 
 import type {
+  CommissionRuleDto,
   DisputeDto,
+  FeatureFlagDto,
+  FeatureFlagKey,
   ModerationQueueResponse,
+  OrderType,
   ReportDto,
   ResolveDisputeRequest,
-  ResolveReportRequest
+  ResolveReportRequest,
+  SellerSettlementRecordDto,
+  SubscriptionRenewalRequestDto
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { EmptyInboxSpot, SpotState } from "../../components/illustrations";
+import {
+  EmptyInboxSpot,
+  FeatureFlagsIllustration,
+  SpotState
+} from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import {
   ConfirmActionButton,
@@ -19,25 +29,70 @@ import {
   ApiClientError,
   approveListingModeration,
   approveSellerModeration,
+  createAdminCommissionRule,
+  createAdminSettlement,
   enrollAdminMfa,
+  fetchAdminCommissionRules,
   fetchAdminDisputes,
+  fetchAdminFeatureFlags,
   fetchAdminReports,
+  fetchAdminSettlements,
+  fetchAdminStores,
+  fetchAdminSubscriptionRenewals,
   fetchModerationQueue,
   rejectListingModeration,
   rejectSellerModeration,
   resolveAdminDispute,
   resolveAdminReport,
+  reviewAdminSubscriptionRenewal,
   triggerServiceAutoCompleteSweep,
+  updateAdminFeatureFlag,
   verifyAdminMfa
 } from "../../lib/api-client";
-import { formatPkrFromPaisa } from "../../lib/money";
+import { formatPkrFromPaisa, parseWholeRupeesToPaisa } from "../../lib/money";
 
 export default function AdminConsolePage() {
-  const { locale, t, user, refreshUser } = useAppContext();
+  const { locale, t, user, refreshUser, refreshFeatures, showToast } =
+    useAppContext();
 
   const [queue, setQueue] = useState<ModerationQueueResponse["data"] | null>(null);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlagDto[]>([]);
+  const [togglingFlagKey, setTogglingFlagKey] = useState<FeatureFlagKey | null>(
+    null
+  );
   const [reports, setReports] = useState<ReportDto[]>([]);
   const [disputes, setDisputes] = useState<DisputeDto[]>([]);
+  const [commissionRules, setCommissionRules] = useState<CommissionRuleDto[]>([]);
+  const [settlements, setSettlements] = useState<SellerSettlementRecordDto[]>([]);
+  const [subscriptionRenewals, setSubscriptionRenewals] = useState<
+    SubscriptionRenewalRequestDto[]
+  >([]);
+  const [renewalReviewNotes, setRenewalReviewNotes] = useState<
+    Record<string, string>
+  >({});
+  const [adminStores, setAdminStores] = useState<
+    Array<{ id: string; slug: string; displayName: string; status: string }>
+  >([]);
+  const [ruleName, setRuleName] = useState("");
+  const [ruleScope, setRuleScope] = useState<"GLOBAL" | "ORDER_TYPE">("GLOBAL");
+  const [ruleOrderType, setRuleOrderType] = useState<OrderType>("PHYSICAL");
+  const [ruleRateBps, setRuleRateBps] = useState(0);
+  const [settlementStoreId, setSettlementStoreId] = useState("");
+  const [settlementDirection, setSettlementDirection] = useState<
+    "SELLER_TO_PLATFORM" | "PLATFORM_TO_SELLER"
+  >("SELLER_TO_PLATFORM");
+  const [settlementMethod, setSettlementMethod] = useState<
+    "BANK_TRANSFER" | "CASH_OFFICE" | "JAZZCASH_MANUAL" | "EASYPAISA_MANUAL"
+  >("BANK_TRANSFER");
+  const [settlementAmountRupees, setSettlementAmountRupees] = useState(1000);
+  const [settlementRef, setSettlementRef] = useState("");
+  const [settlementPeriodStart, setSettlementPeriodStart] = useState(() =>
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  );
+  const [settlementPeriodEnd, setSettlementPeriodEnd] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [settlementNotes, setSettlementNotes] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [mfaEnrollment, setMfaEnrollment] = useState<{
     secretBase32: string;
@@ -81,14 +136,36 @@ export default function AdminConsolePage() {
     if (!user || !user.mfaVerified) return;
     setErrorMsg(null);
     try {
-      const [queueRes, reportsRes, disputesRes] = await Promise.all([
+      const [
+        queueRes,
+        flagsRes,
+        reportsRes,
+        disputesRes,
+        rulesRes,
+        settlementsRes,
+        storesRes,
+        renewalsRes
+      ] = await Promise.all([
         fetchModerationQueue(),
+        fetchAdminFeatureFlags().catch(() => ({ data: [] })),
         fetchAdminReports(),
-        fetchAdminDisputes()
+        fetchAdminDisputes(),
+        fetchAdminCommissionRules().catch(() => ({ data: [] })),
+        fetchAdminSettlements().catch(() => ({ data: [] })),
+        fetchAdminStores().catch(() => ({ data: [] })),
+        fetchAdminSubscriptionRenewals().catch(() => ({ data: [] }))
       ]);
       setQueue(queueRes.data);
+      setFeatureFlags(flagsRes.data);
       setReports(reportsRes.data);
       setDisputes(disputesRes.data);
+      setCommissionRules(rulesRes.data);
+      setSettlements(settlementsRes.data);
+      setAdminStores(storesRes.data);
+      setSubscriptionRenewals(renewalsRes.data);
+      if (!settlementStoreId && storesRes.data[0]?.id) {
+        setSettlementStoreId(storesRes.data[0].id);
+      }
     } catch (err: unknown) {
       setErrorMsg(
         err instanceof ApiClientError ? err.message : "Access restricted."
@@ -317,6 +394,112 @@ export default function AdminConsolePage() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Illustrated 1-Click Platform Feature Control Center */}
+          <section className="rounded-3xl border border-brand-primary/25 bg-surface-card p-6 shadow-card space-y-5">
+            <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+              <div className="space-y-1.5 max-w-2xl">
+                <span className="inline-block rounded-full bg-brand-primary-soft px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-brand-primary">
+                  {locale === "ur" ? "ون کلک رول آؤٹ کنٹرول" : "1-Click Platform Rollout Control"}
+                </span>
+                <h2 className="text-xl font-extrabold text-ink-primary">
+                  {locale === "ur"
+                    ? "سوداو فیچر کنٹرول سینٹر (آن / آف)"
+                    : "Saudavo Feature Control Center"}
+                </h2>
+                <p className="text-xs leading-relaxed text-ink-secondary">
+                  {locale === "ur"
+                    ? "ماہانہ سیلر سبسکرپشن سمیت تمام جدید فیچرز یہاں سے ایک کلک میں آن یا آف کریں۔ آف شدہ فیچر صارفین کو نظر نہیں آئیں گے۔"
+                    : "Turn Monthly Seller Subscriptions and all 5 Saudavo differentiators ON or OFF in one click. Disabled modules remain completely hidden from buyers and sellers until you launch them."}
+                </p>
+              </div>
+              <FeatureFlagsIllustration />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {featureFlags.map((flag) => (
+                <div
+                  key={flag.key}
+                  className={`flex items-start justify-between gap-3 rounded-2xl border p-4 transition ${
+                    flag.isEnabled
+                      ? "border-brand-primary/40 bg-brand-primary-soft/30"
+                      : "border-border-subtle bg-surface-canvas"
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-accent">
+                        {flag.category}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          flag.isEnabled
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-slate-200 text-slate-700"
+                        }`}
+                      >
+                        {flag.isEnabled ? "LIVE" : "OFF"}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-extrabold text-ink-primary">
+                      {locale === "ur" ? flag.nameUr : flag.nameEn}
+                    </h3>
+                    <p className="text-xs leading-relaxed text-ink-secondary">
+                      {locale === "ur" ? flag.descriptionUr : flag.descriptionEn}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-pressed={flag.isEnabled}
+                    disabled={togglingFlagKey === flag.key}
+                    onClick={() => {
+                      setTogglingFlagKey(flag.key);
+                      setErrorMsg(null);
+                      void updateAdminFeatureFlag(flag.key, {
+                        isEnabled: !flag.isEnabled
+                      })
+                        .then(async (res) => {
+                          setFeatureFlags((prev) =>
+                            prev.map((item) =>
+                              item.key === flag.key ? res.data : item
+                            )
+                          );
+                          await refreshFeatures();
+                          showToast(
+                            `${flag.nameEn}: ${res.data.isEnabled ? "ENABLED" : "TURNED OFF"}`,
+                            res.data.isEnabled ? "primary" : "neutral"
+                          );
+                        })
+                        .catch((err: unknown) => {
+                          setErrorMsg(
+                            err instanceof ApiClientError
+                              ? err.message
+                              : "Unable to toggle feature."
+                          );
+                        })
+                        .finally(() => setTogglingFlagKey(null));
+                    }}
+                    className={`shrink-0 rounded-xl px-4 py-2 text-xs font-extrabold transition disabled:opacity-50 ${
+                      flag.isEnabled
+                        ? "bg-brand-primary text-white hover:bg-brand-primary-hover"
+                        : "border border-brand-primary bg-surface-card text-brand-primary hover:bg-brand-primary-soft"
+                    }`}
+                  >
+                    {togglingFlagKey === flag.key
+                      ? "..."
+                      : flag.isEnabled
+                        ? locale === "ur"
+                          ? "آف کریں"
+                          : "Turn OFF"
+                        : locale === "ur"
+                          ? "آن کریں (1-Click)"
+                          : "Enable (1-Click)"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <div className="rounded-2xl border border-border-subtle bg-surface-card p-5">
             <label className="block text-xs font-semibold text-ink-secondary">
               Mandatory Rejection Reason (Used when rejecting sellers/listings)
@@ -481,6 +664,367 @@ export default function AdminConsolePage() {
             )}
           </section>
 
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-ink-primary">
+                Seller Subscription Renewals ({subscriptionRenewals.length})
+              </h2>
+              <p className="text-xs text-ink-secondary">
+                Verify offline Raast / JazzCash / Easypaisa monthly plan transfers and activate 30-day seller subscriptions.
+              </p>
+            </div>
+            {subscriptionRenewals.length === 0 ? (
+              <p className="text-xs text-ink-secondary">
+                No subscription renewal requests submitted yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {subscriptionRenewals.map((reqItem) => (
+                  <div
+                    key={reqItem.id}
+                    className="space-y-2 rounded-xl border border-border-subtle p-4 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-ink-primary">
+                        {reqItem.storeDisplayName ?? reqItem.storeId} —{" "}
+                        {reqItem.planNameEn ?? reqItem.planCode} (
+                        {formatPkrFromPaisa(reqItem.amountPaisa, locale)})
+                      </p>
+                      <StatusBadge status={reqItem.status} />
+                    </div>
+                    <p className="text-ink-secondary">
+                      {reqItem.paymentMethod} • Ref: {reqItem.transactionReference}
+                      {reqItem.payerAccountNote ? ` • ${reqItem.payerAccountNote}` : ""}
+                    </p>
+                    {reqItem.status === "PENDING" && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={renewalReviewNotes[reqItem.id] ?? ""}
+                          onChange={(e) =>
+                            setRenewalReviewNotes((prev) => ({
+                              ...prev,
+                              [reqItem.id]: e.target.value
+                            }))
+                          }
+                          placeholder="Verification note (optional)..."
+                          className="w-full rounded-lg border border-border-subtle px-3 py-2 text-xs sm:min-w-[200px] sm:flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void runAdminAction(
+                              () =>
+                                reviewAdminSubscriptionRenewal(reqItem.id, {
+                                  decision: "APPROVED",
+                                  ...(renewalReviewNotes[reqItem.id]?.trim()
+                                    ? {
+                                        reviewNote:
+                                          renewalReviewNotes[reqItem.id]!.trim()
+                                      }
+                                    : {})
+                                }),
+                              "Seller subscription approved for 30 days.",
+                              "Unable to approve subscription renewal."
+                            )
+                          }
+                          className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          Approve (30 Days)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void runAdminAction(
+                              () =>
+                                reviewAdminSubscriptionRenewal(reqItem.id, {
+                                  decision: "REJECTED",
+                                  ...(renewalReviewNotes[reqItem.id]?.trim()
+                                    ? {
+                                        reviewNote:
+                                          renewalReviewNotes[reqItem.id]!.trim()
+                                      }
+                                    : {})
+                                }),
+                              "Subscription renewal marked rejected.",
+                              "Unable to reject subscription renewal."
+                            )
+                          }
+                          className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-ink-primary">
+                Commission Policy Rules ({commissionRules.length})
+              </h2>
+              <p className="text-xs text-ink-secondary">
+                Versioned commission rules (delivery fees always excluded). Closed beta runs at 0 bps (0%).
+              </p>
+            </div>
+
+            {commissionRules.length > 0 && (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {commissionRules.map((rule) => (
+                  <div
+                    key={rule.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-border-subtle p-3 text-xs"
+                  >
+                    <div>
+                      <p className="font-bold text-ink-primary">
+                        v{rule.version} • {rule.name}
+                      </p>
+                      <p className="text-ink-secondary">
+                        {rule.scopeType}
+                        {rule.orderType ? ` (${rule.orderType})` : ""} •{" "}
+                        {(rule.rateBps / 100).toFixed(2)}% ({rule.rateBps} bps)
+                      </p>
+                    </div>
+                    <StatusBadge status={rule.isActive ? "ACTIVE" : "ARCHIVED"} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {user.roles.includes("SUPER_ADMIN") && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void runAdminAction(
+                    async () => {
+                      await createAdminCommissionRule({
+                        name: ruleName.trim(),
+                        scopeType: ruleScope,
+                        ...(ruleScope === "ORDER_TYPE"
+                          ? { orderType: ruleOrderType }
+                          : {}),
+                        rateBps: ruleRateBps,
+                        includeDeliveryFee: false
+                      });
+                      setRuleName("");
+                    },
+                    "New commission rule version activated.",
+                    "Unable to create commission rule."
+                  );
+                }}
+                className="grid grid-cols-1 gap-2.5 border-t border-border-subtle pt-4 sm:grid-cols-4"
+              >
+                <input
+                  type="text"
+                  required
+                  minLength={3}
+                  value={ruleName}
+                  onChange={(e) => setRuleName(e.target.value)}
+                  placeholder="Rule name (e.g. Post-Beta Standard)"
+                  className="rounded-xl border border-border-subtle px-3 py-2 text-xs sm:col-span-2"
+                />
+                <select
+                  value={ruleScope}
+                  onChange={(e) =>
+                    setRuleScope(e.target.value === "ORDER_TYPE" ? "ORDER_TYPE" : "GLOBAL")
+                  }
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                >
+                  <option value="GLOBAL">GLOBAL</option>
+                  <option value="ORDER_TYPE">ORDER_TYPE</option>
+                </select>
+                {ruleScope === "ORDER_TYPE" && (
+                  <select
+                    value={ruleOrderType}
+                    onChange={(e) =>
+                      setRuleOrderType(e.target.value === "SERVICE" ? "SERVICE" : "PHYSICAL")
+                    }
+                    className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                  >
+                    <option value="PHYSICAL">PHYSICAL</option>
+                    <option value="SERVICE">SERVICE</option>
+                  </select>
+                )}
+                <input
+                  type="number"
+                  min={0}
+                  max={5000}
+                  value={ruleRateBps}
+                  onChange={(e) => setRuleRateBps(Number(e.target.value))}
+                  placeholder="Rate bps (e.g. 500 = 5%)"
+                  className="rounded-xl border border-border-subtle px-3 py-2 text-xs"
+                />
+                <button
+                  type="submit"
+                  className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Publish Rule Version
+                </button>
+              </form>
+            )}
+          </section>
+
+          <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-ink-primary">
+                Offline Seller Settlements ({settlements.length})
+              </h2>
+              <p className="text-xs text-ink-secondary">
+                Accounting record of verified offline bank, cash-office, or manual settlements (no platform wallet/escrow).
+              </p>
+            </div>
+
+            {adminStores.length > 0 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void runAdminAction(
+                    async () => {
+                      await createAdminSettlement({
+                        storeId: settlementStoreId,
+                        direction: settlementDirection,
+                        settlementMethod,
+                        amountPaisa: parseWholeRupeesToPaisa(settlementAmountRupees),
+                        ...(settlementRef.trim()
+                          ? { externalReference: settlementRef.trim() }
+                          : {}),
+                        periodStart: new Date(`${settlementPeriodStart}T00:00:00.000Z`).toISOString(),
+                        periodEnd: new Date(`${settlementPeriodEnd}T23:59:59.999Z`).toISOString(),
+                        ...(settlementNotes.trim()
+                          ? { notes: settlementNotes.trim() }
+                          : {})
+                      });
+                      setSettlementRef("");
+                      setSettlementNotes("");
+                    },
+                    "Offline settlement recorded & verified.",
+                    "Unable to record settlement."
+                  );
+                }}
+                className="grid grid-cols-1 gap-2.5 rounded-2xl border border-border-subtle bg-surface-muted/40 p-4 sm:grid-cols-3"
+              >
+                <select
+                  required
+                  value={settlementStoreId}
+                  onChange={(e) => setSettlementStoreId(e.target.value)}
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                >
+                  {adminStores.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.displayName} ({st.status})
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={settlementDirection}
+                  onChange={(e) =>
+                    setSettlementDirection(
+                      e.target.value === "PLATFORM_TO_SELLER"
+                        ? "PLATFORM_TO_SELLER"
+                        : "SELLER_TO_PLATFORM"
+                    )
+                  }
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                >
+                  <option value="SELLER_TO_PLATFORM">SELLER_TO_PLATFORM</option>
+                  <option value="PLATFORM_TO_SELLER">PLATFORM_TO_SELLER</option>
+                </select>
+                <select
+                  value={settlementMethod}
+                  onChange={(e) =>
+                    setSettlementMethod(
+                      e.target.value as
+                        | "BANK_TRANSFER"
+                        | "CASH_OFFICE"
+                        | "JAZZCASH_MANUAL"
+                        | "EASYPAISA_MANUAL"
+                    )
+                  }
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                >
+                  <option value="BANK_TRANSFER">BANK_TRANSFER</option>
+                  <option value="CASH_OFFICE">CASH_OFFICE</option>
+                  <option value="JAZZCASH_MANUAL">JAZZCASH_MANUAL</option>
+                  <option value="EASYPAISA_MANUAL">EASYPAISA_MANUAL</option>
+                </select>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={settlementAmountRupees}
+                  onChange={(e) => setSettlementAmountRupees(Number(e.target.value))}
+                  placeholder="Amount (PKR Rs.)"
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                />
+                <input
+                  type="date"
+                  required
+                  value={settlementPeriodStart}
+                  onChange={(e) => setSettlementPeriodStart(e.target.value)}
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                />
+                <input
+                  type="date"
+                  required
+                  value={settlementPeriodEnd}
+                  onChange={(e) => setSettlementPeriodEnd(e.target.value)}
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                />
+                <input
+                  type="text"
+                  value={settlementRef}
+                  onChange={(e) => setSettlementRef(e.target.value)}
+                  placeholder="Receipt / Transfer Ref (optional)"
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                />
+                <input
+                  type="text"
+                  value={settlementNotes}
+                  onChange={(e) => setSettlementNotes(e.target.value)}
+                  placeholder="Notes (optional)"
+                  className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                />
+                <button
+                  type="submit"
+                  className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white"
+                >
+                  Record Verified Settlement
+                </button>
+              </form>
+            )}
+
+            {settlements.length > 0 && (
+              <div className="space-y-2">
+                {settlements.map((s) => {
+                  const storeName =
+                    adminStores.find((st) => st.id === s.storeId)?.displayName ??
+                    s.storeId;
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-subtle p-3 text-xs"
+                    >
+                      <div>
+                        <p className="font-bold text-ink-primary">
+                          {storeName} — {formatPkrFromPaisa(s.amountPaisa, locale)}
+                        </p>
+                        <p className="text-ink-secondary">
+                          {s.direction} • {s.settlementMethod}
+                          {s.externalReference ? ` • Ref: ${s.externalReference}` : ""}
+                        </p>
+                      </div>
+                      <StatusBadge status={s.status} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
           <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -541,7 +1085,7 @@ export default function AdminConsolePage() {
                             }))
                           }
                           placeholder="Resolution note (min 5 chars)..."
-                          className="min-w-[220px] flex-1 rounded-lg border border-border-subtle px-3 py-1.5 text-xs"
+                          className="w-full rounded-lg border border-border-subtle px-3 py-2 text-xs sm:min-w-[220px] sm:flex-1"
                         />
                         <button
                           type="button"
@@ -621,7 +1165,7 @@ export default function AdminConsolePage() {
                             }))
                           }
                           placeholder="Resolution note (min 5 chars)..."
-                          className="min-w-[220px] flex-1 rounded-lg border border-border-subtle px-3 py-1.5 text-xs"
+                          className="w-full rounded-lg border border-border-subtle px-3 py-2 text-xs sm:min-w-[220px] sm:flex-1"
                         />
                         <button
                           type="button"

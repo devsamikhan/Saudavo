@@ -150,6 +150,7 @@ export interface FakeStoreRecord {
   showPublicAddress: boolean;
   publicBusinessAddress: string | null;
   defaultDeliveryFeePaisa: bigint;
+  requireCleanCodHistory: boolean;
   currency: string;
   status: string;
   createdAt: Date;
@@ -302,6 +303,7 @@ export interface FakeOrderRecord {
   subtotalPaisa: bigint;
   deliveryFeePaisa: bigint;
   discountPaisa: bigint;
+  appliedPromoCode: string | null;
   totalPaisa: bigint;
   commissionRuleId: string;
   commissionRateBps: number;
@@ -357,6 +359,8 @@ export interface FakeDeliveryRecord {
   shippingAddressSnapshotJson: unknown;
   pickupInstructions: string | null;
   trackingNote: string | null;
+  handoverPin: string | null;
+  handoverPinVerifiedAt: Date | null;
   dispatchedAt: Date | null;
   deliveredAt: Date | null;
   failedReason: string | null;
@@ -539,6 +543,139 @@ export interface FakeRefundRecord {
   updatedAt: Date;
 }
 
+export interface FakeConversationRecord {
+  id: string;
+  buyerId: string;
+  storeId: string;
+  productId: string | null;
+  serviceListingId: string | null;
+  status: string;
+  lastMessageAt: Date;
+  buyerLastReadAt: Date | null;
+  sellerLastReadAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FakeChatMessageRecord {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderRole: string;
+  messageType: string;
+  body: string;
+  productId: string | null;
+  serviceListingId: string | null;
+  mediaAssetId: string | null;
+  voiceDurationSec: number | null;
+  offerTitle: string | null;
+  offerQuantity: number | null;
+  offerUnitPricePaisa: bigint | null;
+  offerDeliveryFeePaisa: bigint | null;
+  offerFulfilmentMode: string | null;
+  offerStatus: string | null;
+  offerOrderId: string | null;
+  offerExpiresAt: Date | null;
+  createdAt: Date;
+}
+
+export interface FakeSubscriptionPlanRecord {
+  id: string;
+  code: string;
+  nameEn: string;
+  nameUr: string;
+  descriptionEn: string;
+  descriptionUr: string;
+  pricePaisa: bigint;
+  currency: string;
+  durationDays: number;
+  maxActiveProducts: number;
+  maxActiveServices: number;
+  hasVerifiedBadge: boolean;
+  hasPriorityPlacement: boolean;
+  hasCustomOffers: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FakeStoreSubscriptionRecord {
+  id: string;
+  storeId: string;
+  planId: string;
+  status: string;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date | null;
+  graceEndsAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FakeSubscriptionRenewalRequestRecord {
+  id: string;
+  storeId: string;
+  planId: string;
+  submittedById: string;
+  amountPaisa: bigint;
+  currency: string;
+  paymentMethod: string;
+  transactionReference: string;
+  payerAccountNote: string | null;
+  status: string;
+  reviewedById: string | null;
+  reviewedAt: Date | null;
+  reviewNote: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FakePlatformFeatureFlagRecord {
+  id: string;
+  key: string;
+  nameEn: string;
+  nameUr: string;
+  descriptionEn: string;
+  descriptionUr: string;
+  category: string;
+  isEnabled: boolean;
+  sortOrder: number;
+  updatedById: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FakeBuyerRequestRecord {
+  id: string;
+  buyerId: string;
+  districtId: string;
+  areaZoneId: string | null;
+  categoryId: string | null;
+  title: string;
+  description: string;
+  budgetMaxPaisa: bigint;
+  status: string;
+  responsesCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FakeStorePromoDealRecord {
+  id: string;
+  storeId: string;
+  code: string | null;
+  title: string;
+  discountType: string;
+  discountValue: bigint;
+  minOrderPaisa: bigint;
+  isFlashDeal: boolean;
+  startsAt: Date;
+  endsAt: Date;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /**
  * Typed in-memory PrismaService test double for offline NestJS + Supertest integration tests.
  */
@@ -582,6 +719,87 @@ export class InMemoryPrismaService {
   readonly disputes: FakeDisputeRecord[] = [];
   readonly refunds: FakeRefundRecord[] = [];
   readonly notifications: FakeNotificationRecord[] = [];
+  readonly conversations: FakeConversationRecord[] = [];
+  readonly chatMessages: FakeChatMessageRecord[] = [];
+  readonly subscriptionPlans: FakeSubscriptionPlanRecord[] = [];
+  readonly storeSubscriptions: FakeStoreSubscriptionRecord[] = [];
+  readonly subscriptionRenewalRequests: FakeSubscriptionRenewalRequestRecord[] = [];
+  readonly platformFeatureFlags: FakePlatformFeatureFlagRecord[] = [];
+  readonly buyerRequests: FakeBuyerRequestRecord[] = [];
+  readonly storePromoDeals: FakeStorePromoDealRecord[] = [];
+
+  constructor() {
+    this.seedDefaultSubscriptionPlans();
+  }
+
+  seedDefaultSubscriptionPlans(): void {
+    if (this.subscriptionPlans.length > 0) {
+      return;
+    }
+    const now = new Date();
+    this.subscriptionPlans.push(
+      {
+        id: randomUUID(),
+        code: "FREE_STARTER",
+        nameEn: "Free Starter Store",
+        nameUr: "مفت اسٹارٹر اسٹور",
+        descriptionEn: "Launch free in Mianwali with up to 5 products and 2 services.",
+        descriptionUr: "میانوالی میں 5 مصنوعات اور 2 سروسز کے ساتھ مفت شروعات۔",
+        pricePaisa: 0n,
+        currency: "PKR",
+        durationDays: 30,
+        maxActiveProducts: 5,
+        maxActiveServices: 2,
+        hasVerifiedBadge: false,
+        hasPriorityPlacement: false,
+        hasCustomOffers: true,
+        isActive: true,
+        sortOrder: 10,
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: randomUUID(),
+        code: "PRO_MONTHLY",
+        nameEn: "Saudavo Pro Monthly",
+        nameUr: "سوداو پرو ماہانہ",
+        descriptionEn: "100 products, 25 services, and Verified Pro badge.",
+        descriptionUr: "100 مصنوعات، 25 سروسز اور تصدیق شدہ پرو بیج۔",
+        pricePaisa: 50_000n,
+        currency: "PKR",
+        durationDays: 30,
+        maxActiveProducts: 100,
+        maxActiveServices: 25,
+        hasVerifiedBadge: true,
+        hasPriorityPlacement: false,
+        hasCustomOffers: true,
+        isActive: true,
+        sortOrder: 20,
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: randomUUID(),
+        code: "GROWTH_MONTHLY",
+        nameEn: "Saudavo Growth Monthly",
+        nameUr: "سوداو گروتھ ماہانہ",
+        descriptionEn: "500 products, 100 services, Verified Pro badge & priority placement.",
+        descriptionUr: "500 مصنوعات، 100 سروسز اور ترجیحی نمائش۔",
+        pricePaisa: 120_000n,
+        currency: "PKR",
+        durationDays: 30,
+        maxActiveProducts: 500,
+        maxActiveServices: 100,
+        hasVerifiedBadge: true,
+        hasPriorityPlacement: true,
+        hasCustomOffers: true,
+        isActive: true,
+        sortOrder: 30,
+        createdAt: now,
+        updatedAt: now
+      }
+    );
+  }
 
   seedInitialCommissionRule(createdById = randomUUID()): void {
     if (this.commissionRules.length > 0) {
@@ -755,6 +973,19 @@ export class InMemoryPrismaService {
   };
 
   readonly user = {
+    findUnique: async (args: {
+      where: { id?: string; email?: string };
+      select?: unknown;
+      include?: unknown;
+    }) => {
+      const match = this.users.find(
+        (u) =>
+          (args.where.id === undefined || u.id === args.where.id) &&
+          (args.where.email === undefined || u.email === args.where.email)
+      );
+      return match ? this.hydrateUser(match) : null;
+    },
+
     findFirst: async (args: {
       where: {
         id?: string;
@@ -1429,6 +1660,7 @@ export class InMemoryPrismaService {
         showPublicAddress: args.data.showPublicAddress,
         publicBusinessAddress: args.data.publicBusinessAddress,
         defaultDeliveryFeePaisa: args.data.defaultDeliveryFeePaisa,
+        requireCleanCodHistory: false,
         currency: args.data.currency,
         status: args.data.status,
         createdAt: now,
@@ -1766,6 +1998,34 @@ export class InMemoryPrismaService {
         count += 1;
       }
       return { count };
+    },
+
+    count: async (args: {
+      where: {
+        storeId?: string;
+        deletedAt?: Date | null;
+        status?: string | { not: string };
+      };
+    }): Promise<number> => {
+      return this.products.filter((p) => {
+        if (args.where.storeId !== undefined && p.storeId !== args.where.storeId) {
+          return false;
+        }
+        if (args.where.deletedAt === null && p.deletedAt !== null) {
+          return false;
+        }
+        if (typeof args.where.status === "string" && p.status !== args.where.status) {
+          return false;
+        }
+        if (
+          typeof args.where.status === "object" &&
+          args.where.status.not !== undefined &&
+          p.status === args.where.status.not
+        ) {
+          return false;
+        }
+        return true;
+      }).length;
     }
   };
 
@@ -1947,6 +2207,34 @@ export class InMemoryPrismaService {
       }
       Object.assign(target, args.data, { updatedAt: new Date() });
       return this.hydrateService(target);
+    },
+
+    count: async (args: {
+      where: {
+        storeId?: string;
+        deletedAt?: Date | null;
+        status?: string | { not: string };
+      };
+    }): Promise<number> => {
+      return this.serviceListings.filter((s) => {
+        if (args.where.storeId !== undefined && s.storeId !== args.where.storeId) {
+          return false;
+        }
+        if (args.where.deletedAt === null && s.deletedAt !== null) {
+          return false;
+        }
+        if (typeof args.where.status === "string" && s.status !== args.where.status) {
+          return false;
+        }
+        if (
+          typeof args.where.status === "object" &&
+          args.where.status.not !== undefined &&
+          s.status === args.where.status.not
+        ) {
+          return false;
+        }
+        return true;
+      }).length;
     }
   };
 
@@ -2374,7 +2662,8 @@ export class InMemoryPrismaService {
     },
 
     create: async (args: {
-      data: Omit<FakeOrderRecord, "id" | "createdAt" | "updatedAt" | "completedAt" | "cancelledReason"> & {
+      data: Omit<FakeOrderRecord, "id" | "createdAt" | "updatedAt" | "completedAt" | "cancelledReason" | "appliedPromoCode"> & {
+        appliedPromoCode?: string | null;
         cancelledReason?: string | null;
         completedAt?: Date | null;
       };
@@ -2383,6 +2672,7 @@ export class InMemoryPrismaService {
       const created: FakeOrderRecord = {
         id: randomUUID(),
         ...args.data,
+        appliedPromoCode: args.data.appliedPromoCode ?? null,
         cancelledReason: args.data.cancelledReason ?? null,
         completedAt: args.data.completedAt ?? null,
         createdAt: now,
@@ -2475,6 +2765,17 @@ export class InMemoryPrismaService {
   };
 
   readonly orderItem = {
+    create: async (args: {
+      data: Omit<FakeOrderItemRecord, "id">;
+    }): Promise<FakeOrderItemRecord> => {
+      const created: FakeOrderItemRecord = {
+        id: randomUUID(),
+        ...args.data
+      };
+      this.orderItems.push(created);
+      return created;
+    },
+
     createMany: async (args: {
       data: Array<Omit<FakeOrderItemRecord, "id">>;
     }) => {
@@ -2556,6 +2857,8 @@ export class InMemoryPrismaService {
         shippingAddressSnapshotJson: args.data.shippingAddressSnapshotJson ?? null,
         pickupInstructions: null,
         trackingNote: null,
+        handoverPin: null,
+        handoverPinVerifiedAt: null,
         dispatchedAt: null,
         deliveredAt: null,
         failedReason: null,
@@ -2598,6 +2901,27 @@ export class InMemoryPrismaService {
       };
       this.orderStatusHistories.push(created);
       return created;
+    },
+
+    createMany: async (args: {
+      data: Array<{
+        orderId: string;
+        fromStatus: string | null;
+        toStatus: string;
+        actorId: string | null;
+        actorRole: string;
+        reason: string | null;
+      }>;
+    }) => {
+      for (const row of args.data) {
+        this.orderStatusHistories.push({
+          id: randomUUID(),
+          ...row,
+          metadataJson: null,
+          createdAt: new Date()
+        });
+      }
+      return { count: args.data.length };
     }
   };
 
@@ -3096,6 +3420,669 @@ export class InMemoryPrismaService {
       return created;
     }
   };
+
+  readonly subscriptionPlan = {
+    findMany: async (args?: {
+      where?: { isActive?: boolean };
+      orderBy?: { sortOrder?: "asc" | "desc" };
+    }): Promise<FakeSubscriptionPlanRecord[]> => {
+      return this.subscriptionPlans
+        .filter((p) => args?.where?.isActive === undefined || p.isActive === args.where.isActive)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+    },
+
+    findFirst: async (args: {
+      where: { code?: string; isActive?: boolean };
+    }): Promise<FakeSubscriptionPlanRecord | null> => {
+      return (
+        this.subscriptionPlans.find(
+          (p) =>
+            (args.where.code === undefined || p.code === args.where.code) &&
+            (args.where.isActive === undefined || p.isActive === args.where.isActive)
+        ) ?? null
+      );
+    },
+
+    findUnique: async (args: {
+      where: { code?: string; id?: string };
+    }): Promise<FakeSubscriptionPlanRecord | null> => {
+      return (
+        this.subscriptionPlans.find(
+          (p) =>
+            (args.where.code === undefined || p.code === args.where.code) &&
+            (args.where.id === undefined || p.id === args.where.id)
+        ) ?? null
+      );
+    },
+
+    upsert: async (args: {
+      where: { code: string };
+      update: Partial<FakeSubscriptionPlanRecord>;
+      create: Omit<FakeSubscriptionPlanRecord, "id" | "createdAt" | "updatedAt">;
+    }): Promise<FakeSubscriptionPlanRecord> => {
+      const existing = this.subscriptionPlans.find((p) => p.code === args.where.code);
+      if (existing) {
+        Object.assign(existing, args.update, { updatedAt: new Date() });
+        return existing;
+      }
+      const now = new Date();
+      const created: FakeSubscriptionPlanRecord = {
+        id: randomUUID(),
+        ...args.create,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.subscriptionPlans.push(created);
+      return created;
+    }
+  };
+
+  readonly storeSubscription = {
+    findUnique: async (args: { where: { storeId: string } }) => {
+      const sub = this.storeSubscriptions.find((s) => s.storeId === args.where.storeId);
+      if (!sub) return null;
+      const plan = this.subscriptionPlans.find((p) => p.id === sub.planId)!;
+      return { ...sub, plan };
+    },
+
+    create: async (args: {
+      data: {
+        storeId: string;
+        planId: string;
+        status: string;
+        currentPeriodStart: Date;
+        currentPeriodEnd: Date | null;
+        graceEndsAt: Date | null;
+      };
+    }) => {
+      const now = new Date();
+      const created: FakeStoreSubscriptionRecord = {
+        id: randomUUID(),
+        ...args.data,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.storeSubscriptions.push(created);
+      const plan = this.subscriptionPlans.find((p) => p.id === created.planId)!;
+      return { ...created, plan };
+    },
+
+    update: async (args: {
+      where: { id: string };
+      data: Partial<FakeStoreSubscriptionRecord>;
+    }) => {
+      const target = this.storeSubscriptions.find((s) => s.id === args.where.id)!;
+      Object.assign(target, args.data, { updatedAt: new Date() });
+      const plan = this.subscriptionPlans.find((p) => p.id === target.planId)!;
+      return { ...target, plan };
+    },
+
+    upsert: async (args: {
+      where: { storeId: string };
+      update: Partial<FakeStoreSubscriptionRecord>;
+      create: Omit<FakeStoreSubscriptionRecord, "id" | "createdAt" | "updatedAt">;
+    }) => {
+      const existing = this.storeSubscriptions.find((s) => s.storeId === args.where.storeId);
+      if (existing) {
+        Object.assign(existing, args.update, { updatedAt: new Date() });
+        const plan = this.subscriptionPlans.find((p) => p.id === existing.planId)!;
+        return { ...existing, plan };
+      }
+      const now = new Date();
+      const created: FakeStoreSubscriptionRecord = {
+        id: randomUUID(),
+        ...args.create,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.storeSubscriptions.push(created);
+      const plan = this.subscriptionPlans.find((p) => p.id === created.planId)!;
+      return { ...created, plan };
+    }
+  };
+
+  readonly subscriptionRenewalRequest = {
+    findFirst: async (args: { where: { storeId?: string; status?: string } }) => {
+      const match = this.subscriptionRenewalRequests.find(
+        (r) =>
+          (args.where.storeId === undefined || r.storeId === args.where.storeId) &&
+          (args.where.status === undefined || r.status === args.where.status)
+      );
+      return match ? this.hydrateRenewal(match) : null;
+    },
+
+    findUnique: async (args: { where: { id: string } }) => {
+      const match = this.subscriptionRenewalRequests.find((r) => r.id === args.where.id);
+      return match ? this.hydrateRenewal(match) : null;
+    },
+
+    findMany: async (args?: { where?: { storeId?: string } }) => {
+      return this.subscriptionRenewalRequests
+        .filter((r) => args?.where?.storeId === undefined || r.storeId === args.where.storeId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .map((r) => this.hydrateRenewal(r));
+    },
+
+    create: async (args: {
+      data: {
+        storeId: string;
+        planId: string;
+        submittedById: string;
+        amountPaisa: bigint;
+        currency: string;
+        paymentMethod: string;
+        transactionReference: string;
+        payerAccountNote: string | null;
+        status: string;
+      };
+    }) => {
+      const now = new Date();
+      const created: FakeSubscriptionRenewalRequestRecord = {
+        id: randomUUID(),
+        ...args.data,
+        reviewedById: null,
+        reviewedAt: null,
+        reviewNote: null,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.subscriptionRenewalRequests.push(created);
+      return this.hydrateRenewal(created);
+    },
+
+    update: async (args: {
+      where: { id: string };
+      data: Partial<FakeSubscriptionRenewalRequestRecord>;
+    }) => {
+      const target = this.subscriptionRenewalRequests.find((r) => r.id === args.where.id)!;
+      Object.assign(target, args.data, { updatedAt: new Date() });
+      return this.hydrateRenewal(target);
+    }
+  };
+
+  readonly conversation = {
+    findUnique: async (args: {
+      where: { id?: string; buyerId_storeId?: { buyerId: string; storeId: string } };
+    }) => {
+      const match = this.conversations.find(
+        (c) =>
+          (args.where.id !== undefined && c.id === args.where.id) ||
+          (args.where.buyerId_storeId !== undefined &&
+            c.buyerId === args.where.buyerId_storeId.buyerId &&
+            c.storeId === args.where.buyerId_storeId.storeId)
+      );
+      return match ? this.hydrateConversation(match) : null;
+    },
+
+    findMany: async (args: {
+      where: {
+        OR?: Array<{
+          buyerId?: string;
+          store?: { sellerProfile: { userId: string } };
+        }>;
+      };
+    }) => {
+      return this.conversations
+        .filter((c) => {
+          if (!args.where.OR) return true;
+          return args.where.OR.some((clause) => {
+            if (clause.buyerId !== undefined && c.buyerId === clause.buyerId) return true;
+            if (clause.store?.sellerProfile?.userId !== undefined) {
+              const st = this.stores.find((s) => s.id === c.storeId);
+              const sp = st
+                ? this.sellerProfiles.find((p) => p.id === st.sellerProfileId)
+                : null;
+              return sp?.userId === clause.store.sellerProfile.userId;
+            }
+            return false;
+          });
+        })
+        .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime())
+        .map((c) => this.hydrateConversation(c));
+    },
+
+    create: async (args: {
+      data: {
+        buyerId: string;
+        storeId: string;
+        productId: string | null;
+        serviceListingId: string | null;
+        status: string;
+        lastMessageAt: Date;
+        buyerLastReadAt: Date | null;
+      };
+    }) => {
+      const now = new Date();
+      const created: FakeConversationRecord = {
+        id: randomUUID(),
+        ...args.data,
+        sellerLastReadAt: null,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.conversations.push(created);
+      return this.hydrateConversation(created);
+    },
+
+    update: async (args: {
+      where: { id: string };
+      data: Partial<FakeConversationRecord>;
+    }) => {
+      const target = this.conversations.find((c) => c.id === args.where.id)!;
+      Object.assign(target, args.data, { updatedAt: new Date() });
+      return this.hydrateConversation(target);
+    }
+  };
+
+  readonly chatMessage = {
+    count: async (args: {
+      where: {
+        conversationId: string;
+        senderId?: { not: string };
+        createdAt?: { gt: Date };
+      };
+    }): Promise<number> => {
+      return this.chatMessages.filter((m) => {
+        if (m.conversationId !== args.where.conversationId) return false;
+        if (args.where.senderId?.not !== undefined && m.senderId === args.where.senderId.not) {
+          return false;
+        }
+        if (
+          args.where.createdAt?.gt !== undefined &&
+          m.createdAt.getTime() <= args.where.createdAt.gt.getTime()
+        ) {
+          return false;
+        }
+        return true;
+      }).length;
+    },
+
+    findFirst: async (args: {
+      where: { id?: string; conversationId?: string; messageType?: string };
+    }) => {
+      const match = this.chatMessages.find(
+        (m) =>
+          (args.where.id === undefined || m.id === args.where.id) &&
+          (args.where.conversationId === undefined ||
+            m.conversationId === args.where.conversationId) &&
+          (args.where.messageType === undefined ||
+            m.messageType === args.where.messageType)
+      );
+      return match ? this.hydrateChatMessage(match) : null;
+    },
+
+    findMany: async (args: { where: { conversationId: string } }) => {
+      return this.chatMessages
+        .filter((m) => m.conversationId === args.where.conversationId)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((m) => this.hydrateChatMessage(m));
+    },
+
+    create: async (args: {
+      data: {
+        conversationId: string;
+        senderId: string;
+        senderRole: string;
+        messageType: string;
+        body: string;
+        productId?: string | null;
+        serviceListingId?: string | null;
+        mediaAssetId?: string | null;
+        voiceDurationSec?: number | null;
+        offerTitle?: string | null;
+        offerQuantity?: number | null;
+        offerUnitPricePaisa?: bigint | null;
+        offerDeliveryFeePaisa?: bigint | null;
+        offerFulfilmentMode?: string | null;
+        offerStatus?: string | null;
+        offerOrderId?: string | null;
+        offerExpiresAt?: Date | null;
+      };
+    }) => {
+      const created: FakeChatMessageRecord = {
+        id: randomUUID(),
+        conversationId: args.data.conversationId,
+        senderId: args.data.senderId,
+        senderRole: args.data.senderRole,
+        messageType: args.data.messageType,
+        body: args.data.body,
+        productId: args.data.productId ?? null,
+        serviceListingId: args.data.serviceListingId ?? null,
+        mediaAssetId: args.data.mediaAssetId ?? null,
+        voiceDurationSec: args.data.voiceDurationSec ?? null,
+        offerTitle: args.data.offerTitle ?? null,
+        offerQuantity: args.data.offerQuantity ?? null,
+        offerUnitPricePaisa: args.data.offerUnitPricePaisa ?? null,
+        offerDeliveryFeePaisa: args.data.offerDeliveryFeePaisa ?? null,
+        offerFulfilmentMode: args.data.offerFulfilmentMode ?? null,
+        offerStatus: args.data.offerStatus ?? null,
+        offerOrderId: args.data.offerOrderId ?? null,
+        offerExpiresAt: args.data.offerExpiresAt ?? null,
+        createdAt: new Date()
+      };
+      this.chatMessages.push(created);
+      return this.hydrateChatMessage(created);
+    },
+
+    update: async (args: {
+      where: { id: string };
+      data: Partial<FakeChatMessageRecord>;
+    }) => {
+      const target = this.chatMessages.find((m) => m.id === args.where.id)!;
+      Object.assign(target, args.data);
+      return this.hydrateChatMessage(target);
+    },
+
+    updateMany: async (args: {
+      where: { id: string; offerStatus?: string };
+      data: Partial<FakeChatMessageRecord>;
+    }) => {
+      let count = 0;
+      for (const m of this.chatMessages) {
+        if (m.id !== args.where.id) continue;
+        if (args.where.offerStatus !== undefined && m.offerStatus !== args.where.offerStatus) {
+          continue;
+        }
+        Object.assign(m, args.data);
+        count += 1;
+      }
+      return { count };
+    }
+  };
+
+  readonly platformFeatureFlag = {
+    findMany: async (args?: {
+      orderBy?: { sortOrder?: "asc" | "desc" };
+    }): Promise<FakePlatformFeatureFlagRecord[]> => {
+      const list = [...this.platformFeatureFlags];
+      if (args?.orderBy?.sortOrder === "asc") {
+        list.sort((a, b) => a.sortOrder - b.sortOrder);
+      }
+      return list;
+    },
+
+    findUnique: async (args: {
+      where: { key: string };
+    }): Promise<FakePlatformFeatureFlagRecord | null> => {
+      return this.platformFeatureFlags.find((f) => f.key === args.where.key) ?? null;
+    },
+
+    create: async (args: {
+      data: {
+        key: string;
+        nameEn: string;
+        nameUr: string;
+        descriptionEn: string;
+        descriptionUr: string;
+        category: string;
+        isEnabled: boolean;
+        sortOrder: number;
+      };
+    }): Promise<FakePlatformFeatureFlagRecord> => {
+      const now = new Date();
+      const created: FakePlatformFeatureFlagRecord = {
+        id: randomUUID(),
+        ...args.data,
+        updatedById: null,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.platformFeatureFlags.push(created);
+      return created;
+    },
+
+    update: async (args: {
+      where: { key: string };
+      data: Partial<FakePlatformFeatureFlagRecord>;
+    }): Promise<FakePlatformFeatureFlagRecord> => {
+      const target = this.platformFeatureFlags.find((f) => f.key === args.where.key);
+      if (!target) {
+        throw new Error(`Feature flag not found: ${args.where.key}`);
+      }
+      Object.assign(target, args.data, { updatedAt: new Date() });
+      return target;
+    }
+  };
+
+  readonly buyerRequest = {
+    findMany: async (args?: {
+      where?: { districtId?: string; areaZoneId?: string; status?: string };
+      take?: number;
+    }) => {
+      const filtered = this.buyerRequests
+        .filter((r) => {
+          if (args?.where?.districtId && r.districtId !== args.where.districtId) {
+            return false;
+          }
+          if (args?.where?.areaZoneId && r.areaZoneId !== args.where.areaZoneId) {
+            return false;
+          }
+          if (args?.where?.status && r.status !== args.where.status) {
+            return false;
+          }
+          return true;
+        })
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const sliced = args?.take ? filtered.slice(0, args.take) : filtered;
+      return sliced.map((r) => this.hydrateBuyerRequest(r));
+    },
+
+    findUnique: async (args: { where: { id: string } }) => {
+      const found = this.buyerRequests.find((r) => r.id === args.where.id);
+      return found ? this.hydrateBuyerRequest(found) : null;
+    },
+
+    create: async (args: {
+      data: {
+        buyerId: string;
+        districtId: string;
+        areaZoneId: string | null;
+        categoryId: string | null;
+        title: string;
+        description: string;
+        budgetMaxPaisa: bigint;
+        status: string;
+      };
+    }) => {
+      const now = new Date();
+      const created: FakeBuyerRequestRecord = {
+        id: randomUUID(),
+        ...args.data,
+        responsesCount: 0,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.buyerRequests.push(created);
+      return this.hydrateBuyerRequest(created);
+    },
+
+    update: async (args: {
+      where: { id: string };
+      data: { status?: string; responsesCount?: { increment: number } };
+    }) => {
+      const target = this.buyerRequests.find((r) => r.id === args.where.id);
+      if (!target) {
+        throw new Error(`BuyerRequest not found: ${args.where.id}`);
+      }
+      if (args.data.status !== undefined) {
+        target.status = args.data.status;
+      }
+      if (args.data.responsesCount?.increment !== undefined) {
+        target.responsesCount += args.data.responsesCount.increment;
+      }
+      target.updatedAt = new Date();
+      return this.hydrateBuyerRequest(target);
+    }
+  };
+
+  readonly storePromoDeal = {
+    findMany: async (args?: {
+      where?: {
+        storeId?: string;
+        isActive?: boolean;
+        isFlashDeal?: boolean;
+        startsAt?: { lte: Date };
+        endsAt?: { gt: Date };
+      };
+      take?: number;
+    }) => {
+      const filtered = this.storePromoDeals
+        .filter((d) => {
+          if (args?.where?.storeId && d.storeId !== args.where.storeId) return false;
+          if (args?.where?.isActive !== undefined && d.isActive !== args.where.isActive) {
+            return false;
+          }
+          if (
+            args?.where?.isFlashDeal !== undefined &&
+            d.isFlashDeal !== args.where.isFlashDeal
+          ) {
+            return false;
+          }
+          if (args?.where?.startsAt?.lte && d.startsAt > args.where.startsAt.lte) {
+            return false;
+          }
+          if (args?.where?.endsAt?.gt && d.endsAt <= args.where.endsAt.gt) {
+            return false;
+          }
+          return true;
+        })
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const sliced = args?.take ? filtered.slice(0, args.take) : filtered;
+      return sliced.map((d) => {
+        const store = this.stores.find((s) => s.id === d.storeId);
+        return {
+          ...d,
+          store: store ? { slug: store.slug, displayName: store.displayName } : null
+        };
+      });
+    },
+
+    findFirst: async (args: {
+      where: {
+        id?: string;
+        storeId?: string;
+        code?: string;
+        isActive?: boolean;
+        startsAt?: { lte: Date };
+        endsAt?: { gt: Date };
+      };
+    }) => {
+      return (
+        this.storePromoDeals.find((d) => {
+          if (args.where.id && d.id !== args.where.id) return false;
+          if (args.where.storeId && d.storeId !== args.where.storeId) return false;
+          if (args.where.code && d.code !== args.where.code) return false;
+          if (args.where.isActive !== undefined && d.isActive !== args.where.isActive) {
+            return false;
+          }
+          if (args.where.startsAt?.lte && d.startsAt > args.where.startsAt.lte) {
+            return false;
+          }
+          if (args.where.endsAt?.gt && d.endsAt <= args.where.endsAt.gt) {
+            return false;
+          }
+          return true;
+        }) ?? null
+      );
+    },
+
+    create: async (args: {
+      data: {
+        storeId: string;
+        code: string | null;
+        title: string;
+        discountType: string;
+        discountValue: bigint;
+        minOrderPaisa: bigint;
+        isFlashDeal: boolean;
+        startsAt: Date;
+        endsAt: Date;
+        isActive: boolean;
+      };
+    }) => {
+      const now = new Date();
+      const created: FakeStorePromoDealRecord = {
+        id: randomUUID(),
+        ...args.data,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.storePromoDeals.push(created);
+      return created;
+    },
+
+    update: async (args: {
+      where: { id: string };
+      data: Partial<FakeStorePromoDealRecord>;
+    }) => {
+      const target = this.storePromoDeals.find((d) => d.id === args.where.id);
+      if (!target) {
+        throw new Error(`StorePromoDeal not found: ${args.where.id}`);
+      }
+      Object.assign(target, args.data, { updatedAt: new Date() });
+      return target;
+    }
+  };
+
+  private hydrateBuyerRequest(row: FakeBuyerRequestRecord) {
+    const buyer = this.users.find((u) => u.id === row.buyerId)!;
+    const district = this.districts.find((d) => d.id === row.districtId)!;
+    const areaZone = row.areaZoneId
+      ? (district.areaZones.find((z) => z.id === row.areaZoneId) ?? null)
+      : null;
+    const category = row.categoryId
+      ? (this.categories.find((c) => c.id === row.categoryId) ?? null)
+      : null;
+    return {
+      ...row,
+      buyer: { displayName: buyer.displayName },
+      district: { nameEn: district.nameEn },
+      areaZone: areaZone ? { nameEn: areaZone.nameEn } : null,
+      category: category ? { nameEn: category.nameEn } : null
+    };
+  }
+
+  private hydrateRenewal(row: FakeSubscriptionRenewalRequestRecord) {
+    const store = this.stores.find((s) => s.id === row.storeId)!;
+    const plan = this.subscriptionPlans.find((p) => p.id === row.planId)!;
+    return {
+      ...row,
+      store: this.hydrateStore(store),
+      plan
+    };
+  }
+
+  private hydrateConversation(conv: FakeConversationRecord) {
+    const buyer = this.users.find((u) => u.id === conv.buyerId)!;
+    const store = this.stores.find((s) => s.id === conv.storeId)!;
+    const messages = this.chatMessages
+      .filter((m) => m.conversationId === conv.id)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return {
+      ...conv,
+      buyer: { id: buyer.id, displayName: buyer.displayName },
+      store: this.hydrateStore(store),
+      messages
+    };
+  }
+
+  private hydrateChatMessage(msg: FakeChatMessageRecord) {
+    const product = msg.productId
+      ? (this.products.find((p) => p.id === msg.productId) ?? null)
+      : null;
+    const serviceListing = msg.serviceListingId
+      ? (this.serviceListings.find((s) => s.id === msg.serviceListingId) ?? null)
+      : null;
+    const mediaAsset = msg.mediaAssetId
+      ? (this.mediaAssets.find((a) => a.id === msg.mediaAssetId) ?? null)
+      : null;
+    return {
+      ...msg,
+      product,
+      serviceListing,
+      mediaAsset
+    };
+  }
 
   private hydrateAddress(address: FakeAddressRecord) {
     const district = this.districts.find((d) => d.id === address.districtId)!;

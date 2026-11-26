@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from "@nestjs/common";
+import { HttpStatus, Injectable, Logger } from "@nestjs/common";
 import {
   AdminMfaEnrollResponse,
   AdminMfaEnrollResponseSchema,
@@ -27,6 +27,7 @@ import {
   sha256Hex
 } from "../../common/auth/crypto.util";
 import { DomainException } from "../../common/errors/domain.exception";
+import { resolveWebOrigin } from "../../common/http/security.config";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { OutboxService } from "../outbox/outbox.service";
@@ -44,6 +45,8 @@ export interface ClientMetadata {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
@@ -148,6 +151,7 @@ export class AuthService {
     meta: { requestId: string };
   }> {
     const user = await this.usersService.findByIdentifierWithAuth(dto.identifier);
+    let rawResetTokenForEmail: string | null = null;
 
     if (user && user.status === "ACTIVE") {
       if (user.email) {
@@ -180,6 +184,7 @@ export class AuthService {
             tx
           );
         });
+        rawResetTokenForEmail = rawToken;
       } else {
         // PQ-05: No mandatory SMS OTP in closed beta; phone-only recovery requires support escalation
         await this.outboxService.enqueue({
@@ -194,6 +199,14 @@ export class AuthService {
       }
     }
 
+    if (user?.email && rawResetTokenForEmail) {
+      await this.dispatchPasswordResetEmail(
+        user.email,
+        user.displayName,
+        rawResetTokenForEmail
+      );
+    }
+
     return {
       data: {
         accepted: true,
@@ -202,6 +215,66 @@ export class AuthService {
       },
       meta: { requestId }
     };
+  }
+
+  private async dispatchPasswordResetEmail(
+    recipientEmail: string,
+    displayName: string,
+    rawToken: string
+  ): Promise<void> {
+    const apiKey = process.env.RESEND_API_KEY?.trim();
+    const mailFrom = process.env.MAIL_FROM?.trim();
+    if (!apiKey || !mailFrom) {
+      this.logger.debug(
+        "Password reset queued in outbox without transactional email dispatch (RESEND_API_KEY/MAIL_FROM unset)."
+      );
+      return;
+    }
+
+    const resetUrl = `${resolveWebOrigin()}/auth?mode=reset&token=${encodeURIComponent(rawToken)}`;
+    const safeName = displayName
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+    try {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: mailFrom,
+          to: [recipientEmail],
+          subject: "Saudavo Password Reset (Valid 30 Minutes)",
+          text:
+            `Assalam-o-Alaikum ${displayName},\n\n` +
+            `Open this single-use link (valid for 30 minutes) to set a new Saudavo password:\n${resetUrl}\n\n` +
+            `Or paste this recovery token on /auth:\n${rawToken}\n`,
+          html:
+            `<div style="font-family:Inter,Arial,sans-serif;color:#111827;line-height:1.5">` +
+            `<h2 style="color:#0F6B52;margin-bottom:8px">Saudavo Password Recovery</h2>` +
+            `<p>Assalam-o-Alaikum <strong>${safeName}</strong>,</p>` +
+            `<p>Click the button below to choose a new password (valid for 30 minutes):</p>` +
+            `<p><a href="${resetUrl}" style="display:inline-block;background:#0F6B52;color:#ffffff;padding:12px 20px;border-radius:12px;text-decoration:none;font-weight:bold">Reset Saudavo Password</a></p>` +
+            `<p style="font-size:12px;color:#4B5563">Or paste this token manually on the login screen:<br/><code>${rawToken}</code></p>` +
+            `</div>`
+        })
+      });
+
+      if (!response.ok) {
+        this.logger.warn(
+          `Password reset email provider returned HTTP ${response.status}; token remains safely queued in outbox.`
+        );
+      }
+    } catch {
+      this.logger.warn(
+        "Password reset email delivery failed transiently; token remains queued in outbox."
+      );
+    }
   }
 
   async confirmPasswordReset(

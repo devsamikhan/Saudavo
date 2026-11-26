@@ -6,9 +6,11 @@ import type {
   OrderMessageDto
 } from "@saudavo/contracts";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   EmptyInboxSpot,
+  HandoverPinIllustration,
   IsometricTrackingIllustration,
   SpotState
 } from "../../components/illustrations";
@@ -22,6 +24,7 @@ import {
 } from "../../components/ui-primitives";
 import {
   acceptServiceDelivery,
+  addCartItem,
   ApiClientError,
   cancelCustomerOrder,
   createOrderDispute,
@@ -85,7 +88,10 @@ function getLiveTrackingData(order: OrderDetailDto, t: UiDictionary) {
 }
 
 export default function OrdersPage() {
-  const { locale, t, user, showToast } = useAppContext();
+  const router = useRouter();
+  const { locale, t, user, features, refreshCartCount, showToast } =
+    useAppContext();
+  const [reorderingOrderId, setReorderingOrderId] = useState<string | null>(null);
 
   const [orders, setOrders] = useState<OrderDetailDto[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
@@ -315,7 +321,7 @@ export default function OrdersPage() {
         <div className="mt-6 space-y-6">
           {/* Isometric Live Order Tracking Hero Card */}
           {activeOrder && trackingInfo && (
-            <section className="grid grid-cols-1 items-center gap-8 rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card sm:p-8 lg:grid-cols-12">
+            <section className="grid grid-cols-1 items-center gap-5 rounded-3xl border border-border-subtle bg-surface-card p-4 shadow-card sm:gap-8 sm:p-8 lg:grid-cols-12">
               <div className="lg:col-span-6">
                 <IsometricTrackingIllustration />
               </div>
@@ -422,6 +428,33 @@ export default function OrdersPage() {
                   locale={locale}
                 />
 
+                {features.handover_pin_enabled &&
+                  order.delivery?.handoverPin &&
+                  order.status !== "DELIVERED" &&
+                  order.status !== "COMPLETED" &&
+                  order.status !== "CANCELLED" && (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-primary/30 bg-brand-primary-soft/50 px-4 py-3 text-xs">
+                      <div className="flex items-center gap-3">
+                        <HandoverPinIllustration />
+                        <div>
+                          <p className="font-extrabold text-brand-primary">
+                            {locale === "ur"
+                              ? "ڈلیوری ہینڈ اوور پن (4 ہندسے)"
+                              : "4-Digit Delivery Handover PIN"}
+                          </p>
+                          <p className="text-[11px] text-ink-secondary">
+                            {locale === "ur"
+                              ? "پارسل وصول کرتے وقت دکاندار یا رائیڈر کو یہ خفیہ پن بتائیں۔"
+                              : "Share this private PIN with the seller/rider only when handing over your parcel."}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="rounded-xl bg-brand-primary px-4 py-2 font-mono text-lg font-extrabold tracking-[0.25em] text-white">
+                        {order.delivery.handoverPin}
+                      </span>
+                    </div>
+                  )}
+
                 <div className="mt-4 flex flex-wrap gap-2">
                   {order.status === "PENDING_CONFIRMATION" && (
                     <ConfirmActionButton
@@ -498,6 +531,55 @@ export default function OrdersPage() {
                       </>
                     )}
 
+                  {order.orderType === "PHYSICAL" &&
+                    order.items.length > 0 &&
+                    (order.status === "COMPLETED" ||
+                      order.status === "DELIVERED" ||
+                      order.status === "CANCELLED") && (
+                      <button
+                        type="button"
+                        disabled={reorderingOrderId === order.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setErrorMsg(null);
+                          setReorderingOrderId(order.id);
+                          void (async () => {
+                            try {
+                              for (const item of order.items) {
+                                await addCartItem({
+                                  productId: item.productId,
+                                  productVariantId: item.productVariantId,
+                                  quantity: item.quantity
+                                });
+                              }
+                              await refreshCartCount();
+                              showToast(
+                                locale === "ur"
+                                  ? "اشیاء دوبارہ کارٹ میں شامل کر دی گئیں!"
+                                  : "Order items added to your cart!"
+                              );
+                              router.push("/cart");
+                            } catch (err: unknown) {
+                              setErrorMsg(
+                                err instanceof ApiClientError
+                                  ? err.message
+                                  : "Some items in this order are currently unavailable."
+                              );
+                            } finally {
+                              setReorderingOrderId(null);
+                            }
+                          })();
+                        }}
+                        className="rounded-lg bg-brand-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-accent-hover disabled:opacity-50"
+                      >
+                        {reorderingOrderId === order.id
+                          ? "..."
+                          : locale === "ur"
+                            ? "دوبارہ آرڈر کریں"
+                            : "Order Again"}
+                      </button>
+                    )}
+
                   {order.status === "COMPLETED" && (
                     <button
                       type="button"
@@ -529,6 +611,22 @@ export default function OrdersPage() {
                         Open Dispute
                       </button>
                     )}
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedOrderId(order.id);
+                      if (typeof document !== "undefined") {
+                        document
+                          .getElementById("order-chat-panel")
+                          ?.scrollIntoView({ behavior: "smooth" });
+                      }
+                    }}
+                    className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-brand-primary lg:hidden"
+                  >
+                    {locale === "ur" ? "سیلر چیٹ ↓" : "Order Chat ↓"}
+                  </button>
                 </div>
 
                 {statusNotice && selectedOrderId === order.id && (
@@ -650,7 +748,10 @@ export default function OrdersPage() {
             ))}
           </div>
 
-          <aside className="h-fit rounded-3xl border border-border-subtle bg-surface-card p-5 shadow-card">
+          <aside
+            id="order-chat-panel"
+            className="h-fit scroll-mt-20 rounded-3xl border border-border-subtle bg-surface-card p-5 shadow-card"
+          >
             <h2 className="text-base font-extrabold text-ink-primary">
               Order Messages (Text-Only REST • PQ-09)
             </h2>

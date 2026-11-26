@@ -25,6 +25,7 @@ export function toOrderDetailDto(
   order: OrderWithDetails,
   options: {
     revealPickupInstructions: boolean;
+    revealHandoverPin?: boolean;
     buyerCodStats?: BuyerCodStatsDto | null;
   }
 ): OrderDetailDto {
@@ -112,6 +113,12 @@ export function toOrderDetailDto(
             ? order.delivery.pickupInstructions
             : null,
           trackingNote: order.delivery.trackingNote,
+          handoverPin: options.revealHandoverPin
+            ? (order.delivery.handoverPin ?? null)
+            : null,
+          handoverPinVerifiedAt: order.delivery.handoverPinVerifiedAt
+            ? order.delivery.handoverPinVerifiedAt.toISOString()
+            : null,
           dispatchedAt: order.delivery.dispatchedAt
             ? order.delivery.dispatchedAt.toISOString()
             : null,

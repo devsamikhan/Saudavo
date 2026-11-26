@@ -3,13 +3,16 @@
 import type {
   CategoryDto,
   DistrictDto,
+  PromoDealDto,
   PublicSearchItem
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
+  DemandBoardIllustration,
   EmptyCartSpot,
+  FlashDealsIllustration,
   HeroMarketplaceIllustration,
   SpotState
 } from "../components/illustrations";
@@ -23,6 +26,7 @@ import {
   ApiClientError,
   fetchCategories,
   fetchDistricts,
+  fetchPublicFlashDeals,
   searchListings
 } from "../lib/api-client";
 import { formatPkrFromPaisa, parseWholeRupeesToPaisa } from "../lib/money";
@@ -42,6 +46,7 @@ export default function HomePage() {
     locale,
     t,
     user,
+    features,
     refreshCartCount,
     wishlistIds,
     isWishlisted,
@@ -52,6 +57,7 @@ export default function HomePage() {
   const [districts, setDistricts] = useState<DistrictDto[]>([]);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [items, setItems] = useState<PublicSearchItem[]>([]);
+  const [flashDeals, setFlashDeals] = useState<PromoDealDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiUnavailable, setApiUnavailable] = useState(false);
 
@@ -147,6 +153,16 @@ export default function HomePage() {
     void loadResults();
   }, [loadResults]);
 
+  useEffect(() => {
+    if (!features.flash_deals_coupons_enabled) {
+      setFlashDeals([]);
+      return;
+    }
+    void fetchPublicFlashDeals()
+      .then((res) => setFlashDeals(res.data))
+      .catch(() => setFlashDeals([]));
+  }, [features.flash_deals_coupons_enabled]);
+
   const handleSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     void loadResults();
@@ -232,15 +248,15 @@ export default function HomePage() {
           className="pointer-events-none absolute -bottom-24 start-10 h-72 w-72 rounded-full bg-[#3CE2BE]/15 blur-3xl"
         />
 
-        <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12">
-            <div className="space-y-5 lg:col-span-7">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-[#FDE68A]">
-                <span className="h-2 w-2 rounded-full bg-brand-accent" />
+        <div className="relative z-10 mx-auto max-w-7xl px-3.5 py-7 sm:px-6 sm:py-10 lg:px-8 lg:py-14">
+          <div className="grid grid-cols-1 items-center gap-6 sm:gap-8 lg:grid-cols-12">
+            <div className="space-y-4 sm:space-y-5 lg:col-span-7">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#FDE68A] sm:px-3.5 sm:text-[11px]">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-brand-accent" />
                 {t.heroBadge}
               </span>
 
-              <h1 className="text-3xl font-extrabold leading-[1.12] tracking-tight sm:text-5xl">
+              <h1 className="text-2xl font-extrabold leading-[1.15] tracking-tight sm:text-4xl lg:text-5xl">
                 {t.heroTitle}
               </h1>
 
@@ -248,37 +264,37 @@ export default function HomePage() {
                 {t.heroSubtitle}
               </p>
 
-              <div className="flex flex-wrap items-center gap-3 pt-1">
+              <div className="flex flex-col gap-2.5 pt-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <a
                   href="#catalog"
-                  className="rounded-2xl bg-brand-accent px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-brand-accent-hover"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-brand-accent px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-brand-accent-hover sm:px-6"
                 >
                   {t.exploreMarketplaceBtn}
                 </a>
                 <Link
                   href="/auth?intent=seller"
-                  className="glass-promo rounded-2xl px-6 py-3 text-sm font-bold text-white transition hover:bg-white/20"
+                  className="glass-promo inline-flex min-h-[44px] items-center justify-center rounded-2xl px-5 py-3 text-sm font-bold text-white transition hover:bg-white/20 sm:px-6"
                 >
                   {t.becomeSellerBtn}
                 </Link>
               </div>
 
-              <div className="grid max-w-md grid-cols-3 gap-3 pt-2">
-                <div className="glass-promo rounded-2xl p-3.5">
-                  <div className="text-base font-extrabold text-[#FDE68A]">0%</div>
-                  <div className="text-[11px] font-medium text-white/85">
+              <div className="grid max-w-md grid-cols-3 gap-2 pt-1 sm:gap-3 sm:pt-2">
+                <div className="glass-promo rounded-2xl p-2.5 sm:p-3.5">
+                  <div className="text-sm font-extrabold text-[#FDE68A] sm:text-base">0%</div>
+                  <div className="text-[10px] font-medium text-white/85 sm:text-[11px]">
                     {locale === "ur" ? "بیٹا کمیشن" : "Beta Commission"}
                   </div>
                 </div>
-                <div className="glass-promo rounded-2xl p-3.5">
-                  <div className="text-base font-extrabold text-white">COD</div>
-                  <div className="text-[11px] font-medium text-white/85">
+                <div className="glass-promo rounded-2xl p-2.5 sm:p-3.5">
+                  <div className="text-sm font-extrabold text-white sm:text-base">COD</div>
+                  <div className="text-[10px] font-medium text-white/85 sm:text-[11px]">
                     {locale === "ur" ? "محفوظ ادائیگی" : "Verified Cash"}
                   </div>
                 </div>
-                <div className="glass-promo rounded-2xl p-3.5">
-                  <div className="text-base font-extrabold text-[#A7F3D0]">100%</div>
-                  <div className="text-[11px] font-medium text-white/85">
+                <div className="glass-promo rounded-2xl p-2.5 sm:p-3.5">
+                  <div className="text-sm font-extrabold text-[#A7F3D0] sm:text-base">100%</div>
+                  <div className="text-[10px] font-medium text-white/85 sm:text-[11px]">
                     {locale === "ur" ? "مقامی تحفظ" : "Privacy First"}
                   </div>
                 </div>
@@ -309,10 +325,91 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Feature-Controlled Growth Spotlights (Mujhy Chahiye & Flash Deals) */}
+      {(features.buyer_requests_board_enabled ||
+        (features.flash_deals_coupons_enabled && flashDeals.length > 0)) && (
+        <section className="mx-auto max-w-7xl space-y-4 px-3.5 pt-6 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {features.buyer_requests_board_enabled && (
+              <div className="flex items-center justify-between gap-4 rounded-3xl border border-brand-primary/25 bg-gradient-to-br from-[#E7F4EF] to-white p-5 shadow-card">
+                <div className="space-y-1.5">
+                  <span className="inline-block rounded-full bg-brand-primary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    {locale === "ur" ? "مقامی ڈیمانڈ بورڈ" : "Mujhy Chahiye"}
+                  </span>
+                  <h2 className="text-lg font-extrabold text-ink-primary">
+                    {locale === "ur"
+                      ? "اپنی ضرورت پوسٹ کریں، دکاندار آفر بھیجیں"
+                      : "Can't find an item? Post Your Budget"}
+                  </h2>
+                  <p className="text-xs text-ink-secondary">
+                    {locale === "ur"
+                      ? "میانوالی کے تصدیق شدہ دکاندار آپ کو میسنجر میں آفر بھیجیں گے۔"
+                      : "Verified Mianwali sellers send offers privately in Saudavo Messenger."}
+                  </p>
+                  <Link
+                    href="/demands"
+                    className="mt-1 inline-block rounded-xl bg-brand-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-brand-primary-hover"
+                  >
+                    {locale === "ur" ? "ڈیمانڈ بورڈ کھولیں →" : "Open Demand Board →"}
+                  </Link>
+                </div>
+                <div className="hidden sm:block">
+                  <DemandBoardIllustration />
+                </div>
+              </div>
+            )}
+
+            {features.flash_deals_coupons_enabled && flashDeals.length > 0 && (
+              <div className="rounded-3xl border border-brand-accent/30 bg-gradient-to-br from-[#FCEFE6] to-white p-5 shadow-card space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <span className="inline-block rounded-full bg-brand-accent px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                      {locale === "ur" ? "محدود وقت کی ڈیلز" : "Mianwali Flash Deals"}
+                    </span>
+                    <h2 className="mt-1 text-lg font-extrabold text-ink-primary">
+                      {locale === "ur"
+                        ? "آج کے خصوصی پرومو کوپنز"
+                        : "Live Store Coupons & Flash Discounts"}
+                    </h2>
+                  </div>
+                  <div className="hidden sm:block">
+                    <FlashDealsIllustration />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {flashDeals.slice(0, 4).map((deal) => (
+                    <Link
+                      key={deal.id}
+                      href={deal.storeSlug ? `/stores/${deal.storeSlug}` : "/"}
+                      className="flex items-center justify-between gap-2 rounded-2xl border border-brand-accent/20 bg-white px-3.5 py-2.5 text-xs hover:border-brand-accent"
+                    >
+                      <div>
+                        <p className="font-extrabold text-ink-primary">{deal.title}</p>
+                        <p className="text-[11px] text-ink-secondary">
+                          {deal.storeDisplayName} •{" "}
+                          {deal.discountType === "PERCENT_BPS"
+                            ? `${Math.round(deal.discountValue / 100)}% OFF`
+                            : `${formatPkrFromPaisa(deal.discountValue, locale)} OFF`}
+                        </p>
+                      </div>
+                      {deal.code && (
+                        <span className="rounded-lg bg-brand-accent-soft px-2 py-1 font-mono text-[11px] font-extrabold text-brand-accent">
+                          {deal.code}
+                        </span>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Soft 3D Claymorphic Category Strip & Search */}
       <div
         id="catalog"
-        className="mx-auto max-w-7xl px-4 pt-10 pb-14 sm:px-6 lg:px-8"
+        className="mx-auto max-w-7xl px-3.5 pt-7 pb-14 sm:px-6 sm:pt-10 lg:px-8"
       >
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
@@ -495,7 +592,7 @@ export default function HomePage() {
 
           {/* Dynamic Category Clay Chips (Horizontal swipe rail on mobile) */}
           {categories.length > 0 && (
-            <div className="flex flex-nowrap items-center gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+            <div className="no-scrollbar flex flex-nowrap items-center gap-2.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
               {categories.map((cat, idx) => (
                 <button
                   key={cat.id}
@@ -506,7 +603,7 @@ export default function HomePage() {
                     );
                     setOnlySaved(false);
                   }}
-                  className={`clay-pill flex shrink-0 items-center gap-2 px-3.5 py-2 text-xs font-bold text-ink-primary ${
+                  className={`clay-pill flex min-h-[40px] shrink-0 items-center gap-2 px-3.5 py-2 text-xs font-bold text-ink-primary ${
                     selectedCategoryId === cat.id ? "clay-pill-active" : ""
                   }`}
                 >
@@ -527,7 +624,7 @@ export default function HomePage() {
               type="button"
               onClick={() => setMobileFiltersOpen((prev) => !prev)}
               aria-expanded={mobileFiltersOpen}
-              className="inline-flex items-center gap-2 rounded-2xl border border-border-subtle bg-surface-card px-4 py-2 text-xs font-bold text-ink-primary shadow-card transition hover:border-brand-primary"
+              className="inline-flex min-h-[42px] items-center gap-2 rounded-2xl border border-border-subtle bg-surface-card px-4 py-2 text-xs font-bold text-ink-primary shadow-card transition hover:border-brand-primary"
             >
               <svg
                 className="h-4 w-4 text-brand-primary"
@@ -561,7 +658,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setSelectedZoneId("")}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                className={`min-h-[36px] rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                   selectedZoneId === ""
                     ? "bg-brand-primary text-white"
                     : "bg-surface-muted text-ink-primary hover:bg-brand-primary-soft"
@@ -575,7 +672,7 @@ export default function HomePage() {
                   key={zone.id}
                   type="button"
                   onClick={() => setSelectedZoneId(zone.id)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`min-h-[36px] rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                     selectedZoneId === zone.id
                       ? "bg-brand-primary text-white"
                       : "bg-surface-muted text-ink-primary hover:bg-brand-primary-soft"
@@ -586,7 +683,7 @@ export default function HomePage() {
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <input
                 type="number"
                 min={0}
@@ -594,7 +691,7 @@ export default function HomePage() {
                 onChange={(e) => setMinPkrText(e.target.value)}
                 placeholder={t.minPriceLabel}
                 aria-label={t.minPriceLabel}
-                className="w-24 rounded-xl border border-border-subtle bg-surface-canvas px-3 py-1.5 text-xs focus:border-brand-primary focus:outline-none"
+                className="min-h-[40px] min-w-0 flex-1 rounded-xl border border-border-subtle bg-surface-canvas px-3 py-1.5 text-xs focus:border-brand-primary focus:outline-none sm:w-24 sm:flex-none"
               />
               <input
                 type="number"
@@ -603,13 +700,13 @@ export default function HomePage() {
                 onChange={(e) => setMaxPkrText(e.target.value)}
                 placeholder={t.maxPriceLabel}
                 aria-label={t.maxPriceLabel}
-                className="w-24 rounded-xl border border-border-subtle bg-surface-canvas px-3 py-1.5 text-xs focus:border-brand-primary focus:outline-none"
+                className="min-h-[40px] min-w-0 flex-1 rounded-xl border border-border-subtle bg-surface-canvas px-3 py-1.5 text-xs focus:border-brand-primary focus:outline-none sm:w-24 sm:flex-none"
               />
               <select
                 value={sortMode}
                 onChange={(e) => setSortMode(e.target.value as SortMode)}
                 aria-label="Sort listings"
-                className="rounded-xl border border-border-subtle bg-surface-canvas px-3 py-1.5 text-xs font-semibold text-ink-primary focus:border-brand-primary focus:outline-none"
+                className="min-h-[40px] w-full rounded-xl border border-border-subtle bg-surface-canvas px-3 py-1.5 text-xs font-semibold text-ink-primary focus:border-brand-primary focus:outline-none sm:w-auto"
               >
                 <option value="NEWEST">{t.sortNewest}</option>
                 <option value="PRICE_ASC">{t.sortPriceAsc}</option>

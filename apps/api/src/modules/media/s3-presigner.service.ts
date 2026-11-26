@@ -47,8 +47,17 @@ export class S3PresignerService {
       throw new DomainException(
         "VALIDATION_ERROR",
         HttpStatus.BAD_REQUEST,
-        "Uploaded image size is empty or exceeds the 5 MB limit."
+        "Uploaded media size is empty or exceeds the 5 MB limit."
       );
+    }
+
+    if (input.mimeType.startsWith("audio/")) {
+      const hex = rawBuffer.subarray(0, 16).toString("hex");
+      this.assertValidMagicBytes(input.mimeType, hex);
+      return {
+        verifiedSizeBytes: rawBuffer.length,
+        strippedMetadata: false
+      };
     }
 
     const sanitized = sanitizeImageBuffer(rawBuffer, input.mimeType);
@@ -79,14 +88,17 @@ export class S3PresignerService {
   }
 
   /**
-   * Validates that uploaded image magic bytes match the declared MIME type.
+   * Validates that uploaded media magic bytes match the declared MIME type.
    */
   assertValidMagicBytes(mimeType: MediaMimeType, magicBytesHex: string): void {
     const normalized = magicBytesHex.trim().toLowerCase();
     const matches =
       (mimeType === "image/jpeg" && normalized.startsWith("ffd8ff")) ||
       (mimeType === "image/png" && normalized.startsWith("89504e47")) ||
-      (mimeType === "image/webp" && normalized.startsWith("52494646"));
+      (mimeType === "image/webp" && normalized.startsWith("52494646")) ||
+      (mimeType === "audio/webm" && normalized.startsWith("1a45dfa3")) ||
+      (mimeType === "audio/ogg" && normalized.startsWith("4f676753")) ||
+      (mimeType === "audio/mp4" && normalized.includes("66747970"));
 
     if (!matches) {
       throw new DomainException(
@@ -174,11 +186,11 @@ export class S3PresignerService {
     accessKey: string;
     secretKey: string;
   } {
-    const endpoint = process.env.S3_ENDPOINT;
-    const region = process.env.S3_REGION ?? "us-east-1";
-    const bucket = process.env.S3_BUCKET;
-    const accessKey = process.env.S3_ACCESS_KEY;
-    const secretKey = process.env.S3_SECRET_KEY;
+    const endpoint = process.env.S3_ENDPOINT?.trim() || undefined;
+    const region = process.env.S3_REGION?.trim() || "us-east-1";
+    const bucket = process.env.S3_BUCKET?.trim() || undefined;
+    const accessKey = process.env.S3_ACCESS_KEY?.trim() || undefined;
+    const secretKey = process.env.S3_SECRET_KEY?.trim() || undefined;
 
     if (!endpoint || !bucket || !accessKey || !secretKey) {
       if (process.env.NODE_ENV === "production") {

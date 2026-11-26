@@ -1,4 +1,5 @@
 import {
+  type AcceptCustomOfferRequest,
   type AddCartItemRequest,
   type AddressDto,
   type AdminMfaEnrollResponse,
@@ -7,25 +8,37 @@ import {
   type ApproveListingRequest,
   type AuthMeResponse,
   type AuthSessionResponse,
+  type BuyerRequestDto,
   type CancelOrderRequest,
   type CartsResponse,
   type CategoriesResponse,
+  type ChatMessageDto,
   type CheckoutQuoteDto,
   type CheckoutQuoteRequest,
   type CodCollectionRequest,
+  type CommissionRuleDto,
   type CommissionSummaryDto,
   type ConfirmMediaUploadRequest,
+  type ConversationSummaryDto,
   type CreateAddressRequest,
+  type CreateBuyerRequest,
+  type CreateCommissionRuleRequest,
   type CreateDisputeRequest,
   type CreateOrderMessageRequest,
   type CreatePhysicalOrderRequest,
   type CreateProductRequest,
+  type CreatePromoDealRequest,
   type CreateReportRequest,
   type CreateReviewRequest,
   type CreateServiceListingRequest,
   type CreateServiceOrderRequest,
+  type CreateSettlementRecordRequest,
+  type CustomerProfileDto,
   type DisputeDto,
   type DistrictsResponse,
+  type FeatureFlagDto,
+  type FeatureFlagKey,
+  type FeatureFlagsMap,
   type LoginRequest,
   type ManualPaymentConfirmationRequest,
   type MediaAssetDto,
@@ -35,9 +48,12 @@ import {
   type OrderCreatedSummary,
   type OrderDetailDto,
   type OrderMessageDto,
+  type PasswordResetConfirm,
+  type PasswordResetRequest,
   type PresignedUploadDto,
   type PrivateStoreDto,
   type ProductDto,
+  type PromoDealDto,
   type PublicProductDetailDto,
   type PublicServiceDetailDto,
   type PublicStoreDto,
@@ -49,14 +65,28 @@ import {
   type RequestServiceRevisionRequest,
   type ResolveDisputeRequest,
   type ResolveReportRequest,
+  type RespondBuyerRequest,
   type ReviewDto,
+  type ReviewSubscriptionRenewalRequest,
   type SearchResponse,
   type SellerOnboardingRequest,
   type SellerOnboardingResponse,
   type SellerProfileDto,
+  type SellerSettlementRecordDto,
+  type SendChatMessageRequest,
+  type SendCustomOfferRequest,
   type ServiceListingDto,
+  type StartConversationRequest,
   type StoreCartDto,
   type StoreCatalogResponse,
+  type StoreSubscriptionSummaryDto,
+  type SubmitSubscriptionRenewalRequest,
+  type SubscriptionPlanDto,
+  type SubscriptionRenewalRequestDto,
+  type TogglePromoDealRequest,
+  type UpdateAddressRequest,
+  type UpdateCustomerProfileRequest,
+  type UpdateFeatureFlagRequest,
   type UpdateProductRequest,
   type UpdateSellerOrderStatusRequest,
   type UpdateServiceListingRequest,
@@ -198,12 +228,21 @@ async function apiRequest<T>(
     headers["Idempotency-Key"] = options.idempotencyKey;
   }
 
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    method,
-    credentials: "include",
-    headers,
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {})
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${getApiBaseUrl()}${path}`, {
+      method,
+      credentials: "include",
+      headers,
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {})
+    });
+  } catch {
+    throw new ApiClientError(
+      503,
+      "API_UNREACHABLE",
+      `Cannot reach Saudavo API server (${getApiBaseUrl()}). Ensure the backend API is running and retry.`
+    );
+  }
 
   try {
     return await parseApiResponse<T>(res);
@@ -330,6 +369,26 @@ export async function logoutAccount(): Promise<void> {
   setStoredCsrfToken(null);
 }
 
+export function requestPasswordReset(body: PasswordResetRequest): Promise<{
+  data: { accepted: true; message: string };
+  meta: { requestId: string };
+}> {
+  return apiRequest("/auth/password-reset/request", {
+    method: "POST",
+    body
+  });
+}
+
+export function confirmPasswordReset(body: PasswordResetConfirm): Promise<{
+  data: { reset: true };
+  meta: { requestId: string };
+}> {
+  return apiRequest("/auth/password-reset/confirm", {
+    method: "POST",
+    body
+  });
+}
+
 export async function fetchCurrentUser(options?: {
   syncCsrf?: boolean;
 }): Promise<AuthMeResponse> {
@@ -358,7 +417,17 @@ export function verifyAdminMfa(
   });
 }
 
-// Customer Addresses, Cart & Orders
+// Customer Profile, Addresses, Cart & Orders
+export function fetchCustomerProfile(): Promise<{ data: CustomerProfileDto }> {
+  return apiRequest("/customer/profile");
+}
+
+export function updateCustomerProfile(
+  body: UpdateCustomerProfileRequest
+): Promise<{ data: CustomerProfileDto }> {
+  return apiRequest("/customer/profile", { method: "PATCH", body });
+}
+
 export function fetchAddresses(): Promise<{ data: AddressDto[] }> {
   return apiRequest("/customer/addresses");
 }
@@ -367,6 +436,24 @@ export function createAddress(
   body: CreateAddressRequest
 ): Promise<{ data: AddressDto }> {
   return apiRequest("/customer/addresses", { method: "POST", body });
+}
+
+export function updateAddress(
+  addressId: string,
+  body: UpdateAddressRequest
+): Promise<{ data: AddressDto }> {
+  return apiRequest(`/customer/addresses/${encodeURIComponent(addressId)}`, {
+    method: "PATCH",
+    body
+  });
+}
+
+export function deleteAddress(
+  addressId: string
+): Promise<{ data: { deleted: true; id: string } }> {
+  return apiRequest(`/customer/addresses/${encodeURIComponent(addressId)}`, {
+    method: "DELETE"
+  });
 }
 
 export function fetchCarts(): Promise<CartsResponse> {
@@ -721,5 +808,245 @@ export function triggerServiceAutoCompleteSweep(): Promise<{
   return apiRequest("/admin/orders/auto-complete-services", {
     method: "POST",
     body: {}
+  });
+}
+
+export function fetchAdminCommissionRules(): Promise<{
+  data: CommissionRuleDto[];
+}> {
+  return apiRequest("/admin/commission-rules");
+}
+
+export function createAdminCommissionRule(
+  body: CreateCommissionRuleRequest
+): Promise<{ data: CommissionRuleDto }> {
+  return apiRequest("/admin/commission-rules", { method: "POST", body });
+}
+
+export function fetchAdminSettlements(): Promise<{
+  data: SellerSettlementRecordDto[];
+}> {
+  return apiRequest("/admin/settlements");
+}
+
+export function createAdminSettlement(
+  body: CreateSettlementRecordRequest
+): Promise<{ data: SellerSettlementRecordDto }> {
+  return apiRequest("/admin/settlements", { method: "POST", body });
+}
+
+export function fetchAdminStores(): Promise<{
+  data: Array<{ id: string; slug: string; displayName: string; status: string }>;
+}> {
+  return apiRequest("/admin/stores");
+}
+
+// Monthly Seller Subscriptions (Zero-Gateway Manual Billing)
+export function fetchSubscriptionPlans(): Promise<{
+  data: SubscriptionPlanDto[];
+}> {
+  return apiRequest("/subscriptions/plans");
+}
+
+export function fetchSellerSubscription(): Promise<{
+  data: StoreSubscriptionSummaryDto;
+}> {
+  return apiRequest("/seller/subscription");
+}
+
+export function submitSubscriptionRenewal(
+  body: SubmitSubscriptionRenewalRequest
+): Promise<{ data: SubscriptionRenewalRequestDto }> {
+  return apiRequest("/seller/subscription/renewals", {
+    method: "POST",
+    body
+  });
+}
+
+export function fetchAdminSubscriptionRenewals(): Promise<{
+  data: SubscriptionRenewalRequestDto[];
+}> {
+  return apiRequest("/admin/subscriptions/renewals");
+}
+
+export function reviewAdminSubscriptionRenewal(
+  renewalId: string,
+  body: ReviewSubscriptionRenewalRequest
+): Promise<{ data: SubscriptionRenewalRequestDto }> {
+  return apiRequest(`/admin/subscriptions/renewals/${encodeURIComponent(renewalId)}/review`, {
+    method: "POST",
+    body
+  });
+}
+
+// Saudavo Shopping Messenger
+export function startMessengerConversation(
+  body: StartConversationRequest
+): Promise<{ data: ConversationSummaryDto }> {
+  return apiRequest("/messenger/conversations", {
+    method: "POST",
+    body
+  });
+}
+
+export function fetchMessengerConversations(): Promise<{
+  data: ConversationSummaryDto[];
+}> {
+  return apiRequest("/messenger/conversations");
+}
+
+export function fetchMessengerUnreadCount(): Promise<{
+  data: { unreadCount: number };
+}> {
+  return apiRequest("/messenger/unread-count");
+}
+
+export function fetchConversationMessages(
+  conversationId: string
+): Promise<{ data: ChatMessageDto[] }> {
+  return apiRequest(`/messenger/conversations/${encodeURIComponent(conversationId)}/messages`);
+}
+
+export function sendChatMessage(
+  conversationId: string,
+  body: SendChatMessageRequest
+): Promise<{ data: ChatMessageDto }> {
+  return apiRequest(`/messenger/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    method: "POST",
+    body
+  });
+}
+
+export function sendChatCustomOffer(
+  conversationId: string,
+  body: SendCustomOfferRequest
+): Promise<{ data: ChatMessageDto }> {
+  return apiRequest(`/messenger/conversations/${encodeURIComponent(conversationId)}/offers`, {
+    method: "POST",
+    body
+  });
+}
+
+export function acceptChatCustomOffer(
+  conversationId: string,
+  messageId: string,
+  body: AcceptCustomOfferRequest
+): Promise<{ data: OrderCreatedSummary }> {
+  return apiRequest(
+    `/messenger/conversations/${encodeURIComponent(conversationId)}/offers/${encodeURIComponent(messageId)}/accept`,
+    {
+      method: "POST",
+      body,
+      idempotencyKey: createIdempotencyKey()
+    }
+  );
+}
+
+export function declineChatCustomOffer(
+  conversationId: string,
+  messageId: string
+): Promise<{ data: ChatMessageDto }> {
+  return apiRequest(
+    `/messenger/conversations/${encodeURIComponent(conversationId)}/offers/${encodeURIComponent(messageId)}/decline`,
+    {
+      method: "POST",
+      body: {}
+    }
+  );
+}
+
+// ---------- Platform Feature Flags (1-Click Admin Control) ----------
+
+export function fetchPublicFeatureFlags(): Promise<{ data: FeatureFlagsMap }> {
+  return apiRequest("/features");
+}
+
+export function fetchAdminFeatureFlags(): Promise<{ data: FeatureFlagDto[] }> {
+  return apiRequest("/admin/features");
+}
+
+export function updateAdminFeatureFlag(
+  key: FeatureFlagKey,
+  body: UpdateFeatureFlagRequest
+): Promise<{ data: FeatureFlagDto }> {
+  return apiRequest(`/admin/features/${encodeURIComponent(key)}`, {
+    method: "PATCH",
+    body
+  });
+}
+
+// ---------- Mujhy Chahiye Local Demand Board ----------
+
+export function fetchPublicDemands(params?: {
+  districtId?: string;
+  areaZoneId?: string;
+  status?: string;
+}): Promise<{ data: BuyerRequestDto[] }> {
+  const sp = new URLSearchParams();
+  if (params?.districtId) sp.set("districtId", params.districtId);
+  if (params?.areaZoneId) sp.set("areaZoneId", params.areaZoneId);
+  if (params?.status) sp.set("status", params.status);
+  const qs = sp.toString();
+  return apiRequest(`/demands${qs ? `?${qs}` : ""}`);
+}
+
+export function createBuyerDemand(
+  body: CreateBuyerRequest
+): Promise<{ data: BuyerRequestDto }> {
+  return apiRequest("/demands", {
+    method: "POST",
+    body
+  });
+}
+
+export function respondToBuyerDemand(
+  demandId: string,
+  body: RespondBuyerRequest
+): Promise<{ data: { conversation: ConversationSummaryDto; demand: BuyerRequestDto } }> {
+  return apiRequest(`/demands/${encodeURIComponent(demandId)}/respond`, {
+    method: "POST",
+    body
+  });
+}
+
+export function closeBuyerDemand(
+  demandId: string,
+  status: "FULFILLED" | "CLOSED" = "FULFILLED"
+): Promise<{ data: BuyerRequestDto }> {
+  return apiRequest(`/demands/${encodeURIComponent(demandId)}/close`, {
+    method: "PATCH",
+    body: { status }
+  });
+}
+
+// ---------- Store Flash Deals & Promo Coupons ----------
+
+export function fetchPublicFlashDeals(
+  storeId?: string
+): Promise<{ data: PromoDealDto[] }> {
+  const qs = storeId ? `?storeId=${encodeURIComponent(storeId)}` : "";
+  return apiRequest(`/deals${qs}`);
+}
+
+export function fetchSellerDeals(): Promise<{ data: PromoDealDto[] }> {
+  return apiRequest("/seller/deals");
+}
+
+export function createSellerDeal(
+  body: CreatePromoDealRequest
+): Promise<{ data: PromoDealDto }> {
+  return apiRequest("/seller/deals", {
+    method: "POST",
+    body
+  });
+}
+
+export function toggleSellerDeal(
+  dealId: string,
+  body: TogglePromoDealRequest
+): Promise<{ data: PromoDealDto }> {
+  return apiRequest(`/seller/deals/${encodeURIComponent(dealId)}/toggle`, {
+    method: "PATCH",
+    body
   });
 }

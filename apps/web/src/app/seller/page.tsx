@@ -4,16 +4,21 @@ import type {
   CategoryDto,
   CommissionSummaryDto,
   DistrictDto,
+  ManualBillingMethod,
   MediaAssetDto,
   OrderDetailDto,
   OrderMessageDto,
   PrivateStoreDto,
   ProductDto,
+  ProductVariantInput,
+  PromoDealDto,
   SellerProfileDto,
   SellerType,
   ServiceListingDto,
   ServiceMode,
-  ServicePackageInput
+  ServicePackageInput,
+  StoreSubscriptionSummaryDto,
+  SubscriptionPlanDto
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,6 +26,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   EmptyCatalogSpot,
   EmptyInboxSpot,
+  FlashDealsIllustration,
   SaudaBuddyAvatar,
   SellerStudioIllustration,
   SpotState
@@ -40,19 +46,25 @@ import {
   confirmSellerCodCollection,
   confirmSellerManualPayment,
   confirmSellerOrder,
+  createSellerDeal,
   createSellerProduct,
   createSellerService,
   fetchCategories,
   fetchDistricts,
   fetchOrderMessages,
   fetchSellerCommissionSummary,
+  fetchSellerDeals,
   fetchSellerOrders,
   fetchSellerProducts,
   fetchSellerProfile,
   fetchSellerServices,
   fetchSellerStore,
+  fetchSellerSubscription,
+  fetchSubscriptionPlans,
   postOrderMessage,
   submitSellerOnboarding,
+  submitSubscriptionRenewal,
+  toggleSellerDeal,
   updateSellerOrderStatus,
   updateSellerProduct,
   updateSellerService,
@@ -65,7 +77,7 @@ import {
   parseWholeRupeesToPaisa
 } from "../../lib/money";
 
-type SellerTab = "ORDERS" | "PRODUCTS" | "SERVICES" | "GROWTH";
+type SellerTab = "ORDERS" | "PRODUCTS" | "SERVICES" | "GROWTH" | "PLAN";
 
 function slugifyStoreName(name: string): string {
   return name
@@ -76,7 +88,7 @@ function slugifyStoreName(name: string): string {
 
 export default function SellerStudioPage() {
   const router = useRouter();
-  const { locale, t, user, refreshUser, showToast } = useAppContext();
+  const { locale, t, user, features, refreshUser, showToast } = useAppContext();
 
   const [profile, setProfile] = useState<SellerProfileDto | null>(null);
   const [store, setStore] = useState<PrivateStoreDto | null>(null);
@@ -84,6 +96,17 @@ export default function SellerStudioPage() {
   const [services, setServices] = useState<ServiceListingDto[]>([]);
   const [orders, setOrders] = useState<OrderDetailDto[]>([]);
   const [summary, setSummary] = useState<CommissionSummaryDto | null>(null);
+  const [subscription, setSubscription] =
+    useState<StoreSubscriptionSummaryDto | null>(null);
+  const [plans, setPlans] = useState<SubscriptionPlanDto[]>([]);
+  const [renewalPlanCode, setRenewalPlanCode] = useState<
+    "PRO_MONTHLY" | "GROWTH_MONTHLY"
+  >("PRO_MONTHLY");
+  const [renewalMethod, setRenewalMethod] =
+    useState<ManualBillingMethod>("RAAST_MANUAL");
+  const [renewalTxRef, setRenewalTxRef] = useState("");
+  const [renewalPayerNote, setRenewalPayerNote] = useState("");
+  const [submittingRenewal, setSubmittingRenewal] = useState(false);
   const [districts, setDistricts] = useState<DistrictDto[]>([]);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [serviceCategories, setServiceCategories] = useState<CategoryDto[]>([]);
@@ -100,6 +123,9 @@ export default function SellerStudioPage() {
   const [prodPriceRupees, setProdPriceRupees] = useState(1500);
   const [prodStock, setProdStock] = useState(5);
   const [prodDesc, setProdDesc] = useState("");
+  const [prodVariants, setProdVariants] = useState<
+    Array<{ title: string; priceRupees: number; stockQuantity: number }>
+  >([]);
   const [uploadedAssets, setUploadedAssets] = useState<MediaAssetDto[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
@@ -128,6 +154,23 @@ export default function SellerStudioPage() {
   const [editPublicPhone, setEditPublicPhone] = useState("");
   const [editShowPublicAddress, setEditShowPublicAddress] = useState(false);
   const [editPublicAddress, setEditPublicAddress] = useState("");
+  const [editRequireCleanCod, setEditRequireCleanCod] = useState(false);
+
+  // Flash deals & coupons (when flash_deals_coupons_enabled is ON)
+  const [sellerDeals, setSellerDeals] = useState<PromoDealDto[]>([]);
+  const [dealTitle, setDealTitle] = useState("");
+  const [dealCode, setDealCode] = useState("");
+  const [dealDiscountType, setDealDiscountType] = useState<
+    "PERCENT_BPS" | "FLAT_PAISA"
+  >("PERCENT_BPS");
+  const [dealDiscountNumber, setDealDiscountNumber] = useState(10);
+  const [dealMinOrderRupees, setDealMinOrderRupees] = useState(500);
+  const [dealHours, setDealHours] = useState(48);
+
+  // Handover PIN input per order (when handover_pin_enabled is ON)
+  const [handoverPinByOrder, setHandoverPinByOrder] = useState<
+    Record<string, string>
+  >({});
 
   // Order chat drawer state
   const [chatOrderId, setChatOrderId] = useState<string | null>(null);
@@ -167,14 +210,23 @@ export default function SellerStudioPage() {
 
       if (user) {
         try {
-          const [profRes, storeRes, prodRes, svcRes, ordRes, sumRes] =
+          const [profRes, storeRes, prodRes, svcRes, ordRes, sumRes, subRes, plansRes, dealsRes] =
             await Promise.all([
               fetchSellerProfile(),
               fetchSellerStore(),
               fetchSellerProducts(),
               fetchSellerServices(),
               fetchSellerOrders(),
-              fetchSellerCommissionSummary()
+              fetchSellerCommissionSummary(),
+              features.seller_subscriptions_enabled
+                ? fetchSellerSubscription().catch(() => null)
+                : Promise.resolve(null),
+              features.seller_subscriptions_enabled
+                ? fetchSubscriptionPlans().catch(() => ({ data: [] }))
+                : Promise.resolve({ data: [] }),
+              features.flash_deals_coupons_enabled
+                ? fetchSellerDeals().catch(() => ({ data: [] }))
+                : Promise.resolve({ data: [] })
             ]);
           setProfile(profRes.data);
           setStore(storeRes.data);
@@ -187,10 +239,14 @@ export default function SellerStudioPage() {
           setEditPublicPhone(storeRes.data.publicContactPhone ?? "");
           setEditShowPublicAddress(storeRes.data.showPublicAddress);
           setEditPublicAddress(storeRes.data.publicBusinessAddress ?? "");
+          setEditRequireCleanCod(storeRes.data.requireCleanCodHistory);
           setProducts(prodRes.data);
           setServices(svcRes.data);
           setOrders(ordRes.data);
           setSummary(sumRes.data);
+          setSubscription(subRes?.data ?? null);
+          setPlans(plansRes.data);
+          setSellerDeals(dealsRes.data);
         } catch {
           setProfile(null);
           setStore(null);
@@ -199,7 +255,14 @@ export default function SellerStudioPage() {
     } finally {
       setLoading(false);
     }
-  }, [prodCatId, selectedZoneIds.length, svcCatId, user]);
+  }, [
+    features.flash_deals_coupons_enabled,
+    features.seller_subscriptions_enabled,
+    prodCatId,
+    selectedZoneIds.length,
+    svcCatId,
+    user
+  ]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -298,6 +361,15 @@ export default function SellerStudioPage() {
     e.preventDefault();
     setErrorMsg(null);
     try {
+      const variantsPayload: ProductVariantInput[] = prodVariants
+        .filter((v) => v.title.trim().length > 0 && v.priceRupees > 0)
+        .map((v) => ({
+          title: v.title.trim(),
+          optionValuesJson: { Option: v.title.trim() },
+          pricePaisa: parseWholeRupeesToPaisa(v.priceRupees),
+          stockQuantity: Math.max(0, v.stockQuantity),
+          isActive: true
+        }));
       await createSellerProduct({
         categoryId: prodCatId,
         title: prodTitle,
@@ -307,12 +379,14 @@ export default function SellerStudioPage() {
         deliveryEnabled: true,
         pickupEnabled: true,
         initialStatus: "PENDING_REVIEW",
+        ...(variantsPayload.length > 0 ? { variants: variantsPayload } : {}),
         ...(uploadedAssets.length > 0
           ? { mediaAssetIds: uploadedAssets.map((a) => a.id) }
           : {})
       });
       setProdTitle("");
       setProdDesc("");
+      setProdVariants([]);
       setUploadedAssets([]);
       setStatusNotice(
         locale === "ur"
@@ -364,6 +438,9 @@ export default function SellerStudioPage() {
         displayName: editDisplayName.trim(),
         description: editDescription.trim() || null,
         defaultDeliveryFeePaisa: parseWholeRupeesToPaisa(editDeliveryFeeRupees),
+        ...(features.cod_refusal_shield_enabled
+          ? { requireCleanCodHistory: editRequireCleanCod }
+          : {}),
         showPublicPhone: editShowPublicPhone,
         publicContactPhone:
           editShowPublicPhone && editPublicPhone.trim()
@@ -473,39 +550,39 @@ export default function SellerStudioPage() {
       {loading ? (
         <ListCardSkeleton rows={2} />
       ) : !user || !profile || !store ? (
-        <div className="grid min-h-[580px] grid-cols-1 overflow-hidden rounded-3xl border border-border-subtle bg-surface-card shadow-soft lg:grid-cols-12">
-          {/* Split-Screen Left Visual Panel (Saudavo Deep Emerald Gradient) */}
-          <section className="relative flex flex-col justify-between gap-6 overflow-hidden bg-gradient-to-br from-[#094232] via-[#0F6B52] to-[#073528] p-7 text-white sm:p-10 lg:col-span-6">
-            <div className="relative z-10 space-y-3">
-              <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-bold tracking-wide text-[#FDE68A]">
+        <div className="grid grid-cols-1 overflow-hidden rounded-3xl border border-border-subtle bg-surface-card shadow-soft lg:min-h-[580px] lg:grid-cols-12">
+          {/* Split-Screen Left Visual Panel (Placed below form on phones for instant onboarding focus) */}
+          <section className="relative order-2 flex flex-col justify-between gap-4 overflow-hidden bg-gradient-to-br from-[#094232] via-[#0F6B52] to-[#073528] p-5 text-white sm:gap-6 sm:p-8 lg:order-1 lg:col-span-6 lg:p-10">
+            <div className="relative z-10 space-y-2.5 sm:space-y-3">
+              <span className="inline-block rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-bold tracking-wide text-[#FDE68A] sm:px-3.5 sm:text-xs">
                 {t.sellerHeroBadge}
               </span>
-              <h1 className="text-2xl font-extrabold leading-snug sm:text-3xl">
+              <h1 className="text-xl font-extrabold leading-snug sm:text-3xl">
                 {t.sellerHeroTitle}
               </h1>
-              <p className="text-sm leading-relaxed text-white/85">
+              <p className="text-xs leading-relaxed text-white/85 sm:text-sm">
                 {t.sellerHeroSubtitle}
               </p>
             </div>
 
-            <div className="glass-promo relative z-10 rounded-3xl p-3">
+            <div className="glass-promo relative z-10 rounded-2xl p-2.5 sm:rounded-3xl sm:p-3">
               <SellerStudioIllustration />
             </div>
 
-            <div className="relative z-10 grid grid-cols-2 gap-3 text-xs">
-              <div className="glass-promo rounded-2xl p-3">
+            <div className="relative z-10 grid grid-cols-2 gap-2.5 text-xs sm:gap-3">
+              <div className="glass-promo rounded-2xl p-2.5 sm:p-3">
                 <p className="font-bold text-white">{t.privacyShieldBadge}</p>
-                <p className="mt-0.5 text-white/80">
+                <p className="mt-0.5 text-[11px] text-white/80 sm:text-xs">
                   {locale === "ur"
                     ? "شناختی کارڈ کے بغیر آغاز (PQ-07)"
                     : "No CNIC required in beta (PQ-07)"}
                 </p>
               </div>
-              <div className="glass-promo rounded-2xl p-3">
+              <div className="glass-promo rounded-2xl p-2.5 sm:p-3">
                 <p className="font-bold text-white">
                   {locale === "ur" ? "واٹس ایپ اور QR اسٹیکر" : "WhatsApp & QR Ready"}
                 </p>
-                <p className="mt-0.5 text-white/80">
+                <p className="mt-0.5 text-[11px] text-white/80 sm:text-xs">
                   {locale === "ur"
                     ? "کیش آن ڈلیوری آرڈرز"
                     : "Mianwali Zone COD Delivery"}
@@ -514,8 +591,8 @@ export default function SellerStudioPage() {
             </div>
           </section>
 
-          {/* Split-Screen Right Onboarding Panel */}
-          <section className="flex flex-col justify-center p-6 sm:p-10 lg:col-span-6">
+          {/* Split-Screen Right Onboarding Panel (First on phones) */}
+          <section className="order-1 flex flex-col justify-center p-5 sm:p-8 lg:order-2 lg:col-span-6 lg:p-10">
             {errorMsg && (
               <div
                 role="alert"
@@ -774,8 +851,8 @@ export default function SellerStudioPage() {
             </div>
           )}
 
-          {/* Seller Workspace Tabs */}
-          <div className="flex flex-wrap gap-2.5 border-b border-border-subtle pb-3">
+          {/* Seller Workspace Tabs (Horizontal swipe rail on phones) */}
+          <div className="no-scrollbar flex flex-nowrap gap-2 overflow-x-auto border-b border-border-subtle pb-3 sm:flex-wrap sm:gap-2.5 sm:overflow-visible">
             {(
               [
                 {
@@ -793,14 +870,22 @@ export default function SellerStudioPage() {
                 {
                   key: "GROWTH",
                   label: t.sellerTabGrowth
-                }
-              ] as const
+                },
+                ...(features.seller_subscriptions_enabled
+                  ? [
+                      {
+                        key: "PLAN" as const,
+                        label: locale === "ur" ? "ماہانہ پلان" : "Monthly Plan"
+                      }
+                    ]
+                  : [])
+              ] as Array<{ key: SellerTab; label: string }>
             ).map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`rounded-2xl px-4 py-2 text-xs font-semibold transition ${
+                className={`min-h-[40px] shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold transition ${
                   activeTab === tab.key
                     ? "clay-pill-active text-white"
                     : "clay-pill text-ink-secondary hover:text-brand-primary"
@@ -811,8 +896,334 @@ export default function SellerStudioPage() {
             ))}
           </div>
 
+          {activeTab === "PLAN" && features.seller_subscriptions_enabled && (
+            <div className="space-y-6">
+              {subscription && (
+                <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-brand-primary">
+                        {locale === "ur" ? "فعال سیلر سبسکرپشن" : "Current Monthly Plan"}
+                      </p>
+                      <h2 className="text-xl font-extrabold text-ink-primary">
+                        {locale === "ur"
+                          ? subscription.plan.nameUr
+                          : subscription.plan.nameEn}{" "}
+                        — {formatPkrFromPaisa(subscription.plan.pricePaisa, locale)}/mo
+                      </h2>
+                      <p className="mt-0.5 text-xs text-ink-secondary">
+                        {subscription.currentPeriodEnd
+                          ? `Valid until ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}`
+                          : locale === "ur"
+                            ? "مفت اسٹارٹر ٹائر • 0% آرڈر کمیشن"
+                            : "Free starter tier • 0% per-order commission"}
+                      </p>
+                    </div>
+                    <StatusBadge status={subscription.status} />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-surface-muted/70 p-4">
+                      <p className="text-xs font-semibold text-ink-secondary">
+                        {locale === "ur" ? "پروڈکٹ لسٹنگ کی حد" : "Product Listing Usage"}
+                      </p>
+                      <p className="mt-1 text-lg font-extrabold text-ink-primary">
+                        {subscription.activeProductCount} /{" "}
+                        {subscription.plan.maxActiveProducts}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-surface-muted/70 p-4">
+                      <p className="text-xs font-semibold text-ink-secondary">
+                        {locale === "ur" ? "سروس لسٹنگ کی حد" : "Service Listing Usage"}
+                      </p>
+                      <p className="mt-1 text-lg font-extrabold text-ink-primary">
+                        {subscription.activeServiceCount} /{" "}
+                        {subscription.plan.maxActiveServices}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+                <h2 className="text-lg font-bold text-ink-primary">
+                  {locale === "ur"
+                    ? "ماہانہ سیلر پلانز (0% آرڈر کمیشن)"
+                    : "Monthly Storefront Plans (0% Order Commission)"}
+                </h2>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  {plans.map((p) => {
+                    const isCurrent = subscription?.plan.code === p.code;
+                    return (
+                      <div
+                        key={p.id}
+                        className={`flex flex-col justify-between rounded-2xl border p-4 ${
+                          isCurrent
+                            ? "border-brand-primary bg-brand-primary-soft/40"
+                            : "border-border-subtle bg-surface-canvas"
+                        }`}
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="text-sm font-extrabold text-ink-primary">
+                              {locale === "ur" ? p.nameUr : p.nameEn}
+                            </h3>
+                            {p.hasVerifiedBadge && (
+                              <span className="rounded-full bg-brand-primary-soft px-2 py-0.5 text-[10px] font-bold text-brand-primary">
+                                Pro Badge
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-lg font-extrabold text-brand-primary">
+                            {formatPkrFromPaisa(p.pricePaisa, locale)}{" "}
+                            <span className="text-xs font-medium text-ink-secondary">
+                              / {p.durationDays} days
+                            </span>
+                          </p>
+                          <p className="text-xs text-ink-secondary">
+                            {locale === "ur" ? p.descriptionUr : p.descriptionEn}
+                          </p>
+                          <p className="pt-1 text-[11px] font-semibold text-ink-primary">
+                            • Up to {p.maxActiveProducts} products &{" "}
+                            {p.maxActiveServices} services
+                          </p>
+                        </div>
+                        {p.pricePaisa > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRenewalPlanCode(
+                                p.code === "GROWTH_MONTHLY"
+                                  ? "GROWTH_MONTHLY"
+                                  : "PRO_MONTHLY"
+                              )
+                            }
+                            className={`mt-3 rounded-xl py-2 text-xs font-bold transition ${
+                              renewalPlanCode === p.code
+                                ? "bg-brand-primary text-white"
+                                : "border border-border-subtle bg-surface-card text-brand-primary hover:border-brand-primary"
+                            }`}
+                          >
+                            {renewalPlanCode === p.code
+                              ? locale === "ur"
+                                ? "منتخب شدہ"
+                                : "Selected for Renewal"
+                              : locale === "ur"
+                                ? "یہ پلان منتخب کریں"
+                                : "Select Plan"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {subscription && (
+                <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+                  <h2 className="text-lg font-bold text-ink-primary">
+                    {locale === "ur"
+                      ? "بغیر گیٹ وے ماہانہ فیس جمع کرائیں (Raast / JazzCash / Easypaisa)"
+                      : "Renew or Upgrade via Manual Transfer (Zero Gateway)"}
+                  </h2>
+                  <div className="rounded-2xl border border-brand-primary/20 bg-brand-primary-soft/50 p-4 text-xs space-y-1">
+                    <p className="font-bold text-brand-primary">
+                      {subscription.billingInstructions.accountTitle}
+                    </p>
+                    <p>Raast ID: {subscription.billingInstructions.raastId}</p>
+                    <p>
+                      JazzCash / Easypaisa:{" "}
+                      {subscription.billingInstructions.walletNumber}
+                    </p>
+                    <p className="text-ink-secondary">
+                      {subscription.billingInstructions.note}
+                    </p>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setSubmittingRenewal(true);
+                      setErrorMsg(null);
+                      setStatusNotice(null);
+                      void submitSubscriptionRenewal({
+                        planCode: renewalPlanCode,
+                        paymentMethod: renewalMethod,
+                        transactionReference: renewalTxRef.trim(),
+                        ...(renewalPayerNote.trim()
+                          ? { payerAccountNote: renewalPayerNote.trim() }
+                          : {})
+                      })
+                        .then(async () => {
+                          setRenewalTxRef("");
+                          setRenewalPayerNote("");
+                          setStatusNotice(
+                            locale === "ur"
+                              ? "آپ کی ماہانہ پلان درخواست ایڈمن تصدیق کے لیے جمع ہو گئی ہے۔"
+                              : "Subscription renewal submitted for Admin verification."
+                          );
+                          await loadSellerWorkspace();
+                        })
+                        .catch((err: unknown) => {
+                          setErrorMsg(
+                            err instanceof ApiClientError
+                              ? err.message
+                              : "Unable to submit subscription renewal."
+                          );
+                        })
+                        .finally(() => {
+                          setSubmittingRenewal(false);
+                        });
+                    }}
+                    className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                  >
+                    <select
+                      value={renewalPlanCode}
+                      onChange={(e) =>
+                        setRenewalPlanCode(
+                          e.target.value === "GROWTH_MONTHLY"
+                            ? "GROWTH_MONTHLY"
+                            : "PRO_MONTHLY"
+                        )
+                      }
+                      className="rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2.5 text-xs"
+                    >
+                      <option value="PRO_MONTHLY">Saudavo Pro Monthly</option>
+                      <option value="GROWTH_MONTHLY">Saudavo Growth Monthly</option>
+                    </select>
+                    <select
+                      value={renewalMethod}
+                      onChange={(e) =>
+                        setRenewalMethod(e.target.value as ManualBillingMethod)
+                      }
+                      className="rounded-xl border border-border-subtle bg-surface-card px-3.5 py-2.5 text-xs"
+                    >
+                      <option value="RAAST_MANUAL">RAAST_MANUAL</option>
+                      <option value="JAZZCASH_MANUAL">JAZZCASH_MANUAL</option>
+                      <option value="EASYPAISA_MANUAL">EASYPAISA_MANUAL</option>
+                      <option value="BANK_TRANSFER">BANK_TRANSFER</option>
+                      <option value="CASH_OFFICE">CASH_OFFICE</option>
+                    </select>
+                    <input
+                      type="text"
+                      required
+                      minLength={4}
+                      value={renewalTxRef}
+                      onChange={(e) => setRenewalTxRef(e.target.value)}
+                      placeholder="Transaction ID / TID (e.g. RAAST-982341)"
+                      className="rounded-xl border border-border-subtle px-3.5 py-2.5 text-xs"
+                    />
+                    <input
+                      type="text"
+                      value={renewalPayerNote}
+                      onChange={(e) => setRenewalPayerNote(e.target.value)}
+                      placeholder="Sender account / note (optional)"
+                      className="rounded-xl border border-border-subtle px-3.5 py-2.5 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      disabled={submittingRenewal}
+                      className="rounded-xl bg-brand-primary px-5 py-2.5 text-xs font-bold text-white sm:w-fit"
+                    >
+                      {submittingRenewal
+                        ? "..."
+                        : locale === "ur"
+                          ? "تصدیق کے لیے جمع کرائیں"
+                          : "Submit Renewal Proof"}
+                    </button>
+                  </form>
+
+                  {subscription.renewals.length > 0 && (
+                    <div className="space-y-2 border-t border-border-subtle pt-4">
+                      <h3 className="text-xs font-bold text-ink-primary">
+                        Renewal History
+                      </h3>
+                      {subscription.renewals.map((r) => (
+                        <div
+                          key={r.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-subtle p-3 text-xs"
+                        >
+                          <div>
+                            <p className="font-bold text-ink-primary">
+                              {r.planNameEn ?? r.planCode} —{" "}
+                              {formatPkrFromPaisa(r.amountPaisa, locale)}
+                            </p>
+                            <p className="text-ink-secondary">
+                              {r.paymentMethod} • Ref: {r.transactionReference}
+                              {r.reviewNote ? ` • Note: ${r.reviewNote}` : ""}
+                            </p>
+                          </div>
+                          <StatusBadge status={r.status} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+            </div>
+          )}
+
           {activeTab === "GROWTH" && (
             <div className="space-y-6">
+              {/* Seller Analytics & Low-Stock Insights */}
+              <section className="rounded-3xl border border-border-subtle bg-surface-card p-6 shadow-card space-y-4">
+                <h2 className="text-lg font-bold text-ink-primary">
+                  {locale === "ur"
+                    ? "اسٹور کارکردگی اور اسٹاک الرٹس"
+                    : "Store Analytics & Inventory Insights"}
+                </h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-2xl bg-surface-muted/70 p-3.5">
+                    <p className="text-[11px] text-ink-secondary">
+                      {locale === "ur" ? "مکمل آرڈرز" : "Completed Orders"}
+                    </p>
+                    <p className="mt-1 text-xl font-extrabold text-brand-primary">
+                      {orders.filter((o) => o.status === "COMPLETED").length}/{orders.length}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-surface-muted/70 p-3.5">
+                    <p className="text-[11px] text-ink-secondary">
+                      {locale === "ur" ? "فروخت شدہ اشیاء" : "Units Ordered"}
+                    </p>
+                    <p className="mt-1 text-xl font-extrabold text-ink-primary">
+                      {orders.reduce(
+                        (sum, o) =>
+                          sum + o.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+                        0
+                      )}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-surface-muted/70 p-3.5">
+                    <p className="text-[11px] text-ink-secondary">
+                      {locale === "ur" ? "لائیو مصنوعات و سروسز" : "Active Listings"}
+                    </p>
+                    <p className="mt-1 text-xl font-extrabold text-brand-accent">
+                      {products.filter((p) => p.status === "ACTIVE").length +
+                        services.filter((s) => s.status === "ACTIVE").length}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-surface-muted/70 p-3.5">
+                    <p className="text-[11px] text-ink-secondary">
+                      {locale === "ur" ? "کم اسٹاک الرٹ (<=3)" : "Low Stock (<=3)"}
+                    </p>
+                    <p className="mt-1 text-xl font-extrabold text-amber-700">
+                      {products.filter((p) => p.stockQuantity <= 3).length}
+                    </p>
+                  </div>
+                </div>
+                {products.some((p) => p.stockQuantity <= 3) && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                    <span className="font-bold">
+                      {locale === "ur" ? "کم اسٹاک مصنوعات:" : "Restock soon:"}
+                    </span>{" "}
+                    {products
+                      .filter((p) => p.stockQuantity <= 3)
+                      .map((p) => `${p.title} (${p.stockQuantity})`)
+                      .join(" • ")}
+                  </div>
+                )}
+              </section>
+
               {store.status === "ACTIVE" && (
                 <StoreShareAndQrCard
                   storeSlug={store.slug}
@@ -903,6 +1314,28 @@ export default function SellerStudioPage() {
                       className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
                     />
                   )}
+                  {features.cod_refusal_shield_enabled && (
+                    <label className="flex items-start gap-2 rounded-2xl border border-brand-primary/25 bg-brand-primary-soft/30 p-3 text-xs text-ink-primary sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        checked={editRequireCleanCod}
+                        onChange={(e) => setEditRequireCleanCod(e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <strong className="block text-brand-primary">
+                          {locale === "ur"
+                            ? "COD ریفیوزل شیلڈ فعال کریں"
+                            : "Enable COD Refusal Shield"}
+                        </strong>
+                        <span className="text-[11px] text-ink-secondary">
+                          {locale === "ur"
+                            ? "بار بار پارسل واپس کرنے والے صارفین سے ہوم ڈلیوری محدود کر کے سیلف پک اپ کی شرط رکھیں۔"
+                            : "Automatically guide buyers with 2+ refused COD deliveries to Self-Pickup instead of home COD delivery."}
+                        </span>
+                      </span>
+                    </label>
+                  )}
                   <button
                     type="submit"
                     className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white sm:w-fit"
@@ -911,6 +1344,167 @@ export default function SellerStudioPage() {
                   </button>
                 </form>
               </section>
+
+              {features.flash_deals_coupons_enabled && (
+                <section className="rounded-3xl border border-brand-accent/30 bg-surface-card p-6 shadow-card space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <span className="inline-block rounded-full bg-brand-accent-soft px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-accent">
+                        {locale === "ur" ? "فلیش ڈیلز اور کوپنز" : "Flash Deals & Coupons"}
+                      </span>
+                      <h2 className="mt-1 text-lg font-bold text-ink-primary">
+                        {locale === "ur"
+                          ? "اپنے اسٹور کے لیے ڈسکاؤنٹ آفر بنائیں"
+                          : "Create Store Promo Codes & Mianwali Flash Deals"}
+                      </h2>
+                    </div>
+                    <FlashDealsIllustration />
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setErrorMsg(null);
+                      const discountValue =
+                        dealDiscountType === "PERCENT_BPS"
+                          ? Math.round(dealDiscountNumber * 100)
+                          : parseWholeRupeesToPaisa(dealDiscountNumber);
+                      void createSellerDeal({
+                        title: dealTitle.trim(),
+                        code: dealCode.trim() ? dealCode.trim().toUpperCase() : null,
+                        discountType: dealDiscountType,
+                        discountValue,
+                        minOrderPaisa: parseWholeRupeesToPaisa(dealMinOrderRupees),
+                        isFlashDeal: true,
+                        durationHours: dealHours
+                      })
+                        .then(async () => {
+                          setDealTitle("");
+                          setDealCode("");
+                          setStatusNotice(
+                            locale === "ur"
+                              ? "فلیش ڈیل لائیو ہو گئی!"
+                              : "Flash deal & coupon published!"
+                          );
+                          await loadSellerWorkspace();
+                        })
+                        .catch((err: unknown) => {
+                          setErrorMsg(
+                            err instanceof ApiClientError
+                              ? err.message
+                              : "Unable to create deal."
+                          );
+                        });
+                    }}
+                    className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                  >
+                    <input
+                      type="text"
+                      required
+                      minLength={3}
+                      value={dealTitle}
+                      onChange={(e) => setDealTitle(e.target.value)}
+                      placeholder="e.g. Weekend Mianwali Eid Sale"
+                      className="rounded-xl border border-border-subtle px-3.5 py-2 text-xs sm:col-span-2"
+                    />
+                    <input
+                      type="text"
+                      value={dealCode}
+                      onChange={(e) => setDealCode(e.target.value.toUpperCase())}
+                      placeholder="Code e.g. SAVE10 (optional)"
+                      className="rounded-xl border border-border-subtle px-3.5 py-2 text-xs uppercase"
+                    />
+                    <select
+                      value={dealDiscountType}
+                      onChange={(e) =>
+                        setDealDiscountType(
+                          e.target.value === "FLAT_PAISA"
+                            ? "FLAT_PAISA"
+                            : "PERCENT_BPS"
+                        )
+                      }
+                      className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs"
+                    >
+                      <option value="PERCENT_BPS">% Percentage Off</option>
+                      <option value="FLAT_PAISA">Flat Rs. Off</option>
+                    </select>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={dealDiscountType === "PERCENT_BPS" ? 80 : 100000}
+                      value={dealDiscountNumber}
+                      onChange={(e) => setDealDiscountNumber(Number(e.target.value))}
+                      placeholder={
+                        dealDiscountType === "PERCENT_BPS" ? "Percent (e.g. 10)" : "Rs. Off"
+                      }
+                      className="rounded-xl border border-border-subtle px-3 py-2 text-xs"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      value={dealMinOrderRupees}
+                      onChange={(e) => setDealMinOrderRupees(Number(e.target.value))}
+                      placeholder="Min Order (Rs.)"
+                      className="rounded-xl border border-border-subtle px-3 py-2 text-xs"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={720}
+                      value={dealHours}
+                      onChange={(e) => setDealHours(Number(e.target.value))}
+                      placeholder="Hours valid (e.g. 48)"
+                      className="rounded-xl border border-border-subtle px-3 py-2 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-brand-accent px-4 py-2 text-xs font-bold text-white sm:w-fit"
+                    >
+                      {locale === "ur" ? "فلیش ڈیل شائع کریں" : "Publish Flash Deal"}
+                    </button>
+                  </form>
+
+                  {sellerDeals.length > 0 && (
+                    <div className="space-y-2 border-t border-border-subtle pt-3">
+                      {sellerDeals.map((d) => (
+                        <div
+                          key={d.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border-subtle p-3 text-xs"
+                        >
+                          <div>
+                            <p className="font-bold text-ink-primary">
+                              {d.title} {d.code ? `(${d.code})` : ""}
+                            </p>
+                            <p className="text-ink-secondary">
+                              {d.discountType === "PERCENT_BPS"
+                                ? `${Math.round(d.discountValue / 100)}% OFF`
+                                : `${formatPkrFromPaisa(d.discountValue, locale)} OFF`}{" "}
+                              • Min {formatPkrFromPaisa(d.minOrderPaisa, locale)} • Ends{" "}
+                              {new Date(d.endsAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void toggleSellerDeal(d.id, { isActive: !d.isActive }).then(
+                                loadSellerWorkspace
+                              )
+                            }
+                            className={`rounded-lg px-3 py-1 text-xs font-bold ${
+                              d.isActive
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-surface-muted text-ink-secondary"
+                            }`}
+                          >
+                            {d.isActive ? "Active (Pause)" : "Paused (Activate)"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           )}
 
@@ -919,7 +1513,13 @@ export default function SellerStudioPage() {
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-brand-accent-soft px-4 py-2 text-xs font-semibold text-brand-accent">
                 <span>
-                  {summary.accountingDisclaimer} {summary.promotionalBetaNote}
+                  {features.seller_subscriptions_enabled
+                    ? locale === "ur"
+                      ? "0% آرڈر کمیشن (ماہانہ سبسکرپشن ماڈل • کوئی پیمنٹ گیٹ وے نہیں) — آپ کے تمام COD آرڈرز کی مکمل رقم آپ کی اپنی ہے۔"
+                      : "0% Order Commission (Monthly Subscription Model • Zero Payment Gateway) — keep 100% of every COD deal closed on Saudavo."
+                    : locale === "ur"
+                      ? "0% کمیشن اور مفت لامحدود لسٹنگز — میانوالی میں ابھی تمام دکانداروں کے لیے سوداو مکمل مفت ہے۔"
+                      : "0% Commission • Unlimited Free Storefront (Monthly plans are currently OFF by Admin) — keep 100% of every COD sale."}
                 </span>
                 <button
                   type="button"
@@ -1068,21 +1668,47 @@ export default function SellerStudioPage() {
 
                       {order.orderType === "PHYSICAL" &&
                         order.status === "READY_FOR_DISPATCH" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void runOrderAction(
-                                () =>
-                                  updateSellerOrderStatus(order.id, {
-                                    toStatus: "DELIVERED"
-                                  }),
-                                "Unable to mark order delivered."
-                              )
-                            }
-                            className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
-                          >
-                            {t.markDeliveredBtn}
-                          </button>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {features.handover_pin_enabled && (
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength={4}
+                                value={handoverPinByOrder[order.id] ?? ""}
+                                onChange={(e) =>
+                                  setHandoverPinByOrder((prev) => ({
+                                    ...prev,
+                                    [order.id]: e.target.value.replace(/\D/g, "").slice(0, 4)
+                                  }))
+                                }
+                                placeholder={locale === "ur" ? "4 ہندسوں کا پن" : "Buyer 4-digit PIN"}
+                                className="w-32 rounded-lg border border-brand-primary/40 bg-surface-card px-2.5 py-1 text-xs font-mono"
+                              />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void runOrderAction(
+                                  () =>
+                                    updateSellerOrderStatus(order.id, {
+                                      toStatus: "DELIVERED",
+                                      ...(features.handover_pin_enabled &&
+                                      (handoverPinByOrder[order.id] ?? "").trim()
+                                        ? {
+                                            handoverPin: (
+                                              handoverPinByOrder[order.id] ?? ""
+                                            ).trim()
+                                          }
+                                        : {})
+                                    }),
+                                  "Unable to mark order delivered."
+                                )
+                              }
+                              className="rounded-lg bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink-primary"
+                            >
+                              {t.markDeliveredBtn}
+                            </button>
+                          </div>
                         )}
 
                       {order.orderType === "SERVICE" &&
@@ -1347,6 +1973,21 @@ export default function SellerStudioPage() {
                       >
                         +1 Stock
                       </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void runOrderAction(
+                            () =>
+                              updateSellerProduct(prod.id, {
+                                stockQuantity: prod.stockQuantity + 5
+                              }),
+                            "Unable to update stock."
+                          )
+                        }
+                        className="rounded-lg bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-primary"
+                      >
+                        +5 Stock
+                      </button>
                       {prod.stockQuantity > 0 && (
                         <button
                           type="button"
@@ -1362,6 +2003,23 @@ export default function SellerStudioPage() {
                           className="rounded-lg bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-primary"
                         >
                           -1 Stock
+                        </button>
+                      )}
+                      {prod.stockQuantity > 0 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void runOrderAction(
+                              () =>
+                                updateSellerProduct(prod.id, {
+                                  stockQuantity: 0
+                                }),
+                              "Unable to update stock."
+                            )
+                          }
+                          className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
+                        >
+                          Out of Stock (0)
                         </button>
                       )}
                       {(prod.status === "REJECTED" || prod.status === "DRAFT") && (
@@ -1461,6 +2119,94 @@ export default function SellerStudioPage() {
                 onChange={(e) => setProdDesc(e.target.value)}
                 className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm sm:col-span-2"
               />
+              <div className="space-y-2 rounded-xl border border-border-subtle bg-surface-muted/40 p-3.5 sm:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-ink-secondary">
+                    {locale === "ur"
+                      ? "اختیاری ویریئنٹس (سائز / رنگ)"
+                      : "Optional Variants (Size / Color)"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setProdVariants((prev) => [
+                        ...prev,
+                        {
+                          title: "",
+                          priceRupees: prodPriceRupees,
+                          stockQuantity: Math.max(1, prodStock)
+                        }
+                      ])
+                    }
+                    className="rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1 text-[11px] font-semibold text-brand-primary hover:border-brand-primary"
+                  >
+                    + {locale === "ur" ? "ویریئنٹ شامل کریں" : "Add Variant"}
+                  </button>
+                </div>
+                {prodVariants.map((variant, idx) => (
+                  <div
+                    key={idx}
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-4"
+                  >
+                    <input
+                      type="text"
+                      placeholder="e.g. Large / Indigo"
+                      value={variant.title}
+                      onChange={(e) =>
+                        setProdVariants((prev) =>
+                          prev.map((item, i) =>
+                            i === idx ? { ...item, title: e.target.value } : item
+                          )
+                        )
+                      }
+                      className="rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1.5 text-xs sm:col-span-2"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="Rs."
+                      value={variant.priceRupees}
+                      onChange={(e) =>
+                        setProdVariants((prev) =>
+                          prev.map((item, i) =>
+                            i === idx
+                              ? { ...item, priceRupees: Number(e.target.value) }
+                              : item
+                          )
+                        )
+                      }
+                      className="rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1.5 text-xs"
+                    />
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Stock"
+                        value={variant.stockQuantity}
+                        onChange={(e) =>
+                          setProdVariants((prev) =>
+                            prev.map((item, i) =>
+                              i === idx
+                                ? { ...item, stockQuantity: Number(e.target.value) }
+                                : item
+                            )
+                          )
+                        }
+                        className="w-full rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1.5 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setProdVariants((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        className="rounded-lg bg-red-50 px-2 py-1 text-xs font-bold text-red-700"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
               <div className="space-y-2 rounded-xl border border-dashed border-border-subtle bg-surface-muted/50 p-3.5 sm:col-span-2">
                 <label
                   htmlFor="seller-product-photo"

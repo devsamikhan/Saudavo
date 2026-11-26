@@ -13,7 +13,8 @@
     "start": "node dist/main.js",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "auth:recover": "tsx prisma/recover-account.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

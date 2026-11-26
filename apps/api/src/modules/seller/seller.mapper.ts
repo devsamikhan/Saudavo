@@ -54,6 +54,7 @@ export function toPrivateStoreDto(store: StoreWithRelations): PrivateStoreDto {
       store.defaultDeliveryFeePaisa,
       "defaultDeliveryFeePaisa"
     ),
+    requireCleanCodHistory: store.requireCleanCodHistory,
     currency: store.currency,
     status: store.status,
     serviceAreas: store.serviceAreas.map((sa) => ({

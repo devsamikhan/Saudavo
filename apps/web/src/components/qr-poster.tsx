@@ -99,19 +99,19 @@ export function StoreShareAndQrCard({
             : "WhatsApp & Printable Storefront QR"}
         </p>
         <p className="text-xs text-ink-secondary break-all">{storeUrl}</p>
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="grid grid-cols-1 gap-2 pt-1 sm:flex sm:flex-wrap">
           <a
             href={`https://wa.me/?text=${encodeURIComponent(whatsappText)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg bg-brand-primary px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-primary-hover"
+            className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-brand-primary px-3.5 py-2 text-center text-xs font-semibold text-white hover:bg-brand-primary-hover"
           >
             {t.shareStoreWhatsApp}
           </a>
           <button
             type="button"
             onClick={() => void handleCopy()}
-            className="rounded-lg border border-border-subtle bg-surface-card px-3 py-2 text-xs font-semibold text-ink-primary hover:border-brand-primary"
+            className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs font-semibold text-ink-primary hover:border-brand-primary"
           >
             {copied
               ? t.copiedNotice
@@ -123,7 +123,7 @@ export function StoreShareAndQrCard({
             type="button"
             onClick={handleDownloadPoster}
             disabled={!qrSvg}
-            className="rounded-lg bg-brand-accent px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            className="inline-flex min-h-[40px] items-center justify-center rounded-xl bg-brand-accent px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
           >
             {t.downloadQrPoster}
           </button>
@@ -133,7 +133,7 @@ export function StoreShareAndQrCard({
       {qrSvg && (
         <div
           aria-label={`QR code for ${storeDisplayName}`}
-          className="shrink-0 self-start rounded-xl border border-border-subtle bg-white p-2 shadow-sm sm:self-center"
+          className="shrink-0 self-center rounded-xl border border-border-subtle bg-white p-2 shadow-sm"
           dangerouslySetInnerHTML={{ __html: qrSvg }}
         />
       )}

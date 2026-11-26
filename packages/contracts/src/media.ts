@@ -5,14 +5,19 @@ export const MAX_MEDIA_UPLOAD_BYTES = 5 * 1024 * 1024;
 export const MediaMimeTypeSchema = z.enum([
   "image/jpeg",
   "image/png",
-  "image/webp"
+  "image/webp",
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg"
 ]);
 export type MediaMimeType = z.infer<typeof MediaMimeTypeSchema>;
 
 export const MediaPurposeSchema = z.enum([
   "STORE_LOGO",
   "STORE_BANNER",
-  "PRODUCT_IMAGE"
+  "PRODUCT_IMAGE",
+  "CHAT_ATTACHMENT",
+  "CHAT_VOICE_NOTE"
 ]);
 export type MediaPurpose = z.infer<typeof MediaPurposeSchema>;
 

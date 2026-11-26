@@ -65,7 +65,7 @@ export function OrderConfirmedModal({
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#094232]/65 p-4 backdrop-blur-sm"
     >
-      <div className="fade-slide relative w-full max-w-md overflow-hidden rounded-3xl border border-border-subtle bg-surface-card p-8 text-center shadow-soft">
+      <div className="fade-slide relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-border-subtle bg-surface-card p-6 text-center shadow-soft sm:p-8">
         {/* Pure-CSS Confetti Burst */}
         <div
           aria-hidden="true"

@@ -52,6 +52,12 @@ model User {
   notifications           Notification[]
   idempotencyKeys         IdempotencyKey[]
   adminAuditLogs          AdminAuditLog[]
+  buyerConversations      Conversation[]               @relation("BuyerConversations")
+  chatMessages            ChatMessage[]                @relation("ChatMessageSender")
+  submittedRenewals       SubscriptionRenewalRequest[] @relation("RenewalSubmitter")
+  reviewedRenewals        SubscriptionRenewalRequest[] @relation("RenewalReviewer")
+  updatedFeatureFlags     PlatformFeatureFlag[]        @relation("FeatureFlagUpdater")
+  buyerRequests           BuyerRequest[]               @relation("BuyerRequests")
 
   @@index([status], map: "idx_users_status")
   @@map("users")
@@ -172,6 +178,7 @@ model District {
   stores           Store[]
   addresses        Address[]
   orders           Order[]
+  buyerRequests    BuyerRequest[]
 
   @@map("districts")
 }
@@ -193,6 +200,7 @@ model AreaZone {
   addresses           Address[]
   deliveries          Delivery[]
   serviceOrderDetails ServiceOrderDetails[]
+  buyerRequests       BuyerRequest[]
 
   @@unique([districtId, slug])
   @@index([districtId, isActive], map: "idx_area_zones_district_active")
@@ -213,6 +221,7 @@ model Store {
   showPublicAddress       Boolean   @default(false) @map("show_public_address")
   publicBusinessAddress   String?   @map("public_business_address")
   defaultDeliveryFeePaisa BigInt    @default(0) @map("default_delivery_fee_paisa")
+  requireCleanCodHistory  Boolean   @default(false) @map("require_clean_cod_history")
   currency                String    @default("PKR") @db.Char(3)
   status                  String    @default("DRAFT") @db.VarChar(30)
   createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -229,9 +238,13 @@ model Store {
   serviceListings   ServiceListing[]
   carts             Cart[]
   orders            Order[]
-  commissionLedgers CommissionLedger[]
-  settlements       SellerSettlementRecord[]
-  reviews           Review[]
+  commissionLedgers    CommissionLedger[]
+  settlements          SellerSettlementRecord[]
+  reviews              Review[]
+  conversations        Conversation[]
+  subscription         StoreSubscription?
+  subscriptionRenewals SubscriptionRenewalRequest[]
+  promoDeals           StorePromoDeal[]
 
   @@index([districtId, status], map: "idx_stores_district_status")
   @@map("stores")
@@ -296,6 +309,7 @@ model Category {
   products        Product[]
   serviceListings ServiceListing[]
   commissionRules CommissionRule[]
+  buyerRequests   BuyerRequest[]
 
   @@map("categories")
 }
@@ -316,6 +330,7 @@ model MediaAsset {
   storeLogos    Store[]        @relation("StoreLogoAsset")
   storeBanners  Store[]        @relation("StoreBannerAsset")
   productImages ProductImage[]
+  chatMessages  ChatMessage[]
 
   @@map("media_assets")
 }
@@ -344,8 +359,10 @@ model Product {
   category   Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   variants   ProductVariant[]
   images     ProductImage[]
-  cartItems  CartItem[]
-  orderItems OrderItem[]
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  conversations Conversation[]
+  chatMessages  ChatMessage[]
 
   @@index([storeId, status], map: "idx_products_store_status")
   @@index([categoryId, status], map: "idx_products_category_status")
@@ -406,6 +423,8 @@ model ServiceListing {
   category            Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   packages            ServicePackage[]
   serviceOrderDetails ServiceOrderDetails[]
+  conversations       Conversation[]
+  chatMessages        ChatMessage[]
 
   @@index([storeId, status], map: "idx_services_store_status")
   @@map("service_listings")
@@ -481,6 +500,7 @@ model Order {
   subtotalPaisa             BigInt    @map("subtotal_paisa")
   deliveryFeePaisa          BigInt    @default(0) @map("delivery_fee_paisa")
   discountPaisa             BigInt    @default(0) @map("discount_paisa")
+  appliedPromoCode          String?   @map("applied_promo_code") @db.VarChar(40)
   totalPaisa                BigInt    @map("total_paisa")
   commissionRuleId          String    @map("commission_rule_id") @db.Uuid
   commissionRateBps         Int       @map("commission_rate_bps")
@@ -503,9 +523,10 @@ model Order {
   messages            OrderMessage[]
   payments            Payment[]
   refunds             Refund[]
-  commissionLedgers   CommissionLedger[]
-  reviews             Review[]
-  disputes            Dispute[]
+  commissionLedgers     CommissionLedger[]
+  reviews               Review[]
+  disputes              Dispute[]
+  acceptedOfferMessages ChatMessage[]        @relation("AcceptedOfferOrder")
 
   @@index([customerId, createdAt(sort: Desc)], map: "idx_orders_customer_created")
   @@index([storeId, status, createdAt(sort: Desc)], map: "idx_orders_store_status_created")
@@ -570,6 +591,8 @@ model Delivery {
   shippingAddressSnapshotJson Json?     @map("shipping_address_snapshot_json") @db.JsonB
   pickupInstructions          String?   @map("pickup_instructions")
   trackingNote                String?   @map("tracking_note")
+  handoverPin                 String?   @map("handover_pin") @db.VarChar(6)
+  handoverPinVerifiedAt       DateTime? @map("handover_pin_verified_at") @db.Timestamptz(6)
   dispatchedAt                DateTime? @map("dispatched_at") @db.Timestamptz(6)
   deliveredAt                 DateTime? @map("delivered_at") @db.Timestamptz(6)
   failedReason                String?   @map("failed_reason")
@@ -878,4 +901,198 @@ model AdminAuditLog {
 
   @@index([targetType, targetId, createdAt], map: "idx_audit_target_created")
   @@map("admin_audit_logs")
+}
+
+// ============================================================================
+// 7. IN-APP SHOPPING MESSENGER & MONTHLY SELLER SUBSCRIPTIONS
+// ============================================================================
+
+model Conversation {
+  id               String    @id @default(uuid()) @db.Uuid
+  buyerId          String    @map("buyer_id") @db.Uuid
+  storeId          String    @map("store_id") @db.Uuid
+  productId        String?   @map("product_id") @db.Uuid
+  serviceListingId String?   @map("service_listing_id") @db.Uuid
+  status           String    @default("OPEN") @db.VarChar(20)
+  lastMessageAt    DateTime  @default(now()) @map("last_message_at") @db.Timestamptz(6)
+  buyerLastReadAt  DateTime? @map("buyer_last_read_at") @db.Timestamptz(6)
+  sellerLastReadAt DateTime? @map("seller_last_read_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  buyer          User            @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Restrict)
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  product        Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  serviceListing ServiceListing? @relation(fields: [serviceListingId], references: [id], onDelete: SetNull)
+  messages       ChatMessage[]
+
+  @@unique([buyerId, storeId])
+  @@index([buyerId, lastMessageAt(sort: Desc)], map: "idx_conversations_buyer_last")
+  @@index([storeId, lastMessageAt(sort: Desc)], map: "idx_conversations_store_last")
+  @@map("conversations")
+}
+
+model ChatMessage {
+  id                    String    @id @default(uuid()) @db.Uuid
+  conversationId        String    @map("conversation_id") @db.Uuid
+  senderId              String    @map("sender_id") @db.Uuid
+  senderRole            String    @map("sender_role") @db.VarChar(20)
+  messageType           String    @default("TEXT") @map("message_type") @db.VarChar(30)
+  body                  String
+  productId             String?   @map("product_id") @db.Uuid
+  serviceListingId      String?   @map("service_listing_id") @db.Uuid
+  mediaAssetId          String?   @map("media_asset_id") @db.Uuid
+  voiceDurationSec      Int?      @map("voice_duration_sec")
+  offerTitle            String?   @map("offer_title") @db.VarChar(200)
+  offerQuantity         Int?      @map("offer_quantity")
+  offerUnitPricePaisa   BigInt?   @map("offer_unit_price_paisa")
+  offerDeliveryFeePaisa BigInt?   @map("offer_delivery_fee_paisa")
+  offerFulfilmentMode   String?   @map("offer_fulfilment_mode") @db.VarChar(30)
+  offerStatus           String?   @map("offer_status") @db.VarChar(20)
+  offerOrderId          String?   @map("offer_order_id") @db.Uuid
+  offerExpiresAt        DateTime? @map("offer_expires_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User            @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Restrict)
+  product        Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  serviceListing ServiceListing? @relation(fields: [serviceListingId], references: [id], onDelete: SetNull)
+  mediaAsset     MediaAsset?     @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  offerOrder     Order?          @relation("AcceptedOfferOrder", fields: [offerOrderId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt], map: "idx_chat_messages_conv_created")
+  @@map("chat_messages")
+}
+
+model SubscriptionPlan {
+  id                   String   @id @default(uuid()) @db.Uuid
+  code                 String   @unique @db.VarChar(40)
+  nameEn               String   @map("name_en") @db.VarChar(80)
+  nameUr               String   @map("name_ur") @db.VarChar(80)
+  descriptionEn        String   @map("description_en")
+  descriptionUr        String   @map("description_ur")
+  pricePaisa           BigInt   @map("price_paisa")
+  currency             String   @default("PKR") @db.Char(3)
+  durationDays         Int      @default(30) @map("duration_days")
+  maxActiveProducts    Int      @map("max_active_products")
+  maxActiveServices    Int      @map("max_active_services")
+  hasVerifiedBadge     Boolean  @default(false) @map("has_verified_badge")
+  hasPriorityPlacement Boolean  @default(false) @map("has_priority_placement")
+  hasCustomOffers      Boolean  @default(true) @map("has_custom_offers")
+  isActive             Boolean  @default(true) @map("is_active")
+  sortOrder            Int      @default(0) @map("sort_order")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  storeSubscriptions StoreSubscription[]
+  renewalRequests    SubscriptionRenewalRequest[]
+
+  @@map("subscription_plans")
+}
+
+model StoreSubscription {
+  id                 String    @id @default(uuid()) @db.Uuid
+  storeId            String    @unique @map("store_id") @db.Uuid
+  planId             String    @map("plan_id") @db.Uuid
+  status             String    @default("ACTIVE") @db.VarChar(20)
+  currentPeriodStart DateTime  @default(now()) @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd   DateTime? @map("current_period_end") @db.Timestamptz(6)
+  graceEndsAt        DateTime? @map("grace_ends_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  store Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  plan  SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@map("store_subscriptions")
+}
+
+model SubscriptionRenewalRequest {
+  id                   String    @id @default(uuid()) @db.Uuid
+  storeId              String    @map("store_id") @db.Uuid
+  planId               String    @map("plan_id") @db.Uuid
+  submittedById        String    @map("submitted_by_id") @db.Uuid
+  amountPaisa          BigInt    @map("amount_paisa")
+  currency             String    @default("PKR") @db.Char(3)
+  paymentMethod        String    @map("payment_method") @db.VarChar(40)
+  transactionReference String    @map("transaction_reference") @db.VarChar(140)
+  payerAccountNote     String?   @map("payer_account_note") @db.VarChar(200)
+  status               String    @default("PENDING") @db.VarChar(20)
+  reviewedById         String?   @map("reviewed_by_id") @db.Uuid
+  reviewedAt           DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewNote           String?   @map("review_note")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  plan        SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  submittedBy User             @relation("RenewalSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  reviewedBy  User?            @relation("RenewalReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, status, createdAt(sort: Desc)], map: "idx_sub_renewals_store_status")
+  @@map("subscription_renewal_requests")
+}
+
+model PlatformFeatureFlag {
+  id            String   @id @default(uuid()) @db.Uuid
+  key           String   @unique @db.VarChar(80)
+  nameEn        String   @map("name_en") @db.VarChar(100)
+  nameUr        String   @map("name_ur") @db.VarChar(100)
+  descriptionEn String   @map("description_en")
+  descriptionUr String   @map("description_ur")
+  category      String   @db.VarChar(40)
+  isEnabled     Boolean  @default(false) @map("is_enabled")
+  sortOrder     Int      @default(0) @map("sort_order")
+  updatedById   String?  @map("updated_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation("FeatureFlagUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("feature_flags")
+}
+
+model BuyerRequest {
+  id             String   @id @default(uuid()) @db.Uuid
+  buyerId        String   @map("buyer_id") @db.Uuid
+  districtId     String   @map("district_id") @db.Uuid
+  areaZoneId     String?  @map("area_zone_id") @db.Uuid
+  categoryId     String?  @map("category_id") @db.Uuid
+  title          String   @db.VarChar(180)
+  description    String
+  budgetMaxPaisa BigInt   @map("budget_max_paisa")
+  status         String   @default("OPEN") @db.VarChar(20)
+  responsesCount Int      @default(0) @map("responses_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  buyer    User      @relation("BuyerRequests", fields: [buyerId], references: [id], onDelete: Cascade)
+  district District  @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  areaZone AreaZone? @relation(fields: [areaZoneId], references: [id], onDelete: SetNull)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([districtId, status, createdAt(sort: Desc)], map: "idx_buyer_requests_district_status")
+  @@map("buyer_requests")
+}
+
+model StorePromoDeal {
+  id            String   @id @default(uuid()) @db.Uuid
+  storeId       String   @map("store_id") @db.Uuid
+  code          String?  @db.VarChar(40)
+  title         String   @db.VarChar(140)
+  discountType  String   @map("discount_type") @db.VarChar(20)
+  discountValue BigInt   @map("discount_value")
+  minOrderPaisa BigInt   @default(0) @map("min_order_paisa")
+  isFlashDeal   Boolean  @default(false) @map("is_flash_deal")
+  startsAt      DateTime @default(now()) @map("starts_at") @db.Timestamptz(6)
+  endsAt        DateTime @map("ends_at") @db.Timestamptz(6)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, code], map: "uq_store_promo_code")
+  @@index([isActive, endsAt], map: "idx_store_promo_active_ends")
+  @@map("store_promo_deals")
 }

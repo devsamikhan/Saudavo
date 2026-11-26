@@ -303,6 +303,9 @@ export class SellerService {
           ...(dto.defaultDeliveryFeePaisa !== undefined
             ? { defaultDeliveryFeePaisa: BigInt(dto.defaultDeliveryFeePaisa) }
             : {}),
+          ...(dto.requireCleanCodHistory !== undefined
+            ? { requireCleanCodHistory: dto.requireCleanCodHistory }
+            : {}),
           showPublicPhone: nextShowPhone,
           publicContactPhone: nextShowPhone
             ? dto.publicContactPhone !== undefined

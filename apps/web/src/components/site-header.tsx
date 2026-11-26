@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  fetchMessengerUnreadCount,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead
@@ -86,6 +87,38 @@ function formatNotificationText(
             : "Listing review returned feedback",
         href: "/seller"
       };
+    case "CHAT_MESSAGE_RECEIVED":
+      return {
+        label:
+          locale === "ur"
+            ? "سوداو میسنجر میں نیا پیغام آیا ہے"
+            : "New message in Saudavo Messenger",
+        href: "/messages"
+      };
+    case "CHAT_OFFER_RECEIVED":
+      return {
+        label:
+          locale === "ur"
+            ? "سیلر نے چیٹ میں کسٹم آفر بھیجی ہے"
+            : "Seller sent a Custom Offer in chat",
+        href: "/messages"
+      };
+    case "SUBSCRIPTION_ACTIVATED":
+      return {
+        label:
+          locale === "ur"
+            ? "آپ کا ماہانہ سیلر پلان فعال ہو گیا!"
+            : "Your monthly seller plan is now active!",
+        href: "/seller"
+      };
+    case "SUBSCRIPTION_RENEWAL_REJECTED":
+      return {
+        label:
+          locale === "ur"
+            ? "سبسکرپشن درخواست مسترد ہوئی — تفصیل دیکھیں"
+            : "Subscription renewal needs attention",
+        href: "/seller"
+      };
     default:
       return {
         label: item.eventType.replace(/_/g, " "),
@@ -97,13 +130,22 @@ function formatNotificationText(
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { locale, setLocale, t, user, cartItemCount, wishlistIds, signOut } =
-    useAppContext();
+  const {
+    locale,
+    setLocale,
+    t,
+    user,
+    features,
+    cartItemCount,
+    wishlistIds,
+    signOut
+  } = useAppContext();
 
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const notifContainerRef = useRef<HTMLDivElement>(null);
 
   const toggleLocale = () => {
@@ -119,13 +161,20 @@ export function SiteHeader() {
     if (!user) {
       setNotifications([]);
       setUnreadCount(0);
+      setChatUnreadCount(0);
       return;
     }
 
-    const notifRes = await fetchNotifications().catch(() => null);
+    const [notifRes, chatRes] = await Promise.all([
+      fetchNotifications().catch(() => null),
+      fetchMessengerUnreadCount().catch(() => null)
+    ]);
     if (notifRes) {
       setNotifications(notifRes.data);
       setUnreadCount(notifRes.meta.unreadCount);
+    }
+    if (chatRes) {
+      setChatUnreadCount(chatRes.data.unreadCount);
     }
   }, [user]);
 
@@ -182,15 +231,15 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border-subtle bg-surface-card/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2.5">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3 lg:px-8">
+        <div className="flex min-w-0 items-center gap-2">
           <Link
             href="/"
-            className="flex items-center gap-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            className="flex items-center gap-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary"
           >
-            <SaudavoMark width={36} height={36} />
+            <SaudavoMark width={34} height={34} />
             <span className="flex flex-col leading-none">
-              <span className="text-lg font-extrabold tracking-tight text-brand-primary">
+              <span className="text-base font-extrabold tracking-tight text-brand-primary sm:text-lg">
                 {t.brandName}
               </span>
               <span className="hidden text-[10px] font-bold uppercase tracking-wider text-brand-accent sm:inline">
@@ -212,6 +261,29 @@ export function SiteHeader() {
           >
             {t.navStorefront}
           </Link>
+          {features.buyer_requests_board_enabled && (
+            <Link
+              href="/demands"
+              aria-current={pathname === "/demands" ? "page" : undefined}
+              className={navTabClass("/demands")}
+            >
+              {locale === "ur" ? "مجھے چاہیے" : "Demands"}
+            </Link>
+          )}
+          {features.shopping_messenger_enabled && (
+            <Link
+              href="/messages"
+              aria-current={pathname === "/messages" ? "page" : undefined}
+              className={`${navTabClass("/messages")} inline-flex items-center gap-1.5`}
+            >
+              <span>{locale === "ur" ? "میسنجر" : "Messenger"}</span>
+              {chatUnreadCount > 0 && (
+                <span className="rounded-full bg-brand-accent px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {chatUnreadCount}
+                </span>
+              )}
+            </Link>
+          )}
           <Link
             href="/orders"
             aria-current={pathname === "/orders" ? "page" : undefined}
@@ -237,12 +309,12 @@ export function SiteHeader() {
           )}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {/* Quick Saved Wishlist Link */}
           <Link
             href="/?saved=1#catalog"
             aria-label={t.savedItemsFilter}
-            className="relative inline-flex rounded-xl bg-brand-primary-soft/75 p-2 text-brand-primary transition hover:bg-brand-primary-soft"
+            className="relative inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl bg-brand-primary-soft/75 p-2 text-brand-primary transition hover:bg-brand-primary-soft"
           >
             <svg
               className="h-4 w-4"
@@ -265,7 +337,7 @@ export function SiteHeader() {
           <Link
             href="/cart"
             aria-label={t.navCart}
-            className="relative rounded-xl bg-brand-primary-soft/75 p-2 text-brand-primary transition hover:bg-brand-primary-soft"
+            className="relative inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl bg-brand-primary-soft/75 p-2 text-brand-primary transition hover:bg-brand-primary-soft"
           >
             <svg
               className="h-4 w-4"
@@ -289,21 +361,24 @@ export function SiteHeader() {
           <button
             type="button"
             onClick={toggleLocale}
-            className="rounded-xl border border-border-subtle bg-surface-muted px-2.5 py-1.5 text-xs font-semibold text-ink-primary transition hover:border-brand-primary"
+            className="min-h-[38px] rounded-xl border border-border-subtle bg-surface-muted px-2 py-1.5 text-[11px] font-semibold text-ink-primary transition hover:border-brand-primary sm:px-2.5 sm:text-xs"
             aria-label="Switch language between English and Urdu"
           >
-            {locale === "en" ? "اردو | EN" : "EN | اردو"}
+            <span className="sm:hidden">{locale === "en" ? "اردو" : "EN"}</span>
+            <span className="hidden sm:inline">
+              {locale === "en" ? "اردو | EN" : "EN | اردو"}
+            </span>
           </button>
 
           {user ? (
-            <div ref={notifContainerRef} className="relative flex items-center gap-2">
+            <div ref={notifContainerRef} className="relative flex items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={() => setNotifOpen((prev) => !prev)}
                 aria-label={t.notificationsTitle}
                 aria-expanded={notifOpen}
                 aria-haspopup="true"
-                className="relative rounded-xl border border-border-subtle bg-surface-card p-2 text-ink-primary transition hover:border-brand-primary"
+                className="relative inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-border-subtle bg-surface-card p-2 text-ink-primary transition hover:border-brand-primary"
               >
                 <svg
                   className="h-4 w-4"
@@ -324,7 +399,7 @@ export function SiteHeader() {
               </button>
 
               {notifOpen && (
-                <div className="absolute end-0 top-11 z-40 w-80 rounded-2xl border border-border-subtle bg-surface-card p-3 shadow-soft">
+                <div className="fixed inset-x-3 top-16 z-40 rounded-2xl border border-border-subtle bg-surface-card p-3 shadow-soft sm:absolute sm:inset-x-auto sm:end-0 sm:top-11 sm:w-80">
                   <div className="flex items-center justify-between border-b border-border-subtle pb-2">
                     <span className="text-xs font-bold text-ink-primary">
                       {t.notificationsTitle} ({unreadCount})
@@ -370,16 +445,18 @@ export function SiteHeader() {
                 </div>
               )}
 
-              <span
+              <Link
+                href="/account"
                 dir="auto"
-                className="hidden rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-semibold text-brand-primary lg:inline-block"
+                title={locale === "ur" ? "میرا اکاؤنٹ اور پتے" : "My Account & Addresses"}
+                className="hidden rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-semibold text-brand-primary transition hover:bg-brand-primary hover:text-white lg:inline-block"
               >
                 {user.displayName}
-              </span>
+              </Link>
               <button
                 type="button"
                 onClick={() => void signOut()}
-                className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold text-ink-primary transition hover:bg-surface-muted"
+                className="hidden rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold text-ink-primary transition hover:bg-surface-muted md:inline-block"
               >
                 {t.navSignOut}
               </button>
@@ -387,7 +464,7 @@ export function SiteHeader() {
           ) : (
             <Link
               href="/auth"
-              className="rounded-xl bg-brand-accent px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-brand-accent-hover"
+              className="inline-flex min-h-[38px] items-center rounded-xl bg-brand-accent px-2.5 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-brand-accent-hover sm:px-4 sm:text-xs"
             >
               {t.navSignIn}
             </Link>
@@ -398,7 +475,7 @@ export function SiteHeader() {
             onClick={() => setMobileMenuOpen((prev) => !prev)}
             aria-label="Toggle mobile menu"
             aria-expanded={mobileMenuOpen}
-            className="rounded-xl bg-brand-primary-soft/75 p-2 text-brand-primary md:hidden"
+            className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl bg-brand-primary-soft/75 p-2 text-brand-primary md:hidden"
           >
             <svg
               className="h-5 w-5"
@@ -418,47 +495,86 @@ export function SiteHeader() {
 
       {/* Responsive Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="grid grid-cols-2 gap-2 border-t border-border-subtle bg-surface-card px-4 py-3 text-xs font-bold md:hidden">
-          <Link
-            href="/"
-            aria-current={pathname === "/" ? "page" : undefined}
-            className={navTabClass("/")}
-          >
-            {t.navStorefront}
-          </Link>
-          <Link
-            href="/cart"
-            aria-current={pathname === "/cart" ? "page" : undefined}
-            className={navTabClass("/cart")}
-          >
-            {t.navCart} {cartItemCount > 0 ? `(${cartItemCount})` : ""}
-          </Link>
-          <Link
-            href="/orders"
-            aria-current={pathname === "/orders" ? "page" : undefined}
-            className={navTabClass("/orders")}
-          >
-            {t.navOrders}
-          </Link>
-          <Link
-            href="/seller"
-            aria-current={pathname === "/seller" ? "page" : undefined}
-            className={navTabClass("/seller")}
-          >
-            {t.navSeller}
-          </Link>
-          <Link href="/?saved=1#catalog" className={navTabClass("/saved")}>
-            {t.savedItemsFilter} ({wishlistIds.length})
-          </Link>
-          {isStaff && (
-            <Link
-              href="/admin"
-              aria-current={pathname === "/admin" ? "page" : undefined}
-              className={navTabClass("/admin")}
-            >
-              {t.navAdmin}
-            </Link>
+        <div className="space-y-3 border-t border-border-subtle bg-surface-card px-4 py-3 text-xs font-bold md:hidden">
+          {user && (
+            <div className="flex items-center justify-between rounded-xl bg-brand-primary-soft/50 px-3 py-2">
+              <span dir="auto" className="truncate font-semibold text-brand-primary">
+                {user.displayName}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  void signOut();
+                }}
+                className="rounded-lg border border-border-subtle bg-surface-card px-2.5 py-1 text-[11px] font-semibold text-ink-primary"
+              >
+                {t.navSignOut}
+              </button>
+            </div>
           )}
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              href="/"
+              aria-current={pathname === "/" ? "page" : undefined}
+              className={`${navTabClass("/")} flex min-h-[40px] items-center justify-center`}
+            >
+              {t.navStorefront}
+            </Link>
+            <Link
+              href="/cart"
+              aria-current={pathname === "/cart" ? "page" : undefined}
+              className={`${navTabClass("/cart")} flex min-h-[40px] items-center justify-center`}
+            >
+              {t.navCart} {cartItemCount > 0 ? `(${cartItemCount})` : ""}
+            </Link>
+            <Link
+              href="/orders"
+              aria-current={pathname === "/orders" ? "page" : undefined}
+              className={`${navTabClass("/orders")} flex min-h-[40px] items-center justify-center`}
+            >
+              {t.navOrders}
+            </Link>
+            <Link
+              href="/seller"
+              aria-current={pathname === "/seller" ? "page" : undefined}
+              className={`${navTabClass("/seller")} flex min-h-[40px] items-center justify-center`}
+            >
+              {t.navSeller}
+            </Link>
+            <Link
+              href="/messages"
+              aria-current={pathname === "/messages" ? "page" : undefined}
+              className={`${navTabClass("/messages")} flex min-h-[40px] items-center justify-center gap-1`}
+            >
+              <span>{locale === "ur" ? "میسنجر" : "Messenger"}</span>
+              {chatUnreadCount > 0 ? ` (${chatUnreadCount})` : ""}
+            </Link>
+            <Link
+              href="/?saved=1#catalog"
+              className={`${navTabClass("/saved")} flex min-h-[40px] items-center justify-center`}
+            >
+              {t.savedItemsFilter} ({wishlistIds.length})
+            </Link>
+            {user && (
+              <Link
+                href="/account"
+                aria-current={pathname === "/account" ? "page" : undefined}
+                className={`${navTabClass("/account")} flex min-h-[40px] items-center justify-center`}
+              >
+                {locale === "ur" ? "میرا اکاؤنٹ" : "Account"}
+              </Link>
+            )}
+            {isStaff && (
+              <Link
+                href="/admin"
+                aria-current={pathname === "/admin" ? "page" : undefined}
+                className={`${navTabClass("/admin")} flex min-h-[40px] items-center justify-center`}
+              >
+                {t.navAdmin}
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </header>
