@@ -16,7 +16,7 @@ import { S3PresignerService } from "./s3-presigner.service";
 
 const UPLOAD_URL_TTL_SECONDS = 300;
 const READ_URL_TTL_SECONDS = 600;
-const MAX_VOICE_NOTE_BYTES = 2 * 1024 * 1024;
+const MAX_VOICE_NOTE_BYTES = 1024 * 1024;
 
 @Injectable()
 export class MediaService {
@@ -50,7 +50,7 @@ export class MediaService {
         throw new DomainException(
           "VALIDATION_ERROR",
           HttpStatus.BAD_REQUEST,
-          "Voice note must be 2 MB or smaller."
+          "Voice note must be 1 MB or smaller."
         );
       }
     } else if (isAudio) {

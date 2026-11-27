@@ -12,8 +12,13 @@ const ALLOWED_MIME_TYPES = new Set<MediaMimeType>([
   "image/webp"
 ]);
 
+const MAX_CHAT_IMAGE_DIMENSION_PX = 1080;
+const MAX_STORE_IMAGE_DIMENSION_PX = 1400;
+const WEBP_QUALITY = 0.78;
+const MAX_VOICE_NOTE_BYTES = 1024 * 1024;
+
 /**
- * Formats the leading bytes of an image buffer into lowercase hex for API magic-byte checks.
+ * Formats the leading bytes of a media buffer into lowercase hex for API magic-byte checks.
  */
 export function bytesToMagicHex(bytes: Uint8Array, maxBytes = 8): string {
   return Array.from(bytes.slice(0, maxBytes))
@@ -22,62 +27,89 @@ export function bytesToMagicHex(bytes: Uint8Array, maxBytes = 8): string {
 }
 
 /**
- * Re-encodes an uploaded image via an offscreen canvas in the browser to drop client EXIF metadata
- * before presigned S3 upload (server-side EXIF stripping also runs in production).
+ * Downscales large camera photos and re-encodes to compact WebP via an offscreen canvas,
+ * automatically stripping EXIF metadata and cutting storage usage by ~80-90%.
  */
 export async function stripClientExifViaCanvas(
   file: File,
-  mimeType: MediaMimeType
-): Promise<Blob> {
+  mimeType: MediaMimeType,
+  maxDimensionPx: number = MAX_STORE_IMAGE_DIMENSION_PX
+): Promise<{ blob: Blob; mimeType: MediaMimeType }> {
   if (typeof document === "undefined" || typeof createImageBitmap !== "function") {
-    return file;
+    return { blob: file, mimeType };
   }
 
   const bitmap = await createImageBitmap(file);
   try {
+    const largestSide = Math.max(bitmap.width, bitmap.height, 1);
+    const scale = largestSide > maxDimensionPx ? maxDimensionPx / largestSide : 1;
+    const targetWidth = Math.max(1, Math.round(bitmap.width * scale));
+    const targetHeight = Math.max(1, Math.round(bitmap.height * scale));
+
     const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      return file;
+      return { blob: file, mimeType };
     }
-    ctx.drawImage(bitmap, 0, 0);
+    ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
 
-    const encoded = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, mimeType, 0.9);
+    const webpBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", WEBP_QUALITY);
     });
-    return encoded ?? file;
+    if (webpBlob && webpBlob.size > 0 && (webpBlob.size < file.size || scale < 1)) {
+      return { blob: webpBlob, mimeType: "image/webp" };
+    }
+
+    const fallbackBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, mimeType, 0.8);
+    });
+    if (fallbackBlob && fallbackBlob.size > 0) {
+      return { blob: fallbackBlob, mimeType };
+    }
+    return { blob: file, mimeType };
   } finally {
     bitmap.close();
   }
 }
 
 /**
- * Runs the 3-step Saudavo private S3 upload flow: presign -> PUT to S3 -> confirm & EXIF verify.
+ * Runs the 3-step Saudavo private media upload flow: resize/compress -> presign -> PUT -> confirm.
  */
 export async function uploadImageAssetToS3(
   file: File,
   purpose: MediaPurpose
 ): Promise<MediaAssetDto> {
-  const mimeType = file.type as MediaMimeType;
-  if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+  const originalMime = file.type as MediaMimeType;
+  if (!ALLOWED_MIME_TYPES.has(originalMime)) {
     throw new Error("Only JPEG, PNG, or WebP images are supported.");
   }
   if (file.size <= 0 || file.size > MAX_MEDIA_UPLOAD_BYTES) {
     throw new Error("Image must be between 1 byte and 5 MB.");
   }
 
-  const sanitizedBlob = await stripClientExifViaCanvas(file, mimeType);
+  const maxDim =
+    purpose === "CHAT_ATTACHMENT"
+      ? MAX_CHAT_IMAGE_DIMENSION_PX
+      : MAX_STORE_IMAGE_DIMENSION_PX;
+  const { blob: sanitizedBlob, mimeType } = await stripClientExifViaCanvas(
+    file,
+    originalMime,
+    maxDim
+  );
   if (sanitizedBlob.size <= 0 || sanitizedBlob.size > MAX_MEDIA_UPLOAD_BYTES) {
     throw new Error("Processed image exceeds the 5 MB upload limit.");
   }
+
+  const ext = mimeType === "image/webp" ? "webp" : mimeType === "image/png" ? "png" : "jpg";
+  const baseName = file.name.replace(/\.[^.]+$/, "").slice(0, 100) || "photo";
 
   const presignRes = await requestMediaUploadUrl({
     purpose,
     mimeType,
     sizeBytes: sanitizedBlob.size,
-    fileName: file.name.slice(0, 120)
+    fileName: `${baseName}.${ext}`
   });
 
   const putRes = await fetch(presignRes.data.uploadUrl, {
@@ -87,7 +119,7 @@ export async function uploadImageAssetToS3(
   });
   if (!putRes.ok) {
     throw new Error(
-      `Object storage upload failed (${String(putRes.status)}). Verify S3/R2 bucket CORS configuration.`
+      `Media upload failed (${String(putRes.status)}). Verify storage configuration.`
     );
   }
 
@@ -108,7 +140,7 @@ const ALLOWED_AUDIO_MIMES = new Set<string>([
 ]);
 
 /**
- * Uploads a recorded audio voice note Blob to private S3/R2 storage for Saudavo Messenger.
+ * Uploads a compact recorded audio voice note Blob (<= 1 MB, ~24 kbps) for Saudavo Messenger.
  */
 export async function uploadVoiceNoteToS3(
   blob: Blob
@@ -118,8 +150,8 @@ export async function uploadVoiceNoteToS3(
     ALLOWED_AUDIO_MIMES.has(baseMime) ? baseMime : "audio/webm"
   ) as MediaMimeType;
 
-  if (blob.size <= 0 || blob.size > 2 * 1024 * 1024) {
-    throw new Error("Voice note must be 2 MB or smaller.");
+  if (blob.size <= 0 || blob.size > MAX_VOICE_NOTE_BYTES) {
+    throw new Error("Voice note must be 1 MB or smaller (up to ~45 seconds).");
   }
 
   const presignRes = await requestMediaUploadUrl({
@@ -136,7 +168,7 @@ export async function uploadVoiceNoteToS3(
   });
   if (!putRes.ok) {
     throw new Error(
-      `Voice upload failed (${String(putRes.status)}). Verify object storage configuration.`
+      `Voice upload failed (${String(putRes.status)}). Verify storage configuration.`
     );
   }
 

@@ -23,17 +23,20 @@ Ensure all required variables from `.env.example` are injected via the hosting p
 - `DATABASE_URL` (TLS-enabled PostgreSQL connection string with least-privilege DB role)
 - `MFA_ENCRYPTION_KEY` & `OUTBOX_ENCRYPTION_KEY` (independent 32+ byte random keys)
 - `SESSION_SECRET` & `CSRF_SECRET` (independent 32+ byte random keys)
-- `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`
+- **Media Storage (`STORAGE_DRIVER`):**
+  - Recommended free cloud scale: `STORAGE_DRIVER=s3` with **Cloudflare R2** (`S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`) — 10 GB free storage + zero egress fees while Supabase PostgreSQL stores metadata keys only.
+  - Persistent VPS / Self-hosted local disk mode: `STORAGE_DRIVER=local`, `LOCAL_MEDIA_DIR=./storage/media`, `API_PUBLIC_URL=https://<api-domain>` — saves binary media locally via HMAC-signed `/api/v1/media/local-object` URLs without touching Supabase storage limits.
 - `SENTRY_DSN` (PII-scrubbed error reporting via `ErrorReporterService`)
 - `RESEND_API_KEY` & `MAIL_FROM` (optional transactional password-reset email delivery; falls back cleanly to encrypted `OutboxEvent` queueing when unset)
 
 ---
 
 ## 3. Private S3 Bucket & Media Security Setup
-1. **Block Public Access:** Enable **Block All Public Access** at bucket level; media is accessed exclusively via short-lived (`600s`) AWS SigV4 presigned `GET` URLs issued after ownership checks.
-2. **Server-Side Verification & EXIF Stripping:** `MediaService.confirmUpload` (`apps/api/src/modules/media/media.service.ts`) enforces server-side object download, binary magic-byte validation (`JPEG`/`PNG`/`WebP`), and automatic binary EXIF/XMP/comment stripping via `S3PresignerService.verifyAndSanitizeUploadedObject` whenever `NODE_ENV=production` or `S3_ENDPOINT` is configured.
+1. **Block Public Access:** Enable **Block All Public Access** at bucket level; media is accessed exclusively via short-lived (`600s`) AWS SigV4 presigned `GET` URLs issued after ownership checks (or HMAC-SHA256 signed local-disk URLs in `STORAGE_DRIVER=local` mode).
+2. **Client Compression & Server Verification:** Browser client automatically resizes uploads (`<=1080px` chat, `<=1400px` products), converts photos to `WebP` (`0.78`), and caps Messenger voice notes (`24 kbps`, max `45s` / `1 MB`). `MediaService.confirmUpload` (`apps/api/src/modules/media/media.service.ts`) enforces server-side binary magic-byte validation (`JPEG`/`PNG`/`WebP`/`audio/*`) and EXIF stripping.
 3. **CORS Policy (Bucket PUT only):** Allow `PUT` from `WEB_ORIGIN` only with `Content-Type` header; disallow anonymous `GET`/`LIST`/`DELETE`.
-4. **IAM Least Privilege:** Grant the API IAM user/key `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` scoped strictly to `arn:aws:s3:::<bucket>/stores/*`.
+4. **IAM Least Privilege:** Grant the API IAM user/key `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` scoped to `arn:aws:s3:::<bucket>/stores/*`, `arn:aws:s3:::<bucket>/chat/*`, and `arn:aws:s3:::<bucket>/voice/*`.
+5. **Automated 30-Day Retention & DB Pruning (`MediaRetentionService`):** Runs every 12 hours (or via `POST /api/v1/media/maintenance/retention-sweep`) to remove 30+ day old `chat/*` and `voice/*` files (keeping `stores/*` product media intact), abandoned `PENDING_UPLOAD` rows (>24h), expired sessions (>7d), processed outbox rows (>14d), and old read notifications (>60d).
 
 ---
 

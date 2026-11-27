@@ -1183,6 +1183,24 @@ export class InMemoryPrismaService {
         count += 1;
       }
       return { count };
+    },
+
+    deleteMany: async (args: {
+      where: { OR?: Array<{ expiresAt?: { lt: Date }; revokedAt?: { lt: Date } }> };
+    }) => {
+      const before = this.userSessions.length;
+      const keep = this.userSessions.filter((s) => {
+        if (!args.where.OR) return false;
+        const matchesOr = args.where.OR.some(
+          (c) =>
+            (c.expiresAt?.lt && s.expiresAt < c.expiresAt.lt) ||
+            (c.revokedAt?.lt && s.revokedAt !== null && s.revokedAt < c.revokedAt.lt)
+        );
+        return !matchesOr;
+      });
+      this.userSessions.length = 0;
+      this.userSessions.push(...keep);
+      return { count: before - keep.length };
     }
   };
 
@@ -1272,6 +1290,23 @@ export class InMemoryPrismaService {
       };
       this.outboxEvents.push(created);
       return created;
+    },
+
+    deleteMany: async (args: {
+      where: { status?: string; processedAt?: { lt: Date } };
+    }) => {
+      const before = this.outboxEvents.length;
+      const keep = this.outboxEvents.filter((evt) => {
+        const matchStatus =
+          args.where.status === undefined || evt.status === args.where.status;
+        const matchProcessed =
+          args.where.processedAt?.lt === undefined ||
+          (evt.processedAt !== null && evt.processedAt < args.where.processedAt.lt);
+        return !(matchStatus && matchProcessed);
+      });
+      this.outboxEvents.length = 0;
+      this.outboxEvents.push(...keep);
+      return { count: before - keep.length };
     }
   };
 
@@ -1351,6 +1386,21 @@ export class InMemoryPrismaService {
         count += 1;
       }
       return { count };
+    },
+
+    deleteMany: async (args: {
+      where: { readAt?: { not?: null; lt?: Date } };
+    }) => {
+      const before = this.notifications.length;
+      const keep = this.notifications.filter((n) => {
+        if (!args.where.readAt) return false;
+        const hasReadAt = args.where.readAt.not === null ? n.readAt !== null : true;
+        const isOld = args.where.readAt.lt ? n.readAt !== null && n.readAt < args.where.readAt.lt : true;
+        return !(hasReadAt && isOld);
+      });
+      this.notifications.length = 0;
+      this.notifications.push(...keep);
+      return { count: before - keep.length };
     }
   };
 
@@ -3209,19 +3259,42 @@ export class InMemoryPrismaService {
     findMany: async (args: {
       where: {
         id?: { in: string[] };
-        storeId?: string;
+        storeId?: string | null;
         status?: string;
         exifStripped?: boolean;
+        createdAt?: { lt: Date };
+        OR?: Array<{ objectKey?: { startsWith: string } }>;
       };
+      take?: number;
     }): Promise<FakeMediaAssetRecord[]> => {
-      return this.mediaAssets.filter(
-        (m) =>
-          (args.where.id?.in === undefined || args.where.id.in.includes(m.id)) &&
-          (args.where.storeId === undefined || m.storeId === args.where.storeId) &&
-          (args.where.status === undefined || m.status === args.where.status) &&
-          (args.where.exifStripped === undefined ||
-            m.exifStripped === args.where.exifStripped)
-      );
+      const filtered = this.mediaAssets.filter((m) => {
+        if (args.where.id?.in !== undefined && !args.where.id.in.includes(m.id)) {
+          return false;
+        }
+        if (args.where.storeId !== undefined && m.storeId !== args.where.storeId) {
+          return false;
+        }
+        if (args.where.status !== undefined && m.status !== args.where.status) {
+          return false;
+        }
+        if (
+          args.where.exifStripped !== undefined &&
+          m.exifStripped !== args.where.exifStripped
+        ) {
+          return false;
+        }
+        if (args.where.createdAt?.lt && !(m.createdAt < args.where.createdAt.lt)) {
+          return false;
+        }
+        if (args.where.OR) {
+          const matchesPrefix = args.where.OR.some(
+            (c) => c.objectKey?.startsWith && m.objectKey.startsWith(c.objectKey.startsWith)
+          );
+          if (!matchesPrefix) return false;
+        }
+        return true;
+      });
+      return args.take ? filtered.slice(0, args.take) : filtered;
     },
 
     update: async (args: {
@@ -3234,6 +3307,16 @@ export class InMemoryPrismaService {
       }
       Object.assign(target, args.data);
       return target;
+    },
+
+    deleteMany: async (args: { where: { id?: string } }) => {
+      const before = this.mediaAssets.length;
+      const keep = this.mediaAssets.filter(
+        (m) => args.where.id !== undefined && m.id !== args.where.id
+      );
+      this.mediaAssets.length = 0;
+      this.mediaAssets.push(...keep);
+      return { count: before - keep.length };
     }
   };
 
@@ -3774,12 +3857,15 @@ export class InMemoryPrismaService {
     },
 
     updateMany: async (args: {
-      where: { id: string; offerStatus?: string };
+      where: { id?: string; offerStatus?: string; mediaAssetId?: string };
       data: Partial<FakeChatMessageRecord>;
     }) => {
       let count = 0;
       for (const m of this.chatMessages) {
-        if (m.id !== args.where.id) continue;
+        if (args.where.id !== undefined && m.id !== args.where.id) continue;
+        if (args.where.mediaAssetId !== undefined && m.mediaAssetId !== args.where.mediaAssetId) {
+          continue;
+        }
         if (args.where.offerStatus !== undefined && m.offerStatus !== args.where.offerStatus) {
           continue;
         }

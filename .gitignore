@@ -9,6 +9,8 @@ build/
 out/
 next-env.d.ts
 *.tsbuildinfo
+storage/
+apps/api/storage/
 
 # Environment & Secrets
 .env

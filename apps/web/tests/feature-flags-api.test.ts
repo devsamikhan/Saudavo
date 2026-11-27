@@ -6,6 +6,7 @@ import {
   fetchPublicFeatureFlags,
   updateAdminFeatureFlag
 } from "../src/lib/api-client";
+import { uploadVoiceNoteToS3 } from "../src/lib/media-upload";
 
 describe("feature flags & differentiators api helpers", () => {
   afterEach(() => {
@@ -134,5 +135,14 @@ describe("feature flags & differentiators api helpers", () => {
     });
     expect(deal.data.code).toBe("WINTER10");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects voice notes over 1 MB to preserve free-tier storage quotas", async () => {
+    const oversized = new Blob([new Uint8Array(1024 * 1024 + 64)], {
+      type: "audio/webm"
+    });
+    await expect(uploadVoiceNoteToS3(oversized)).rejects.toThrow(
+      /1 MB or smaller/
+    );
   });
 });

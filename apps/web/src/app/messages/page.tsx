@@ -275,19 +275,37 @@ export default function MessagesPage() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, { audioBitsPerSecond: 24_000 });
+      } catch {
+        recorder = new MediaRecorder(stream);
+      }
       audioChunksRef.current = [];
       recordStartedAtRef.current = Date.now();
+      const autoStopTimer =
+        typeof window !== "undefined"
+          ? window.setTimeout(() => {
+              if (recorder.state === "recording") {
+                recorder.stop();
+                setRecordingVoice(false);
+              }
+            }, 45_000)
+          : null;
+
       recorder.ondataavailable = (ev) => {
         if (ev.data.size > 0) {
           audioChunksRef.current.push(ev.data);
         }
       };
       recorder.onstop = () => {
+        if (autoStopTimer !== null && typeof window !== "undefined") {
+          window.clearTimeout(autoStopTimer);
+        }
         stream.getTracks().forEach((track) => track.stop());
         const durationSec = Math.max(
           1,
-          Math.min(120, Math.round((Date.now() - recordStartedAtRef.current) / 1000))
+          Math.min(45, Math.round((Date.now() - recordStartedAtRef.current) / 1000))
         );
         const blob = new Blob(audioChunksRef.current, {
           type: recorder.mimeType || "audio/webm"
