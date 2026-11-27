@@ -136,3 +136,18 @@ Remaining items before full public transactions beyond Closed Beta:
 - **NestJS API (`apps/api` on Render / Railway / Persistent VPS):**
   1. Build: `pnpm --filter @saudavo/contracts build && pnpm --filter @saudavo/api build`, Start: `pnpm --filter @saudavo/api start`.
   2. Required Env: `NODE_ENV=production`, `TRUST_PROXY=1`, `WEB_ORIGIN=https://<your-vercel-domain>`, `DATABASE_URL=<supabase-url>`, independent 32+ char secrets (`SESSION_SECRET`, `CSRF_SECRET`, `MFA_ENCRYPTION_KEY`, `OUTBOX_ENCRYPTION_KEY`), plus `STORAGE_DRIVER=local` (persistent disk VPS) or `STORAGE_DRIVER=s3` (Cloudflare R2 / MinIO when activated).
+
+---
+
+## 9. Vercel Production API (`saudavo-api`), SEO & Mobile App Release Guide
+- **Vercel Serverless API (`apps/api`, project `saudavo-api`):**
+  1. Always use Supabase **Transaction Pooler** (`port 6543`, `?pgbouncer=true&connection_limit=1`) in `DATABASE_URL` on Vercel (`VERCEL=1`), reserving Session Pooler (`:5432`) strictly for local `prisma migrate` commands.
+  2. `PrismaService.onModuleInit` connects lazily on `VERCEL=1` to eliminate cold-start `EMAXCONNSESSION` bursts (`pool_size: 15` limit).
+  3. Private media uses `@vercel/blob` (`store_nyqEGSuOEbhjWByf` in `bom1`) via signed HMAC endpoints, with daily `03:00 UTC` cleanup via `/api/v1/health/cron` (`apps/api/vercel.json`).
+- **SEO & Custom Domain Checklist:**
+  1. Attach your custom domain (e.g., `saudavo.pk`) in Vercel Project Settings (`saudavo-web`) and update `NEXT_PUBLIC_SITE_URL` + `WEB_ORIGIN` on `saudavo-api`.
+  2. Verify `https://<domain>/robots.txt` and submit `https://<domain>/sitemap.xml` (which includes `/download`) to Google Search Console.
+- **Public Android APK Release (`/download`):**
+  1. `manifest.webmanifest` includes PNG `192x192` and `512x512` icons (`apps/web/public/icons/`) so Android Chrome supports 1-click PWA install (`beforeinstallprompt`) and Bubblewrap TWA APK wrapping.
+  2. Once the signed `saudavo.apk` is built (via `@bubblewrap/cli` or Capacitor against `https://saudavo-web.vercel.app/manifest.webmanifest`), upload it to a **public** GitHub Release and set `NEXT_PUBLIC_ANDROID_APK_URL` in `saudavo-web` Vercel env vars.
+

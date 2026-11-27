@@ -1,5 +1,6 @@
 import { HttpStatus } from "@nestjs/common";
 import { DomainException } from "../src/common/errors/domain.exception";
+import { PrismaService } from "../src/common/prisma/prisma.service";
 import { HealthController } from "../src/health/health.controller";
 import { HealthService } from "../src/health/health.service";
 import { S3PresignerService } from "../src/modules/media/s3-presigner.service";
@@ -75,5 +76,17 @@ describe("Vercel Blob driver & Maintenance Cron security", () => {
     await expect(controller.runMaintenanceCron(undefined)).rejects.toBeInstanceOf(
       DomainException
     );
+  });
+
+  it("skips eager blocking $connect in PrismaService when VERCEL=1", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.VERCEL = "1";
+    process.env.DATABASE_URL =
+      "postgresql://postgres:postgres@localhost:6543/postgres?pgbouncer=true&connection_limit=1";
+
+    const prisma = new PrismaService();
+    const connectSpy = jest.spyOn(prisma, "$connect").mockResolvedValue(undefined);
+    await prisma.onModuleInit();
+    expect(connectSpy).not.toHaveBeenCalled();
   });
 });

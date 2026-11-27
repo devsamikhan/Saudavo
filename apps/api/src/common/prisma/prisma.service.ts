@@ -14,7 +14,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   async onModuleInit(): Promise<void> {
-    if (process.env.NODE_ENV !== "test" && process.env.DATABASE_URL) {
+    if (
+      process.env.NODE_ENV !== "test" &&
+      process.env.VERCEL !== "1" &&
+      process.env.DATABASE_URL
+    ) {
       await this.connectWithRetry();
     }
   }
