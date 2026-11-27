@@ -4,8 +4,8 @@
   <color name="colorPrimaryDark">#094232</color>
   <color name="colorAccent">#D96B27</color>
   <color name="navigationColor">#FFFFFF</color>
-  <style name="Theme.Saudavo.Launcher" parent="android:Theme.Light.NoTitleBar">
-    <item name="android:windowBackground">@color/colorPrimary</item>
+  <style name="Theme.Saudavo.Launcher" parent="android:Theme.DeviceDefault.Light.NoActionBar">
+    <item name="android:windowBackground">#FFFFFF</item>
     <item name="android:statusBarColor">@color/colorPrimaryDark</item>
   </style>
 </resources>

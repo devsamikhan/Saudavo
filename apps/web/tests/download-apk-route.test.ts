@@ -25,7 +25,7 @@ describe("GET /api/download-apk", () => {
       "application/vnd.android.package-archive"
     );
     expect(res.headers.get("content-disposition")).toBe(
-      'attachment; filename="Saudavo-v1.0.0.apk"'
+      'attachment; filename="Saudavo-v1.0.1.apk"'
     );
     expect(res.headers.get("content-length")).toBe("4");
     const bytes = new Uint8Array(await res.arrayBuffer());

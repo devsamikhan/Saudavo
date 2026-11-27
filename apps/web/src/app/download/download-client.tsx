@@ -21,7 +21,7 @@ export function DownloadAppClient() {
   const apkDownloadUrl =
     process.env.NEXT_PUBLIC_DIRECT_APK_URL?.trim() || DIRECT_APK_ENDPOINT;
   const appVersion =
-    process.env.NEXT_PUBLIC_ANDROID_APK_VERSION?.trim() || "1.0.0";
+    process.env.NEXT_PUBLIC_ANDROID_APK_VERSION?.trim() || "1.0.1";
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
