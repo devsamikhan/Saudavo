@@ -33,6 +33,7 @@ import {
   SkipCsrf
 } from "../../common/auth/decorators";
 import { DomainException } from "../../common/errors/domain.exception";
+import { resolveCookieSameSite } from "../../common/http/security.config";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { RateLimit } from "../../common/rate-limit/rate-limit.guard";
 import { type AppRequest, getRequestId } from "../../common/request-context";
@@ -90,10 +91,11 @@ export class AuthController {
   ): Promise<{ data: { loggedOut: true }; meta: { requestId: string } }> {
     const authenticated = this.requireAuthContext(auth);
     const result = await this.authService.logout(authenticated, getRequestId(req));
+    const sameSite = resolveCookieSameSite();
     res.clearCookie(SESSION_COOKIE_NAME, {
       httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      sameSite,
+      secure: process.env.NODE_ENV === "production" || sameSite === "none",
       path: "/"
     });
     return result;
@@ -186,10 +188,11 @@ export class AuthController {
   }
 
   private setSessionCookie(res: Response, rawSessionToken: string): void {
+    const sameSite = resolveCookieSameSite();
     res.cookie(SESSION_COOKIE_NAME, rawSessionToken, {
       httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      sameSite,
+      secure: process.env.NODE_ENV === "production" || sameSite === "none",
       path: "/",
       maxAge: SESSION_COOKIE_MAX_AGE_MS
     });

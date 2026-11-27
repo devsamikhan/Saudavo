@@ -46,17 +46,38 @@ export function loadLocalEnvFiles(
 }
 
 /**
- * Resolves the permitted browser origin for CORS, failing closed in production.
+ * Resolves the permitted browser origin(s) for CORS, failing closed in production.
+ * Supports comma-separated origins (e.g. Vercel preview + custom domain).
  */
-export function resolveWebOrigin(env: NodeJS.ProcessEnv = process.env): string {
+export function resolveWebOrigin(
+  env: NodeJS.ProcessEnv = process.env
+): string | string[] {
   const configured = env.WEB_ORIGIN?.trim();
   if (configured) {
-    return configured;
+    if (configured.includes(",")) {
+      return configured
+        .split(",")
+        .map((item) => item.trim().replace(/\/+$/g, ""))
+        .filter(Boolean);
+    }
+    return configured.replace(/\/+$/g, "");
   }
   if (env.NODE_ENV === "production") {
     throw new Error("WEB_ORIGIN is required in production.");
   }
   return "http://localhost:3000";
+}
+
+/**
+ * Resolves session cookie SameSite policy ("lax" by default when using Vercel /api/v1 proxy;
+ * "none" if deploying cross-site without a same-origin rewrite).
+ */
+export function resolveCookieSameSite(
+  env: NodeJS.ProcessEnv = process.env
+): "lax" | "none" {
+  return env.SESSION_COOKIE_SAME_SITE?.trim().toLowerCase() === "none"
+    ? "none"
+    : "lax";
 }
 
 /**

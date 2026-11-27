@@ -122,3 +122,17 @@ Remaining items before full public transactions beyond Closed Beta:
 1. **`PQ-03` thresholds:** Grace period days & overdue listing-pause threshold (needed before enabling non-zero commissions).
 2. **`PQ-14` (`D-019`):** Final buyer-facing copy & evidence/dispute rules for `REMOTE` manual offline service payments.
 3. **`Gate F`:** Pakistani legal/tax/terms review (Terms of Service, Privacy Policy, Seller Terms).
+
+---
+
+## 8. Vercel Web + NestJS API Deployment Checklist
+- **Vercel (`apps/web`, configured via root `vercel.json`):**
+  1. Connect GitHub repository `devsamikhan/Saudavo` on Vercel (root directory `.` uses `vercel.json`; or `apps/web` uses `apps/web/package.json`).
+  2. Set Vercel Environment Variables:
+     - `NEXT_PUBLIC_API_BASE_URL=/api/v1` (enables first-party same-origin auth cookies via Next.js `rewrites()` on `apps/web/next.config.ts`)
+     - `API_PROXY_TARGET=https://<your-deployed-nestjs-api-domain>`
+     - `NEXT_PUBLIC_SITE_URL=https://<your-vercel-or-custom-domain>`
+  3. Notice `Permissions-Policy` in `apps/web/next.config.ts` permits `microphone=(self)` so Urdu Voice Notes work in Saudavo Messenger.
+- **NestJS API (`apps/api` on Render / Railway / Persistent VPS):**
+  1. Build: `pnpm --filter @saudavo/contracts build && pnpm --filter @saudavo/api build`, Start: `pnpm --filter @saudavo/api start`.
+  2. Required Env: `NODE_ENV=production`, `TRUST_PROXY=1`, `WEB_ORIGIN=https://<your-vercel-domain>`, `DATABASE_URL=<supabase-url>`, independent 32+ char secrets (`SESSION_SECRET`, `CSRF_SECRET`, `MFA_ENCRYPTION_KEY`, `OUTBOX_ENCRYPTION_KEY`), plus `STORAGE_DRIVER=local` (persistent disk VPS) or `STORAGE_DRIVER=s3` (Cloudflare R2 / MinIO when activated).

@@ -2,6 +2,18 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@saudavo/contracts"],
+  async rewrites() {
+    const proxyTarget = process.env.API_PROXY_TARGET?.trim().replace(/\/+$/g, "");
+    if (!proxyTarget) {
+      return [];
+    }
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${proxyTarget}/api/v1/:path*`
+      }
+    ];
+  },
   async headers() {
     return [
       {
@@ -12,7 +24,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()"
+            value: "camera=(), microphone=(self), geolocation=()"
           }
         ]
       }
