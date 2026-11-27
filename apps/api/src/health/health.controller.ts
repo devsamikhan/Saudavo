@@ -1,5 +1,5 @@
 import { Controller, Get, Headers, HttpStatus, Optional } from "@nestjs/common";
-import { HealthResponse } from "@saudavo/contracts";
+import type { HealthResponse } from "@saudavo/contracts";
 import { timingSafeEqual } from "node:crypto";
 import { Public } from "../common/auth/decorators";
 import { DomainException } from "../common/errors/domain.exception";
