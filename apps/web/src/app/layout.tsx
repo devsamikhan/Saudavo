@@ -26,16 +26,43 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(getPublicSiteUrl()),
   title: {
-    default: "Saudavo — Mianwali Local Marketplace",
+    default: "Saudavo — Mianwali Local Marketplace & Mobile App",
     template: "%s | Saudavo"
   },
   description:
-    "Shop trusted local sellers, crafts, and services in Mianwali District with Cash on Delivery.",
+    "Shop trusted local sellers, crafts, and services in Mianwali District with Cash on Delivery, or download the Saudavo Android App directly.",
+  keywords: [
+    "Saudavo",
+    "Saudavo app",
+    "Saudavo download",
+    "Saudavo APK",
+    "Mianwali local marketplace",
+    "Mianwali online shopping",
+    "Isakhel",
+    "Piplan",
+    "Cash on Delivery Pakistan"
+  ],
+  alternates: {
+    canonical: "/"
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1
+    }
+  },
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+    : undefined,
   manifest: "/manifest.webmanifest",
   openGraph: {
     type: "website",
     siteName: "Saudavo",
-    title: "Saudavo — Mianwali Local Marketplace",
+    title: "Saudavo — Mianwali Local Marketplace & Mobile App",
     description:
       "Trusted local shops, home-based makers, and services in Mianwali District with Cash on Delivery."
   }

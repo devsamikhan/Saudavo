@@ -10,8 +10,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const DEFAULT_GITHUB_RELEASE_URL =
-  "https://github.com/devsamikhan/Saudavo/releases/latest";
+const DIRECT_APK_ENDPOINT = "/api/download-apk";
 
 export function DownloadAppClient() {
   const { locale, showToast } = useAppContext();
@@ -20,7 +19,7 @@ export function DownloadAppClient() {
   const [installingPwa, setInstallingPwa] = useState(false);
 
   const apkDownloadUrl =
-    process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || DEFAULT_GITHUB_RELEASE_URL;
+    process.env.NEXT_PUBLIC_DIRECT_APK_URL?.trim() || DIRECT_APK_ENDPOINT;
   const appVersion =
     process.env.NEXT_PUBLIC_ANDROID_APK_VERSION?.trim() || "1.0.0";
 
@@ -99,8 +98,15 @@ export function DownloadAppClient() {
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap">
                 <a
                   href={apkDownloadUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  download={`Saudavo-v${appVersion}.apk`}
+                  onClick={() =>
+                    showToast(
+                      locale === "ur"
+                        ? `Saudavo-v${appVersion}.apk ڈاؤنلوڈ شروع ہو گئی ہے!`
+                        : `Downloading Saudavo-v${appVersion}.apk directly...`,
+                      "primary"
+                    )
+                  }
                   className="inline-flex min-h-[48px] items-center justify-center gap-2.5 rounded-2xl bg-brand-accent px-6 py-3 text-sm font-extrabold text-white shadow-lg transition hover:bg-brand-accent-hover"
                 >
                   <svg
@@ -117,8 +123,8 @@ export function DownloadAppClient() {
                   </svg>
                   <span>
                     {locale === "ur"
-                      ? "اینڈرائیڈ APK ڈاؤنلوڈ کریں (GitHub)"
-                      : "Download Android APK (GitHub)"}
+                      ? `اینڈرائیڈ APK ڈاؤنلوڈ کریں (v${appVersion})`
+                      : `Download Android APK (v${appVersion})`}
                   </span>
                 </a>
 

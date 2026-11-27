@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "pk.saudavo.app",
+      "sha256_cert_fingerprints": [
+        "70:6A:FF:B0:D4:95:4E:0B:3C:60:B0:93:84:9C:C0:8E:EA:E4:04:5B:28:B5:06:49:D0:28:C4:95:D7:D7:8C:11"
+      ]
+    }
+  }
+]

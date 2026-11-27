@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="colorPrimary">#0F6B52</color>
+  <color name="colorPrimaryDark">#094232</color>
+  <color name="colorAccent">#D96B27</color>
+  <color name="navigationColor">#FFFFFF</color>
+  <style name="Theme.Saudavo.Launcher" parent="android:Theme.Light.NoTitleBar">
+    <item name="android:windowBackground">@color/colorPrimary</item>
+    <item name="android:statusBarColor">@color/colorPrimaryDark</item>
+  </style>
+</resources>

@@ -1808,12 +1808,10 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
     await expect(
       page.getByRole("heading", { name: /Download Saudavo App for Android & Mobile/i })
     ).toBeVisible();
-    const apkLink = page.getByRole("link", { name: /Download Android APK \(GitHub\)/i });
+    const apkLink = page.getByRole("link", { name: /Download Android APK/i });
     await expect(apkLink).toBeVisible();
-    await expect(apkLink).toHaveAttribute(
-      "href",
-      /https:\/\/github\.com\/devsamikhan\/Saudavo\/releases\/latest/
-    );
+    await expect(apkLink).toHaveAttribute("href", "/api/download-apk");
+    await expect(apkLink).toHaveAttribute("download", /Saudavo-v.*\.apk/);
     await expect(page.getByRole("button", { name: /Install/i })).toBeVisible();
 
     const fitsMobile = await page.evaluate(
