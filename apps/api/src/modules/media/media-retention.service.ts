@@ -35,6 +35,7 @@ export class MediaRetentionService implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     if (
       process.env.NODE_ENV !== "test" &&
+      process.env.VERCEL !== "1" &&
       process.env.ENABLE_BACKGROUND_WORKERS !== "false" &&
       process.env.DATABASE_URL
     ) {

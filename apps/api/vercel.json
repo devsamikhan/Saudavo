@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nestjs",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @saudavo/contracts build && pnpm --filter @saudavo/api build",
+  "crons": [
+    {
+      "path": "/api/v1/health/cron",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

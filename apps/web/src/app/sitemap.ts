@@ -16,6 +16,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1
     },
     {
+      url: `${siteUrl}/download`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.9
+    },
+    {
       url: `${siteUrl}/terms`,
       lastModified: now,
       changeFrequency: "monthly",

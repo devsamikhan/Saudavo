@@ -1769,4 +1769,56 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
     );
     expect(fitsMobile).toBe(true);
   });
+
+  test("renders SEO /download page with GitHub Releases APK link, PWA CTA, and homepage download entry", async ({
+    page
+  }) => {
+    await page.route("**/api/v1/**", async (route) => {
+      const url = route.request().url();
+      if (url.endsWith("/api/v1/features")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              shopping_messenger_enabled: true,
+              seller_subscriptions_enabled: false,
+              buyer_requests_board_enabled: false,
+              messenger_voice_notes_enabled: false,
+              handover_pin_enabled: false,
+              flash_deals_coupons_enabled: false,
+              cod_refusal_shield_enabled: false
+            }
+          })
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: [], meta: { unreadCount: 0, requestId: "e2e" } })
+      });
+    });
+
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: /Download App/i }).first()).toBeVisible();
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/download");
+    await expect(
+      page.getByRole("heading", { name: /Download Saudavo App for Android & Mobile/i })
+    ).toBeVisible();
+    const apkLink = page.getByRole("link", { name: /Download Android APK \(GitHub\)/i });
+    await expect(apkLink).toBeVisible();
+    await expect(apkLink).toHaveAttribute(
+      "href",
+      /https:\/\/github\.com\/devsamikhan\/Saudavo\/releases\/latest/
+    );
+    await expect(page.getByRole("button", { name: /Install/i })).toBeVisible();
+
+    const fitsMobile = await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    );
+    expect(fitsMobile).toBe(true);
+  });
 });

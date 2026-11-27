@@ -277,6 +277,13 @@ export default function HomePage() {
                 >
                   {t.becomeSellerBtn}
                 </Link>
+                <Link
+                  href="/download"
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-white/30 bg-white/15 px-5 py-3 text-sm font-extrabold text-[#FDE68A] transition hover:bg-white/25 sm:px-5"
+                >
+                  <span>↓</span>
+                  <span>{locale === "ur" ? "ایپ ڈاؤنلوڈ کریں" : "Download App"}</span>
+                </Link>
               </div>
 
               <div className="grid max-w-md grid-cols-3 gap-2 pt-1 sm:gap-3 sm:pt-2">
@@ -937,6 +944,35 @@ export default function HomePage() {
               })}
             </div>
           )}
+        </section>
+
+        {/* Mobile App Download & GitHub Releases SEO Banner */}
+        <section className="rounded-3xl border border-brand-primary/20 bg-gradient-to-br from-[#094232] via-[#0F6B52] to-[#0B5440] p-6 text-white shadow-soft sm:p-8">
+          <div className="flex flex-col items-start justify-between gap-5 lg:flex-row lg:items-center">
+            <div className="max-w-2xl space-y-2">
+              <span className="inline-block rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#FDE68A]">
+                {locale === "ur" ? "موبائل ایپ • Android & PWA" : "Saudavo Mobile App • GitHub Releases"}
+              </span>
+              <h2 className="text-xl font-extrabold sm:text-2xl">
+                {locale === "ur"
+                  ? "سوداو اینڈرائیڈ ایپ ڈاؤنلوڈ کریں یا ہوم اسکرین پر انسٹال کریں"
+                  : "Get the Saudavo Mobile App for Faster Local Shopping"}
+              </h2>
+              <p className="text-xs leading-relaxed text-white/85 sm:text-sm">
+                {locale === "ur"
+                  ? "اردو وائس نوٹس، کیش آن ڈیلیوری اور فوری آرڈر ٹریکنگ کے ساتھ میانوالی کے تصدیق شدہ اسٹورز اپنی جیب میں رکھیں۔"
+                  : "Download the latest Android APK directly from GitHub Releases or install the instant Web App in one tap."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/download"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-brand-accent px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition hover:bg-brand-accent-hover sm:text-sm"
+              >
+                {locale === "ur" ? "ایپ ڈاؤنلوڈ صفحہ کھولیں ←" : "Download Saudavo App →"}
+              </Link>
+            </div>
+          </div>
         </section>
       </div>
     </main>

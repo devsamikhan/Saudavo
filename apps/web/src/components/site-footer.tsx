@@ -33,6 +33,9 @@ export function SiteFooter() {
             <Link href="/" className="hover:text-brand-primary">
               {t.navStorefront}
             </Link>
+            <Link href="/download" className="font-bold text-brand-primary hover:underline">
+              {locale === "ur" ? "موبائل ایپ ڈاؤنلوڈ کریں" : "Download Mobile App"}
+            </Link>
             <Link href="/cart" className="hover:text-brand-primary">
               {t.navCart}
             </Link>

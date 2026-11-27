@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import type { MediaMimeType } from "@saudavo/contracts";
+import { del, get, put } from "@vercel/blob";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -9,22 +10,53 @@ import { sanitizeImageBuffer } from "./image-sanitizer.util";
 const MAX_OBJECT_BYTES = 5 * 1024 * 1024;
 const SANITIZE_URL_TTL_SECONDS = 120;
 
+function inferBlobContentType(objectKey: string): string {
+  const lower = objectKey.toLowerCase();
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webm")) return "audio/webm";
+  if (lower.endsWith(".m4a")) return "audio/mp4";
+  if (lower.endsWith(".ogg")) return "audio/ogg";
+  return "image/jpeg";
+}
+
 @Injectable()
 export class S3PresignerService {
   /**
-   * Returns true when binary media is stored on local API disk (only metadata references in PostgreSQL).
+   * Returns true when private Vercel Blob storage should store/serve media objects.
+   */
+  isVercelBlobDriver(): boolean {
+    const explicit = process.env.STORAGE_DRIVER?.trim().toLowerCase();
+    if (explicit === "vercel-blob") {
+      return true;
+    }
+    if (explicit === "local" || explicit === "s3") {
+      return false;
+    }
+    return (
+      process.env.NODE_ENV !== "test" &&
+      !process.env.S3_ENDPOINT?.trim() &&
+      Boolean(
+        process.env.BLOB_READ_WRITE_TOKEN?.trim() ||
+          process.env.BLOB_STORE_ID?.trim()
+      )
+    );
+  }
+
+  /**
+   * Returns true when media uploads/reads proxy through signed API endpoints (disk or Vercel Blob).
    */
   isLocalDriver(): boolean {
     const explicit = process.env.STORAGE_DRIVER?.trim().toLowerCase();
-    if (explicit === "local") {
+    if (explicit === "local" || explicit === "vercel-blob") {
       return true;
     }
     if (explicit === "s3") {
       return false;
     }
     return (
-      process.env.NODE_ENV !== "test" &&
-      !process.env.S3_ENDPOINT?.trim()
+      this.isVercelBlobDriver() ||
+      (process.env.NODE_ENV !== "test" && !process.env.S3_ENDPOINT?.trim())
     );
   }
 
@@ -119,12 +151,38 @@ export class S3PresignerService {
       );
     }
     const filePath = this.resolveSafeLocalFilePath(objectKey);
+    const cleanKey = objectKey.replace(/^\/+/, "");
+    if (this.isVercelBlobDriver()) {
+      await put(cleanKey, buffer, {
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: inferBlobContentType(cleanKey)
+      });
+      return;
+    }
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, buffer);
   }
 
   async readLocalObject(objectKey: string): Promise<Buffer> {
     const filePath = this.resolveSafeLocalFilePath(objectKey);
+    const cleanKey = objectKey.replace(/^\/+/, "");
+    if (this.isVercelBlobDriver()) {
+      try {
+        const res = await get(cleanKey, { access: "private", useCache: false });
+        if (!res || res.statusCode !== 200 || !res.stream) {
+          throw new Error("Blob not found");
+        }
+        return Buffer.from(await new Response(res.stream).arrayBuffer());
+      } catch {
+        throw new DomainException(
+          "NOT_FOUND",
+          HttpStatus.NOT_FOUND,
+          "Stored cloud media file was not found or has expired."
+        );
+      }
+    }
     try {
       return await readFile(filePath);
     } catch {
@@ -137,6 +195,11 @@ export class S3PresignerService {
   }
 
   async deleteObject(objectKey: string): Promise<void> {
+    if (this.isVercelBlobDriver()) {
+      const cleanKey = objectKey.replace(/^\/+/, "");
+      await del(cleanKey).catch(() => undefined);
+      return;
+    }
     if (this.isLocalDriver()) {
       try {
         const filePath = this.resolveSafeLocalFilePath(objectKey);

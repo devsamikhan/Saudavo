@@ -18,6 +18,6 @@ import { SellerOrdersController } from "./seller-orders.controller";
     AdminOrdersController
   ],
   providers: [OrdersService, OrdersSchedulerService],
-  exports: [OrdersService]
+  exports: [OrdersService, OrdersSchedulerService]
 })
 export class OrdersModule {}
