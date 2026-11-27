@@ -1,10 +1,10 @@
 import { Prisma } from "@prisma/client";
 import {
-  PrivateStoreDto,
+  type PrivateStoreDto,
   PrivateStoreDtoSchema,
-  PublicStoreDto,
+  type PublicStoreDto,
   PublicStoreDtoSchema,
-  SellerProfileDto,
+  type SellerProfileDto,
   SellerProfileDtoSchema
 } from "@saudavo/contracts";
 import { bigIntToSafeNumber } from "../../common/money.util";

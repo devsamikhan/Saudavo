@@ -11,16 +11,16 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  AcceptCustomOfferRequest,
+  type AcceptCustomOfferRequest,
   AcceptCustomOfferRequestSchema,
-  ChatMessageDto,
-  ConversationSummaryDto,
-  OrderCreatedSummary,
-  SendChatMessageRequest,
+  type ChatMessageDto,
+  type ConversationSummaryDto,
+  type OrderCreatedSummary,
+  type SendChatMessageRequest,
   SendChatMessageRequestSchema,
-  SendCustomOfferRequest,
+  type SendCustomOfferRequest,
   SendCustomOfferRequestSchema,
-  StartConversationRequest,
+  type StartConversationRequest,
   StartConversationRequestSchema
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";

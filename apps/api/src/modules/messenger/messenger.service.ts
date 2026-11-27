@@ -1,16 +1,16 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
-  AcceptCustomOfferRequest,
-  ChatMessageDto,
+  type AcceptCustomOfferRequest,
+  type ChatMessageDto,
   ChatMessageDtoSchema,
-  ConversationSummaryDto,
+  type ConversationSummaryDto,
   ConversationSummaryDtoSchema,
-  OrderCreatedSummary,
+  type OrderCreatedSummary,
   OrderCreatedSummarySchema,
-  SendChatMessageRequest,
-  SendCustomOfferRequest,
-  StartConversationRequest
+  type SendChatMessageRequest,
+  type SendCustomOfferRequest,
+  type StartConversationRequest
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";
 import { IdempotencyService } from "../../common/idempotency/idempotency.service";

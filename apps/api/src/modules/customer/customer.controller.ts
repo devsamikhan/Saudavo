@@ -11,13 +11,13 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  AddressDto,
-  CreateAddressRequest,
+  type AddressDto,
+  type CreateAddressRequest,
   CreateAddressRequestSchema,
-  CustomerProfileDto,
-  UpdateAddressRequest,
+  type CustomerProfileDto,
+  type UpdateAddressRequest,
   UpdateAddressRequestSchema,
-  UpdateCustomerProfileRequest,
+  type UpdateCustomerProfileRequest,
   UpdateCustomerProfileRequestSchema
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";

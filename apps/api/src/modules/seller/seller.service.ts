@@ -1,12 +1,12 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
-  PrivateStoreDto,
-  SellerOnboardingRequest,
-  SellerOnboardingResponse,
+  type PrivateStoreDto,
+  type SellerOnboardingRequest,
+  type SellerOnboardingResponse,
   SellerOnboardingResponseSchema,
-  SellerProfileDto,
-  UpdateSellerProfileRequest,
-  UpdateStoreRequest
+  type SellerProfileDto,
+  type UpdateSellerProfileRequest,
+  type UpdateStoreRequest
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";
 import { PrismaService } from "../../common/prisma/prisma.service";

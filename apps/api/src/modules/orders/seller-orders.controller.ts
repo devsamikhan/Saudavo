@@ -11,14 +11,14 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  CodCollectionRequest,
+  type CodCollectionRequest,
   CodCollectionRequestSchema,
-  ManualPaymentConfirmationRequest,
+  type ManualPaymentConfirmationRequest,
   ManualPaymentConfirmationRequestSchema,
-  OrderDetailDto,
-  RejectOrderRequest,
+  type OrderDetailDto,
+  type RejectOrderRequest,
   RejectOrderRequestSchema,
-  UpdateSellerOrderStatusRequest,
+  type UpdateSellerOrderStatusRequest,
   UpdateSellerOrderStatusRequestSchema
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";

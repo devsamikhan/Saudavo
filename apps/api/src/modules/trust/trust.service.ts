@@ -1,17 +1,17 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
-  CreateDisputeRequest,
-  CreateReportRequest,
-  CreateReviewRequest,
-  DisputeDto,
+  type CreateDisputeRequest,
+  type CreateReportRequest,
+  type CreateReviewRequest,
+  type DisputeDto,
   DisputeDtoSchema,
-  ReportDto,
+  type ReportDto,
   ReportDtoSchema,
-  ResolveDisputeRequest,
-  ResolveReportRequest,
-  ReviewDto,
+  type ResolveDisputeRequest,
+  type ResolveReportRequest,
+  type ReviewDto,
   ReviewDtoSchema,
-  RoleCode,
+  type RoleCode,
   STAFF_ROLES
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";

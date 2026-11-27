@@ -1,15 +1,15 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
   DEFAULT_FEATURE_FLAGS_MAP,
-  FeatureFlagDto,
+  type FeatureFlagDto,
   FeatureFlagDtoSchema,
-  FeatureFlagKey,
+  type FeatureFlagKey,
   FeatureFlagKeySchema,
-  FeatureFlagsMap,
+  type FeatureFlagsMap,
   FeatureFlagsMapSchema,
-  RoleCode,
+  type RoleCode,
   STAFF_ROLES,
-  UpdateFeatureFlagRequest
+  type UpdateFeatureFlagRequest
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";
 import { DomainException } from "../../common/errors/domain.exception";

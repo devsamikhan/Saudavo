@@ -1,13 +1,13 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
-  AddressDto,
+  type AddressDto,
   AddressDtoSchema,
-  CreateAddressRequest,
-  CustomerProfileDto,
+  type CreateAddressRequest,
+  type CustomerProfileDto,
   CustomerProfileDtoSchema,
-  UpdateAddressRequest,
-  UpdateCustomerProfileRequest
+  type UpdateAddressRequest,
+  type UpdateCustomerProfileRequest
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";
 import { PrismaService } from "../../common/prisma/prisma.service";

@@ -1,8 +1,8 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
-  NotificationDto,
-  NotificationsResponse,
+  type NotificationDto,
+  type NotificationsResponse,
   NotificationsResponseSchema
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";

@@ -10,16 +10,16 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  ApproveDecisionRequest,
+  type ApproveDecisionRequest,
   ApproveDecisionRequestSchema,
-  ApproveListingRequest,
+  type ApproveListingRequest,
   ApproveListingRequestSchema,
-  ModerationQueueResponse,
-  RejectDecisionRequest,
+  type ModerationQueueResponse,
+  type RejectDecisionRequest,
   RejectDecisionRequestSchema,
-  RejectListingRequest,
+  type RejectListingRequest,
   RejectListingRequestSchema,
-  SuspendEntityRequest,
+  type SuspendEntityRequest,
   SuspendEntityRequestSchema
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { DistrictsResponse, DistrictsResponseSchema } from "@saudavo/contracts";
+import { type DistrictsResponse, DistrictsResponseSchema } from "@saudavo/contracts";
 import { PrismaService } from "../../common/prisma/prisma.service";
 
 @Injectable()

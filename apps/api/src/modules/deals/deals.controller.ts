@@ -11,9 +11,9 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  CreatePromoDealRequest,
+  type CreatePromoDealRequest,
   CreatePromoDealRequestSchema,
-  TogglePromoDealRequest,
+  type TogglePromoDealRequest,
   TogglePromoDealRequestSchema
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";

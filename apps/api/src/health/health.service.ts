@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { HealthResponse, HealthResponseSchema } from "@saudavo/contracts";
+import { type HealthResponse, HealthResponseSchema } from "@saudavo/contracts";
 import { randomUUID } from "node:crypto";
 
 /**

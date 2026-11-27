@@ -1,14 +1,14 @@
 import {
-  CanActivate,
-  ExecutionContext,
+  type CanActivate,
+  type ExecutionContext,
   HttpStatus,
   Injectable
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import {
-  LocaleCode,
+  type LocaleCode,
   LocaleCodeSchema,
-  RoleCode,
+  type RoleCode,
   RoleCodeSchema
 } from "@saudavo/contracts";
 import { DomainException } from "../../errors/domain.exception";

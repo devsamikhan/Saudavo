@@ -9,18 +9,18 @@ import {
   Res
 } from "@nestjs/common";
 import {
-  AdminMfaEnrollResponse,
-  AdminMfaVerify,
+  type AdminMfaEnrollResponse,
+  type AdminMfaVerify,
   AdminMfaVerifySchema,
-  AuthMeResponse,
-  AuthSessionResponse,
-  LoginRequest,
+  type AuthMeResponse,
+  type AuthSessionResponse,
+  type LoginRequest,
   LoginRequestSchema,
-  PasswordResetConfirm,
+  type PasswordResetConfirm,
   PasswordResetConfirmSchema,
-  PasswordResetRequest,
+  type PasswordResetRequest,
   PasswordResetRequestSchema,
-  RegisterRequest,
+  type RegisterRequest,
   RegisterRequestSchema
 } from "@saudavo/contracts";
 import type { Response } from "express";

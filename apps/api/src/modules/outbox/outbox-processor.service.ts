@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { PrismaService } from "../../common/prisma/prisma.service";
 
 const MAX_OUTBOX_ATTEMPTS = 5;

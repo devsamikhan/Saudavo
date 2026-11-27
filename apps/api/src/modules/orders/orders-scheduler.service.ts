@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { OrdersService } from "./orders.service";
 
 const AUTO_COMPLETE_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;

@@ -1,9 +1,9 @@
 import { Prisma } from "@prisma/client";
 import {
-  BuyerCodStatsDto,
-  OrderDetailDto,
+  type BuyerCodStatsDto,
+  type OrderDetailDto,
   OrderDetailDtoSchema,
-  OrderMessageDto,
+  type OrderMessageDto,
   OrderMessageDtoSchema
 } from "@saudavo/contracts";
 import { bigIntToSafeNumber } from "../../common/money.util";

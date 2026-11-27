@@ -7,7 +7,7 @@ import {
   Post,
   Req
 } from "@nestjs/common";
-import { NotificationDto, NotificationsResponse } from "@saudavo/contracts";
+import type { NotificationDto, NotificationsResponse } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";
 import { CurrentUser } from "../../common/auth/decorators";
 import { DomainException } from "../../common/errors/domain.exception";

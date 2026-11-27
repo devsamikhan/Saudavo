@@ -7,14 +7,14 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  CategoriesResponse,
-  PublicProductDetailDto,
-  PublicServiceDetailDto,
-  PublicStoreDto,
-  SearchQuery,
+  type CategoriesResponse,
+  type PublicProductDetailDto,
+  type PublicServiceDetailDto,
+  type PublicStoreDto,
+  type SearchQuery,
   SearchQuerySchema,
-  SearchResponse,
-  StoreCatalogResponse
+  type SearchResponse,
+  type StoreCatalogResponse
 } from "@saudavo/contracts";
 import { Public } from "../../common/auth/decorators";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";

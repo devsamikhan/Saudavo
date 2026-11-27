@@ -8,14 +8,14 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  PrivateStoreDto,
-  SellerOnboardingRequest,
+  type PrivateStoreDto,
+  type SellerOnboardingRequest,
   SellerOnboardingRequestSchema,
-  SellerOnboardingResponse,
-  SellerProfileDto,
-  UpdateSellerProfileRequest,
+  type SellerOnboardingResponse,
+  type SellerProfileDto,
+  type UpdateSellerProfileRequest,
   UpdateSellerProfileRequestSchema,
-  UpdateStoreRequest,
+  type UpdateStoreRequest,
   UpdateStoreRequestSchema
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";

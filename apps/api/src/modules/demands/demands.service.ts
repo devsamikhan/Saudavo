@@ -1,10 +1,10 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
-  BuyerRequestDto,
+  type BuyerRequestDto,
   BuyerRequestDtoSchema,
-  ConversationSummaryDto,
-  CreateBuyerRequest,
-  RespondBuyerRequest
+  type ConversationSummaryDto,
+  type CreateBuyerRequest,
+  type RespondBuyerRequest
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";
 import { bigIntToSafeNumber } from "../../common/money.util";

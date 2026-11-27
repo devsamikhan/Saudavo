@@ -1,11 +1,11 @@
 import {
-  CanActivate,
-  ExecutionContext,
+  type CanActivate,
+  type ExecutionContext,
   HttpStatus,
   Injectable
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { RoleCode, STAFF_ROLES } from "@saudavo/contracts";
+import { type RoleCode, STAFF_ROLES } from "@saudavo/contracts";
 import { DomainException } from "../../errors/domain.exception";
 import type { AppRequest } from "../../request-context";
 import {

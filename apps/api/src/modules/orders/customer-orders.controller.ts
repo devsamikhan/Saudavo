@@ -11,21 +11,21 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  CancelOrderRequest,
+  type CancelOrderRequest,
   CancelOrderRequestSchema,
-  CheckoutQuoteDto,
-  CheckoutQuoteRequest,
+  type CheckoutQuoteDto,
+  type CheckoutQuoteRequest,
   CheckoutQuoteRequestSchema,
-  CreateOrderMessageRequest,
+  type CreateOrderMessageRequest,
   CreateOrderMessageRequestSchema,
-  CreatePhysicalOrderRequest,
+  type CreatePhysicalOrderRequest,
   CreatePhysicalOrderRequestSchema,
-  CreateServiceOrderRequest,
+  type CreateServiceOrderRequest,
   CreateServiceOrderRequestSchema,
-  OrderCreatedSummary,
-  OrderDetailDto,
-  OrderMessageDto,
-  RequestServiceRevisionRequest,
+  type OrderCreatedSummary,
+  type OrderDetailDto,
+  type OrderMessageDto,
+  type RequestServiceRevisionRequest,
   RequestServiceRevisionRequestSchema
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";

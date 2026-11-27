@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
-  LocaleCode,
+  type LocaleCode,
   normalizeEmail,
   normalizePakistanPhoneE164
 } from "@saudavo/contracts";

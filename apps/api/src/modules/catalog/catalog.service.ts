@@ -1,23 +1,23 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
-  CategoriesResponse,
+  type CategoriesResponse,
   CategoriesResponseSchema,
-  CreateProductRequest,
-  CreateServiceListingRequest,
-  ProductDto,
-  PublicProductDetailDto,
-  PublicSearchItem,
-  PublicServiceDetailDto,
-  PublicStoreDto,
-  SearchQuery,
-  SearchResponse,
+  type CreateProductRequest,
+  type CreateServiceListingRequest,
+  type ProductDto,
+  type PublicProductDetailDto,
+  type PublicSearchItem,
+  type PublicServiceDetailDto,
+  type PublicStoreDto,
+  type SearchQuery,
+  type SearchResponse,
   SearchResponseSchema,
-  ServiceListingDto,
+  type ServiceListingDto,
   slugifyTitle,
-  StoreCatalogResponse,
+  type StoreCatalogResponse,
   StoreCatalogResponseSchema,
-  UpdateProductRequest,
-  UpdateServiceListingRequest
+  type UpdateProductRequest,
+  type UpdateServiceListingRequest
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";
 import { bigIntToSafeNumber } from "../../common/money.util";

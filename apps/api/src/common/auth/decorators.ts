@@ -1,6 +1,6 @@
 import {
   createParamDecorator,
-  ExecutionContext,
+  type ExecutionContext,
   SetMetadata
 } from "@nestjs/common";
 import type { RoleCode } from "@saudavo/contracts";

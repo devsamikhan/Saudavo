@@ -10,19 +10,19 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  CreateDisputeRequest,
+  type CreateDisputeRequest,
   CreateDisputeRequestSchema,
-  CreateReportRequest,
+  type CreateReportRequest,
   CreateReportRequestSchema,
-  CreateReviewRequest,
+  type CreateReviewRequest,
   CreateReviewRequestSchema,
-  DisputeDto,
-  ReportDto,
-  ResolveDisputeRequest,
+  type DisputeDto,
+  type ReportDto,
+  type ResolveDisputeRequest,
   ResolveDisputeRequestSchema,
-  ResolveReportRequest,
+  type ResolveReportRequest,
   ResolveReportRequestSchema,
-  ReviewDto
+  type ReviewDto
 } from "@saudavo/contracts";
 import type { AuthContext } from "../../common/auth/auth.types";
 import { CurrentUser, Public, Roles } from "../../common/auth/decorators";

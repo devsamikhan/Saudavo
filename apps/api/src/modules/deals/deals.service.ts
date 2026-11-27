@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import {
-  CreatePromoDealRequest,
-  PromoDealDto,
+  type CreatePromoDealRequest,
+  type PromoDealDto,
   PromoDealDtoSchema
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";

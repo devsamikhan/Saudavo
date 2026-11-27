@@ -12,9 +12,9 @@ import {
   Req
 } from "@nestjs/common";
 import {
-  CreateBuyerRequest,
+  type CreateBuyerRequest,
   CreateBuyerRequestSchema,
-  RespondBuyerRequest,
+  type RespondBuyerRequest,
   RespondBuyerRequestSchema
 } from "@saudavo/contracts";
 import { z } from "zod";

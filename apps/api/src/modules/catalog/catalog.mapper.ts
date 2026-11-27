@@ -1,14 +1,14 @@
 import { Prisma } from "@prisma/client";
 import {
-  CategoryDto,
+  type CategoryDto,
   CategoryDtoSchema,
-  ProductDto,
+  type ProductDto,
   ProductDtoSchema,
-  PublicProductDetailDto,
+  type PublicProductDetailDto,
   PublicProductDetailDtoSchema,
-  PublicServiceDetailDto,
+  type PublicServiceDetailDto,
   PublicServiceDetailDtoSchema,
-  ServiceListingDto,
+  type ServiceListingDto,
   ServiceListingDtoSchema
 } from "@saudavo/contracts";
 import { bigIntToSafeNumber } from "../../common/money.util";
