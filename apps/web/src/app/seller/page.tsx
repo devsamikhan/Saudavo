@@ -27,12 +27,12 @@ import {
   EmptyCatalogSpot,
   EmptyInboxSpot,
   FlashDealsIllustration,
-  SaudaBuddyAvatar,
   SellerStudioIllustration,
   SpotState
 } from "../../components/illustrations";
 import { useAppContext } from "../../components/locale-provider";
 import { StoreShareAndQrCard } from "../../components/qr-poster";
+import { SaudavoMark } from "../../components/saudavo-mark";
 import {
   ConfirmActionButton,
   ListCardSkeleton,
@@ -794,8 +794,8 @@ export default function SellerStudioPage() {
           {/* Sleek Deep Emerald Studio Header Strip */}
           <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-[#094232] via-[#0F6B52] to-[#073528] p-5 text-white shadow-soft sm:p-6">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 shrink-0 rounded-2xl border border-white/25 bg-white/10 p-1">
-                <SaudaBuddyAvatar />
+              <div className="h-12 w-12 shrink-0 rounded-2xl border border-white/25 bg-white/95 p-1.5">
+                <SaudavoMark className="h-full w-full" />
               </div>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-[#FDE68A]">

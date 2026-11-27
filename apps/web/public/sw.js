@@ -1,5 +1,5 @@
-const CACHE_NAME = "saudavo-shell-v1";
-const STATIC_ASSETS = ["/", "/manifest.webmanifest"];
+const CACHE_NAME = "saudavo-shell-v2";
+const STATIC_ASSETS = ["/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -27,14 +27,16 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+  if (request.mode === "navigate") return;
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api/")) return;
+  if (url.pathname.startsWith("/api/") || url.pathname === "/sw.js") return;
 
   if (
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/illustrations/") ||
+    url.pathname.startsWith("/icons/") ||
     url.pathname === "/manifest.webmanifest"
   ) {
     event.respondWith(

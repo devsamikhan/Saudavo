@@ -967,7 +967,7 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-3">
               <a
                 href="/api/download-apk"
-                download="Saudavo-v1.0.1.apk"
+                download="Saudavo-v1.0.2.apk"
                 className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-brand-accent px-5 py-2.5 text-xs font-extrabold text-white shadow-md transition hover:bg-brand-accent-hover sm:text-sm"
               >
                 {locale === "ur" ? "فوری APK ڈاؤنلوڈ کریں" : "Direct APK Download ↓"}

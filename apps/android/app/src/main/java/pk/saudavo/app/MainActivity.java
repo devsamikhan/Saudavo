@@ -3,14 +3,24 @@ package pk.saudavo.app;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -25,9 +35,21 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
+import android.widget.Toast;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
   private static final String START_URL = "https://saudavo-web.vercel.app/";
+  private static final String VERSION_ENDPOINT = "https://saudavo-web.vercel.app/api/app-version";
+  private static final String DOWNLOAD_FALLBACK_URL = "https://saudavo-web.vercel.app/download";
+  private static final String PREFS_NAME = "saudavo_prefs";
+  private static final String KEY_LAST_WEB_BUILD_ID = "last_web_build_id";
+  private static final long UPDATE_CHECK_COOLDOWN_MS = 15_000L;
   private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
   private static final int AUDIO_PERMISSION_REQUEST_CODE = 1002;
 
@@ -35,6 +57,11 @@ public class MainActivity extends Activity {
   private ProgressBar progressBar;
   private ValueCallback<Uri[]> filePathCallback;
   private PermissionRequest pendingWebPermissionRequest;
+  private long lastUpdateCheckElapsedMs = 0L;
+  private boolean initialPageFinished = false;
+  private boolean apkPromptShown = false;
+  private long activeDownloadId = -1L;
+  private BroadcastReceiver downloadCompleteReceiver;
 
   @SuppressLint("SetJavaScriptEnabled")
   @Override
@@ -76,6 +103,7 @@ public class MainActivity extends Activity {
     settings.setDatabaseEnabled(true);
     settings.setAllowFileAccess(false);
     settings.setAllowContentAccess(true);
+    settings.setCacheMode(WebSettings.LOAD_DEFAULT);
     settings.setMediaPlaybackRequiresUserGesture(false);
     settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
     settings.setUseWideViewPort(true);
@@ -107,6 +135,7 @@ public class MainActivity extends Activity {
 
       @Override
       public void onPageFinished(WebView view, String url) {
+        initialPageFinished = true;
         progressBar.setVisibility(View.GONE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
           CookieManager.getInstance().flush();
@@ -172,6 +201,209 @@ public class MainActivity extends Activity {
       webView.restoreState(savedInstanceState);
     } else {
       webView.loadUrl(START_URL);
+    }
+    checkForLiveUpdates();
+  }
+
+  @Override
+  protected void onResume() {
+    super.onResume();
+    checkForLiveUpdates();
+  }
+
+  private void checkForLiveUpdates() {
+    long now = SystemClock.elapsedRealtime();
+    if (lastUpdateCheckElapsedMs > 0L && (now - lastUpdateCheckElapsedMs) < UPDATE_CHECK_COOLDOWN_MS) {
+      return;
+    }
+    lastUpdateCheckElapsedMs = now;
+
+    Thread worker = new Thread(() -> {
+      HttpURLConnection conn = null;
+      try {
+        URL url = new URL(VERSION_ENDPOINT);
+        conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setUseCaches(false);
+        conn.setRequestProperty("Cache-Control", "no-cache");
+        conn.setConnectTimeout(4000);
+        conn.setReadTimeout(4000);
+
+        if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
+          return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+            new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8)
+        )) {
+          String line;
+          while ((line = reader.readLine()) != null) {
+            sb.append(line);
+          }
+        }
+
+        JSONObject json = new JSONObject(sb.toString());
+        String serverBuildId = json.optString("webBuildId", "").trim();
+        int serverVersionCode = json.optInt("androidVersionCode", 0);
+        String serverVersionName = json.optString("androidVersionName", "").trim();
+        String apkUrl = json.optString("apkDownloadUrl", "").trim();
+        String releaseNotes = json.optString("releaseNotes", "").trim();
+
+        if (!serverBuildId.isEmpty() && !"local-dev".equals(serverBuildId)) {
+          SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+          String previousBuildId = prefs.getString(KEY_LAST_WEB_BUILD_ID, "");
+          if (!serverBuildId.equals(previousBuildId)) {
+            prefs.edit().putString(KEY_LAST_WEB_BUILD_ID, serverBuildId).apply();
+            final boolean shouldReload = !previousBuildId.isEmpty() || initialPageFinished;
+            runOnUiThread(() -> {
+              if (!isFinishing() && webView != null) {
+                webView.clearCache(true);
+                if (shouldReload) {
+                  webView.reload();
+                }
+              }
+            });
+          }
+        }
+
+        int installedVersionCode = getInstalledVersionCode();
+        if (serverVersionCode > installedVersionCode &&
+            installedVersionCode > 0 &&
+            !apkPromptShown &&
+            !apkUrl.isEmpty()) {
+          apkPromptShown = true;
+          final String displayVersion = serverVersionName.isEmpty()
+              ? String.valueOf(serverVersionCode)
+              : serverVersionName;
+          runOnUiThread(() -> showApkUpdateDialog(displayVersion, apkUrl, releaseNotes));
+        }
+      } catch (Exception ignored) {
+        // Offline or unreachable endpoint; keep browsing session unaffected.
+      } finally {
+        if (conn != null) {
+          conn.disconnect();
+        }
+      }
+    }, "saudavo-update-check");
+    worker.setDaemon(true);
+    worker.start();
+  }
+
+  @SuppressWarnings("deprecation")
+  private int getInstalledVersionCode() {
+    try {
+      PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        return (int) info.getLongVersionCode();
+      }
+      return info.versionCode;
+    } catch (Exception ex) {
+      return 0;
+    }
+  }
+
+  private void showApkUpdateDialog(
+      String newVersionName,
+      String apkUrl,
+      String releaseNotes
+  ) {
+    if (isFinishing()) return;
+    StringBuilder message = new StringBuilder();
+    message.append("Saudavo v").append(newVersionName).append(" is now available.\n");
+    message.append("سوداو ایپ کا نیا ورژن دستیاب ہے۔");
+    if (!releaseNotes.isEmpty()) {
+      message.append("\n\n").append(releaseNotes);
+    }
+
+    new AlertDialog.Builder(this)
+        .setTitle("New Update Available • نیا اپڈیٹ")
+        .setMessage(message.toString())
+        .setCancelable(true)
+        .setPositiveButton("Update Now / اپڈیٹ کریں", (dialog, which) ->
+            downloadAndInstallApk(apkUrl, newVersionName)
+        )
+        .setNegativeButton("Later / بعد میں", null)
+        .show();
+  }
+
+  @SuppressLint("UnspecifiedRegisterReceiverFlag")
+  private void downloadAndInstallApk(String apkUrl, String versionName) {
+    try {
+      DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+      if (dm == null) {
+        openBrowserUrl(DOWNLOAD_FALLBACK_URL);
+        return;
+      }
+
+      if (downloadCompleteReceiver == null) {
+        downloadCompleteReceiver = new BroadcastReceiver() {
+          @Override
+          public void onReceive(Context context, Intent intent) {
+            long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
+            if (id != activeDownloadId || id < 0L) {
+              return;
+            }
+            DownloadManager.Query query = new DownloadManager.Query().setFilterById(id);
+            try (Cursor cursor = dm.query(query)) {
+              if (cursor != null && cursor.moveToFirst()) {
+                int statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
+                if (statusIdx >= 0 && cursor.getInt(statusIdx) == DownloadManager.STATUS_SUCCESSFUL) {
+                  Uri apkUri = dm.getUriForDownloadedFile(id);
+                  if (apkUri != null) {
+                    launchApkInstaller(apkUri);
+                    return;
+                  }
+                }
+              }
+            } catch (Exception ignored) {
+            }
+            openBrowserUrl(DOWNLOAD_FALLBACK_URL);
+          }
+        };
+        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          registerReceiver(downloadCompleteReceiver, filter, Context.RECEIVER_EXPORTED);
+        } else {
+          registerReceiver(downloadCompleteReceiver, filter);
+        }
+      }
+
+      String fileName = "Saudavo-v" + versionName.replaceAll("[^0-9A-Za-z._-]", "") + ".apk";
+      DownloadManager.Request req = new DownloadManager.Request(Uri.parse(apkUrl));
+      req.setTitle("Saudavo v" + versionName);
+      req.setDescription("Downloading Saudavo app update...");
+      req.setMimeType("application/vnd.android.package-archive");
+      req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+      req.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, fileName);
+      activeDownloadId = dm.enqueue(req);
+      Toast.makeText(
+          this,
+          "Downloading Saudavo v" + versionName + "...",
+          Toast.LENGTH_SHORT
+      ).show();
+    } catch (Exception ex) {
+      openBrowserUrl(DOWNLOAD_FALLBACK_URL);
+    }
+  }
+
+  private void launchApkInstaller(Uri apkUri) {
+    try {
+      Intent installIntent = new Intent(Intent.ACTION_VIEW);
+      installIntent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+      installIntent.addFlags(
+          Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION
+      );
+      startActivity(installIntent);
+    } catch (Exception ex) {
+      openBrowserUrl(DOWNLOAD_FALLBACK_URL);
+    }
+  }
+
+  private void openBrowserUrl(String url) {
+    try {
+      startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+    } catch (Exception ignored) {
     }
   }
 
@@ -242,6 +474,18 @@ public class MainActivity extends Activity {
     if (webView != null) {
       webView.saveState(outState);
     }
+  }
+
+  @Override
+  protected void onDestroy() {
+    if (downloadCompleteReceiver != null) {
+      try {
+        unregisterReceiver(downloadCompleteReceiver);
+      } catch (Exception ignored) {
+      }
+      downloadCompleteReceiver = null;
+    }
+    super.onDestroy();
   }
 
   @Override

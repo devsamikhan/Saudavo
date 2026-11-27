@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAppContext } from "../../components/locale-provider";
 import { SaudavoMark } from "../../components/saudavo-mark";
+import { getAndroidReleaseVersionName } from "../../lib/app-release";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -20,8 +21,7 @@ export function DownloadAppClient() {
 
   const apkDownloadUrl =
     process.env.NEXT_PUBLIC_DIRECT_APK_URL?.trim() || DIRECT_APK_ENDPOINT;
-  const appVersion =
-    process.env.NEXT_PUBLIC_ANDROID_APK_VERSION?.trim() || "1.0.1";
+  const appVersion = getAndroidReleaseVersionName();
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {

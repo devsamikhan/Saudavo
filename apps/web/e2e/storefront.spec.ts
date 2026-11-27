@@ -222,11 +222,8 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
     await page.getByRole("button", { name: "Save to wishlist" }).first().click();
     await expect(page.getByText(/Saved to wishlist!/)).toBeVisible();
 
-    // Floating Sauda Buddy mascot opens & closes helper card
-    await page.getByRole("button", { name: /Sauda Buddy/i }).click();
-    await expect(page.getByText("Assalam-o-Alaikum!")).toBeVisible();
-    await page.getByRole("button", { name: "Got it!" }).click();
-    await expect(page.getByText("Assalam-o-Alaikum!")).not.toBeVisible();
+    // Sauda Buddy floating widget is disabled per product decision
+    await expect(page.getByRole("button", { name: /Sauda Buddy/i })).toHaveCount(0);
 
     // Verify sort & price controls exist and navigate to Storefront Store Page
     await expect(page.getByLabel("Sort listings")).toBeVisible();

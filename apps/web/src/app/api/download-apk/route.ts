@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
+import {
+  getAndroidReleaseVersionName,
+  getGitHubApkAssetUrl
+} from "../../../lib/app-release";
 
 export const dynamic = "force-dynamic";
-
-const DEFAULT_GITHUB_APK_URL =
-  "https://github.com/devsamikhan/Saudavo/releases/download/v1.0.1/saudavo-v1.0.1.apk";
 
 /**
  * Streams the official Saudavo Android APK directly from the Saudavo domain
  * so users never leave the website or get redirected to GitHub UI.
  */
 export async function GET(): Promise<Response> {
-  const upstreamUrl =
-    process.env.GITHUB_APK_ASSET_URL?.trim() || DEFAULT_GITHUB_APK_URL;
-  const appVersion =
-    process.env.NEXT_PUBLIC_ANDROID_APK_VERSION?.trim() || "1.0.1";
+  const upstreamUrl = getGitHubApkAssetUrl();
+  const appVersion = getAndroidReleaseVersionName();
   const safeVersion = appVersion.replace(/[^0-9A-Za-z._-]/g, "");
 
   try {

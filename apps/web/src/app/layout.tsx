@@ -8,9 +8,10 @@ import "@fontsource/noto-sans-arabic/600.css";
 import "@fontsource/noto-sans-arabic/700.css";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { LiveUpdateWatcher } from "../components/live-update-watcher";
 import { LocaleAndAuthProvider } from "../components/locale-provider";
 import { MobileBottomNav } from "../components/mobile-bottom-nav";
-import { SaudaBuddy } from "../components/sauda-buddy";
+// import { SaudaBuddy } from "../components/sauda-buddy";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import { getPublicSiteUrl } from "../lib/seo";
@@ -85,7 +86,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </div>
           <SiteFooter />
           <MobileBottomNav />
-          <SaudaBuddy />
+          {/* <SaudaBuddy /> disabled per founder request */}
+          <LiveUpdateWatcher />
         </LocaleAndAuthProvider>
       </body>
     </html>

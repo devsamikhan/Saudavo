@@ -204,7 +204,12 @@ export function LocaleAndAuthProvider({ children }: { children: ReactNode }) {
         // Ignore storage errors
       }
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+        navigator.serviceWorker
+          .register("/sw.js", { updateViaCache: "none" })
+          .then((registration) => {
+            void registration.update().catch(() => undefined);
+          })
+          .catch(() => undefined);
       }
     }
     void refreshUser();
