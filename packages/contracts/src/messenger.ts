@@ -53,15 +53,36 @@ export const SendChatMessageRequestSchema = z
   );
 export type SendChatMessageRequest = z.infer<typeof SendChatMessageRequestSchema>;
 
-export const SendCustomOfferRequestSchema = z.object({
-  productId: z.string().uuid(),
-  quantity: z.number().int().min(1).max(100),
-  unitPricePaisa: z.number().int().positive(),
-  deliveryFeePaisa: z.number().int().nonnegative().default(0),
-  fulfilmentMode: z.enum(["SELLER_DELIVERY", "CUSTOMER_PICKUP"]),
-  note: z.string().trim().max(1000).optional()
-});
+export const SendCustomOfferRequestSchema = z
+  .object({
+    productId: z.string().uuid().optional(),
+    serviceListingId: z.string().uuid().optional(),
+    servicePackageId: z.string().uuid().optional(),
+    quantity: z.number().int().min(1).max(100).default(1),
+    unitPricePaisa: z.number().int().positive(),
+    deliveryFeePaisa: z.number().int().nonnegative().default(0),
+    fulfilmentMode: z.enum(["SELLER_DELIVERY", "CUSTOMER_PICKUP"]),
+    note: z.string().trim().max(1000).optional()
+  })
+  .refine(
+    (data) => Boolean(data.productId) !== Boolean(data.serviceListingId),
+    "Provide either productId or serviceListingId for a custom offer."
+  );
 export type SendCustomOfferRequest = z.infer<typeof SendCustomOfferRequestSchema>;
+
+export const ReportConversationRequestSchema = z.object({
+  reasonCode: z.enum([
+    "PRIVACY_VIOLATION",
+    "ABUSIVE_LANGUAGE",
+    "SCAM_OR_FRAUD",
+    "MISLEADING_INFO",
+    "OTHER"
+  ]),
+  details: z.string().trim().min(5).max(2000)
+});
+export type ReportConversationRequest = z.infer<
+  typeof ReportConversationRequestSchema
+>;
 
 export const AcceptCustomOfferRequestSchema = z.object({
   addressId: z.string().uuid().optional(),
@@ -126,6 +147,11 @@ export const ConversationSummaryDtoSchema = z.object({
   storeDisplayName: z.string(),
   storeDistrictNameEn: z.string(),
   storeVerifiedPro: z.boolean(),
+  blockedByBuyer: z.boolean().default(false),
+  blockedBySeller: z.boolean().default(false),
+  blockedByMe: z.boolean().default(false),
+  storeCompletedOrdersCount: z.number().int().nonnegative().default(0),
+  storeAvgResponseMinutes: z.number().int().nonnegative().nullable().default(null),
   status: z.string(),
   unreadCount: z.number().int().nonnegative(),
   lastMessagePreview: z.string(),

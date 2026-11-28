@@ -119,6 +119,19 @@ function formatNotificationText(
             : "Subscription renewal needs attention",
         href: "/seller"
       };
+    case "NEW_LISTING_FROM_FOLLOWED_STORE": {
+      const storeSlug =
+        typeof payload.storeSlug === "string" ? payload.storeSlug : "";
+      const storeName =
+        typeof payload.storeName === "string" ? payload.storeName : "Store";
+      return {
+        label:
+          locale === "ur"
+            ? `${storeName} نے نئی لسٹنگ شامل کی!`
+            : `${storeName} posted a new listing!`,
+        href: storeSlug ? `/stores/${storeSlug}` : "/"
+      };
+    }
     default:
       return {
         label: item.eventType.replace(/_/g, " "),
@@ -146,7 +159,10 @@ export function SiteHeader() {
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [alertsPerm, setAlertsPerm] = useState<string>("default");
   const notifContainerRef = useRef<HTMLDivElement>(null);
+  const prevUnreadRef = useRef<number | null>(null);
+  const prevChatUnreadRef = useRef<number | null>(null);
 
   const toggleLocale = () => {
     setLocale(locale === "en" ? "ur" : "en");
@@ -157,11 +173,43 @@ export function SiteHeader() {
       ["MODERATOR", "SUPPORT", "ADMIN", "SUPER_ADMIN"].includes(r)
     ) ?? false;
 
+  const triggerLiveAlert = useCallback(
+    (title: string, body: string, href: string) => {
+      if (typeof window === "undefined") return;
+      const win = window as Window & {
+        SaudavoAndroid?: {
+          notify?: (t: string, b: string, path: string) => void;
+          requestNotificationPermission?: () => void;
+        };
+      };
+      if (win.SaudavoAndroid?.notify) {
+        win.SaudavoAndroid.notify(title, body, href);
+        return;
+      }
+      if ("Notification" in window && window.Notification.permission === "granted") {
+        if ("serviceWorker" in navigator) {
+          void navigator.serviceWorker.getRegistration("/sw.js").then((reg) => {
+            if (reg) {
+              void reg.showNotification(title, { body, tag: "saudavo-alert" });
+            } else {
+              new window.Notification(title, { body });
+            }
+          });
+        } else {
+          new window.Notification(title, { body });
+        }
+      }
+    },
+    []
+  );
+
   const loadHeaderCounts = useCallback(async () => {
     if (!user) {
       setNotifications([]);
       setUnreadCount(0);
       setChatUnreadCount(0);
+      prevUnreadRef.current = null;
+      prevChatUnreadRef.current = null;
       return;
     }
 
@@ -171,18 +219,56 @@ export function SiteHeader() {
     ]);
     if (notifRes) {
       setNotifications(notifRes.data);
-      setUnreadCount(notifRes.meta.unreadCount);
+      const nextUnread = notifRes.meta.unreadCount;
+      if (
+        prevUnreadRef.current !== null &&
+        nextUnread > prevUnreadRef.current &&
+        notifRes.data[0]
+      ) {
+        const latest = formatNotificationText(notifRes.data[0], locale);
+        triggerLiveAlert("Saudavo", latest.label, latest.href);
+      }
+      prevUnreadRef.current = nextUnread;
+      setUnreadCount(nextUnread);
     }
     if (chatRes) {
-      setChatUnreadCount(chatRes.data.unreadCount);
+      const nextChatUnread = chatRes.data.unreadCount;
+      if (
+        prevChatUnreadRef.current !== null &&
+        nextChatUnread > prevChatUnreadRef.current
+      ) {
+        triggerLiveAlert(
+          "Saudavo Messenger",
+          locale === "ur"
+            ? "آپ کو سوداو میسنجر میں نیا پیغام موصول ہوا ہے!"
+            : "You received a new message in Saudavo Messenger!",
+          "/messages"
+        );
+      }
+      prevChatUnreadRef.current = nextChatUnread;
+      setChatUnreadCount(nextChatUnread);
     }
-  }, [user]);
+  }, [locale, triggerLiveAlert, user]);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setAlertsPerm(window.Notification.permission);
+    }
     void loadHeaderCounts();
     setMobileMenuOpen(false);
     setNotifOpen(false);
   }, [loadHeaderCounts, pathname]);
+
+  // Fast background alert polling every 9 seconds while tab/app is active
+  useEffect(() => {
+    if (!user) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadHeaderCounts();
+      }
+    }, 9000);
+    return () => window.clearInterval(timer);
+  }, [loadHeaderCounts, user]);
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -404,15 +490,38 @@ export function SiteHeader() {
                     <span className="text-xs font-bold text-ink-primary">
                       {t.notificationsTitle} ({unreadCount})
                     </span>
-                    {unreadCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => void handleMarkAllRead()}
-                        className="text-[11px] font-semibold text-brand-primary hover:underline"
-                      >
-                        {t.markAllRead}
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {alertsPerm === "default" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const win = window as Window & {
+                              SaudavoAndroid?: {
+                                requestNotificationPermission?: () => void;
+                              };
+                            };
+                            win.SaudavoAndroid?.requestNotificationPermission?.();
+                            if ("Notification" in window) {
+                              void window.Notification.requestPermission().then((p) =>
+                                setAlertsPerm(p)
+                              );
+                            }
+                          }}
+                          className="text-[11px] font-bold text-brand-accent hover:underline"
+                        >
+                          {locale === "ur" ? "الرٹس آن کریں" : "Enable Alerts"}
+                        </button>
+                      )}
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => void handleMarkAllRead()}
+                          className="text-[11px] font-semibold text-brand-primary hover:underline"
+                        >
+                          {t.markAllRead}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
                     {notifications.length === 0 ? (

@@ -82,7 +82,16 @@ export function toPrivateStoreDto(store: StoreWithRelations): PrivateStoreDto {
  * Privacy-by-projection mapper for public store views.
  * Never returns residential/business address or phone unless seller explicitly opted in.
  */
-export function toPublicStoreDto(store: StoreWithRelations): PublicStoreDto {
+export function toPublicStoreDto(
+  store: StoreWithRelations,
+  extras?: {
+    completedOrdersCount?: number;
+    avgResponseMinutes?: number | null;
+    responseRatePercent?: number | null;
+    followerCount?: number;
+    isFollowing?: boolean;
+  }
+): PublicStoreDto {
   return PublicStoreDtoSchema.parse({
     id: store.id,
     slug: store.slug,
@@ -96,7 +105,8 @@ export function toPublicStoreDto(store: StoreWithRelations): PublicStoreDto {
       "defaultDeliveryFeePaisa"
     ),
     currency: store.currency,
-    publicContactPhone: store.showPublicPhone ? store.publicContactPhone : null,
+    // Saudavo privacy shield: personal phones are never exposed publicly; all chats happen in Messenger.
+    publicContactPhone: null,
     publicBusinessAddress: store.showPublicAddress
       ? store.publicBusinessAddress
       : null,
@@ -115,6 +125,13 @@ export function toPublicStoreDto(store: StoreWithRelations): PublicStoreDto {
           : null,
       pickupSupported: sa.pickupSupported,
       deliverySupported: sa.deliverySupported
-    }))
+    })),
+    completedOrdersCount: extras?.completedOrdersCount ?? 0,
+    avgResponseMinutes: extras?.avgResponseMinutes ?? null,
+    responseRatePercent: extras?.responseRatePercent ?? null,
+    followerCount: extras?.followerCount ?? 0,
+    ...(extras?.isFollowing !== undefined
+      ? { isFollowing: extras.isFollowing }
+      : {})
   });
 }

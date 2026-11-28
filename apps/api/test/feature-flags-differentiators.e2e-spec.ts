@@ -99,10 +99,10 @@ describe("Admin 1-Click Feature Control & 5 Saudavo Differentiators (e2e)", () =
     const initialFlags = FeatureFlagsMapSchema.parse(initialFlagsRes.body.data);
     expect(initialFlags.shopping_messenger_enabled).toBe(true);
     expect(initialFlags.seller_subscriptions_enabled).toBe(false);
-    expect(initialFlags.buyer_requests_board_enabled).toBe(false);
+    expect(initialFlags.buyer_requests_board_enabled).toBe(true);
     expect(initialFlags.handover_pin_enabled).toBe(false);
     expect(initialFlags.flash_deals_coupons_enabled).toBe(false);
-    expect(initialFlags.messenger_voice_notes_enabled).toBe(false);
+    expect(initialFlags.messenger_voice_notes_enabled).toBe(true);
     expect(initialFlags.cod_refusal_shield_enabled).toBe(false);
 
     // Register actors
@@ -171,7 +171,14 @@ describe("Admin 1-Click Feature Control & 5 Saudavo Differentiators (e2e)", () =
         .expect(200);
     }
 
-    // 3. Disabled differentiator endpoints cleanly fail with FEATURE_DISABLED (403)
+    // 3. Admin can toggle Demand Board OFF -> 403 FEATURE_DISABLED -> then back ON
+    await request(server)
+      .patch("/api/v1/admin/features/buyer_requests_board_enabled")
+      .set("Cookie", [admin.cookie])
+      .set("X-CSRF-Token", admin.csrfToken)
+      .send({ isEnabled: false, reason: "Test flag off gate" })
+      .expect(200);
+
     const disabledDemandRes = await request(server)
       .get("/api/v1/demands")
       .expect(403);

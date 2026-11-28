@@ -244,6 +244,30 @@ export function ServiceDetailClient() {
             : service.store.districtNameEn}
         </Link>
 
+        <div className="flex flex-wrap gap-2">
+          {service.store.completedOrdersCount > 0 && (
+            <span className="rounded-full bg-brand-primary-soft px-2.5 py-0.5 text-[11px] font-bold text-brand-primary">
+              {locale === "ur"
+                ? `${service.store.completedOrdersCount} مکمل آرڈرز`
+                : `${service.store.completedOrdersCount} Orders`}
+            </span>
+          )}
+          {service.store.avgResponseMinutes !== null && (
+            <span className="rounded-full bg-brand-primary-soft px-2.5 py-0.5 text-[11px] font-bold text-brand-primary">
+              {locale === "ur"
+                ? `جواب ~${service.store.avgResponseMinutes} منٹ`
+                : `Replies in ~${service.store.avgResponseMinutes}m`}
+            </span>
+          )}
+          {service.store.followerCount > 0 && (
+            <span className="rounded-full border border-border-subtle bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-ink-secondary">
+              {locale === "ur"
+                ? `${service.store.followerCount} فالورز`
+                : `${service.store.followerCount} Followers`}
+            </span>
+          )}
+        </div>
+
         <p dir="auto" className="text-sm text-ink-secondary">
           {service.description}
         </p>

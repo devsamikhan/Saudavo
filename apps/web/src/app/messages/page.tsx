@@ -1,11 +1,14 @@
 "use client";
 
-import type {
-  AddressDto,
-  ChatMessageDto,
-  ConversationSummaryDto,
-  OrderCreatedSummary,
-  ProductDto
+import {
+  type AddressDto,
+  type ChatMessageDto,
+  type ConversationSummaryDto,
+  detectContactLeak,
+  formatContactLeakMessage,
+  type OrderCreatedSummary,
+  type ProductDto,
+  type ServiceListingDto
 } from "@saudavo/contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,22 +23,24 @@ import { StatusBadge, TrustPill } from "../../components/ui-primitives";
 import {
   acceptChatCustomOffer,
   ApiClientError,
+  blockConversation,
   declineChatCustomOffer,
   fetchAddresses,
   fetchConversationMessages,
   fetchMessengerConversations,
   fetchSellerProducts,
+  fetchSellerServices,
+  reportConversation,
   sendChatCustomOffer,
   sendChatMessage,
-  startMessengerConversation
+  startMessengerConversation,
+  unblockConversation
 } from "../../lib/api-client";
 import {
   uploadImageAssetToS3,
   uploadVoiceNoteToS3
 } from "../../lib/media-upload";
 import { formatPkrFromPaisa, parseWholeRupeesToPaisa } from "../../lib/money";
-
-const PHONE_HINT_REGEX = /(?:\+92|03)\d{9}/;
 
 export default function MessagesPage() {
   const { locale, t, user, authLoading, features, showToast } = useAppContext();
@@ -46,6 +51,7 @@ export default function MessagesPage() {
   const [filterTab, setFilterTab] = useState<"ALL" | "BUYER" | "SELLER">("ALL");
   const [addresses, setAddresses] = useState<AddressDto[]>([]);
   const [sellerProducts, setSellerProducts] = useState<ProductDto[]>([]);
+  const [sellerServices, setSellerServices] = useState<ServiceListingDto[]>([]);
 
   const [messageText, setMessageText] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -56,9 +62,11 @@ export default function MessagesPage() {
   const recordStartedAtRef = useRef<number>(0);
   const [sendingMsg, setSendingMsg] = useState(false);
 
-  // Seller custom offer builder state
+  // Seller custom offer builder state (supports Product OR Service quotes)
   const [showOfferForm, setShowOfferForm] = useState(false);
+  const [offerKind, setOfferKind] = useState<"PRODUCT" | "SERVICE">("PRODUCT");
   const [offerProductId, setOfferProductId] = useState("");
+  const [offerServiceId, setOfferServiceId] = useState("");
   const [offerUnitRupees, setOfferUnitRupees] = useState(1200);
   const [offerQty, setOfferQty] = useState(1);
   const [offerDeliveryRupees, setOfferDeliveryRupees] = useState(150);
@@ -129,9 +137,10 @@ export default function MessagesPage() {
       const serviceListingId = sp?.get("serviceListingId") ?? undefined;
       const conversationId = sp?.get("conversationId");
 
-      const [addrRes, prodRes] = await Promise.all([
+      const [addrRes, prodRes, svcRes] = await Promise.all([
         fetchAddresses().catch(() => ({ data: [] })),
-        fetchSellerProducts().catch(() => ({ data: [] }))
+        fetchSellerProducts().catch(() => ({ data: [] })),
+        fetchSellerServices().catch(() => ({ data: [] }))
       ]);
       setAddresses(addrRes.data);
       if (addrRes.data[0]?.id) {
@@ -140,10 +149,21 @@ export default function MessagesPage() {
       const activeProds = prodRes.data.filter(
         (p) => p.status === "ACTIVE" && p.stockQuantity > 0
       );
+      const activeSvcs = svcRes.data.filter((s) => s.status === "ACTIVE");
       setSellerProducts(activeProds);
+      setSellerServices(activeSvcs);
       if (activeProds[0]?.id) {
+        setOfferKind("PRODUCT");
         setOfferProductId(activeProds[0].id);
         setOfferUnitRupees(Math.max(1, Math.round(activeProds[0].basePricePaisa / 100)));
+      } else if (activeSvcs[0]?.id) {
+        setOfferKind("SERVICE");
+        setOfferServiceId(activeSvcs[0].id);
+        const firstPkgPrice = activeSvcs[0].packages[0]?.pricePaisa ?? 100_000;
+        setOfferUnitRupees(Math.max(1, Math.round(firstPkgPrice / 100)));
+      }
+      if (activeSvcs[0]?.id) {
+        setOfferServiceId(activeSvcs[0].id);
       }
 
       if (storeId) {
@@ -209,11 +229,64 @@ export default function MessagesPage() {
     [conversations, filterTab]
   );
 
-  const hasPhoneHint = PHONE_HINT_REGEX.test(messageText);
+  const detectedLeak = useMemo(
+    () => detectContactLeak(messageText),
+    [messageText]
+  );
+
+  const handleToggleBlock = async () => {
+    if (!activeConversation) return;
+    setErrorMsg(null);
+    try {
+      const updated = activeConversation.blockedByMe
+        ? await unblockConversation(activeConversation.id)
+        : await blockConversation(activeConversation.id, "Blocked by participant");
+      setConversations((prev) =>
+        prev.map((c) => (c.id === updated.data.id ? updated.data : c))
+      );
+      showToast(
+        updated.data.blockedByMe
+          ? locale === "ur"
+            ? "یہ چیٹ بلاک کر دی گئی۔"
+            : "Conversation blocked."
+          : locale === "ur"
+            ? "چیٹ ان بلاک کر دی گئی۔"
+            : "Conversation unblocked."
+      );
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : "Unable to update block state."
+      );
+    }
+  };
+
+  const handleReportChat = async () => {
+    if (!activeConversation) return;
+    setErrorMsg(null);
+    try {
+      await reportConversation(activeConversation.id, {
+        reasonCode: "PRIVACY_VIOLATION",
+        details: "Reported via Saudavo Messenger thread safety control."
+      });
+      showToast(
+        locale === "ur"
+          ? "رپورٹ ماڈریشن ٹیم کو بھیج دی گئی۔"
+          : "Conversation reported to moderation team."
+      );
+    } catch (err: unknown) {
+      setErrorMsg(
+        err instanceof ApiClientError ? err.message : "Unable to submit report."
+      );
+    }
+  };
 
   const handleSendText = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!activeConversation || !messageText.trim()) return;
+    if (detectedLeak) {
+      setErrorMsg(formatContactLeakMessage(detectedLeak.kind));
+      return;
+    }
     setSendingMsg(true);
     setErrorMsg(null);
     try {
@@ -343,13 +416,16 @@ export default function MessagesPage() {
 
   const handleSendCustomOffer = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!activeConversation || !offerProductId) return;
+    if (!activeConversation) return;
+    const isService = offerKind === "SERVICE" && Boolean(offerServiceId);
+    if (!isService && !offerProductId) return;
     setSendingMsg(true);
     setErrorMsg(null);
     try {
       await sendChatCustomOffer(activeConversation.id, {
-        productId: offerProductId,
-        quantity: offerQty,
+        ...(isService
+          ? { serviceListingId: offerServiceId, quantity: 1 }
+          : { productId: offerProductId, quantity: offerQty }),
         unitPricePaisa: parseWholeRupeesToPaisa(offerUnitRupees),
         deliveryFeePaisa: parseWholeRupeesToPaisa(offerDeliveryRupees),
         fulfilmentMode: offerFulfilment,
@@ -615,16 +691,26 @@ export default function MessagesPage() {
                       </div>
                       <p className="text-[11px] text-ink-secondary">
                         {activeConversation.roleView === "BUYER"
-                          ? `${activeConversation.storeDistrictNameEn} • COD Protected`
+                          ? `${activeConversation.storeDistrictNameEn} • COD Protected${
+                              activeConversation.storeCompletedOrdersCount > 0
+                                ? ` • ${activeConversation.storeCompletedOrdersCount} Orders`
+                                : ""
+                            }${
+                              activeConversation.storeAvgResponseMinutes !== null
+                                ? ` • ~${activeConversation.storeAvgResponseMinutes}m reply`
+                                : ""
+                            }`
                           : activeConversation.buyerCodStats
                             ? `Buyer COD History: ${activeConversation.buyerCodStats.completedCodCount} collected, ${activeConversation.buyerCodStats.refusedCodCount} refused`
                             : "Buyer Inquiry"}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {activeConversation.roleView === "SELLER" &&
-                      sellerProducts.length > 0 && (
+                      (sellerProducts.length > 0 || sellerServices.length > 0) &&
+                      !activeConversation.blockedByBuyer &&
+                      !activeConversation.blockedBySeller && (
                         <button
                           type="button"
                           onClick={() => setShowOfferForm((prev) => !prev)}
@@ -637,6 +723,26 @@ export default function MessagesPage() {
                               : "+ Send Custom Offer"}
                         </button>
                       )}
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleBlock()}
+                      className="rounded-xl border border-border-subtle px-2.5 py-1.5 text-[11px] font-semibold text-ink-secondary hover:border-red-300 hover:text-red-700"
+                    >
+                      {activeConversation.blockedByMe
+                        ? locale === "ur"
+                          ? "ان بلاک"
+                          : "Unblock"
+                        : locale === "ur"
+                          ? "بلاک"
+                          : "Block"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleReportChat()}
+                      className="rounded-xl border border-border-subtle px-2.5 py-1.5 text-[11px] font-semibold text-ink-secondary hover:border-amber-400 hover:text-amber-700"
+                    >
+                      {locale === "ur" ? "رپورٹ" : "Report"}
+                    </button>
                     <Link
                       href={`/stores/${activeConversation.storeSlug}`}
                       className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold text-ink-primary hover:border-brand-primary"
@@ -649,36 +755,74 @@ export default function MessagesPage() {
                 {/* In-Chat Safety Banner */}
                 <div className="border-b border-brand-primary/15 bg-brand-primary-soft/50 px-4 py-2 text-[11px] font-medium text-brand-primary">
                   {locale === "ur"
-                    ? "حفاظتی ہدایت: تمام بات چیت اور ڈیلز سوداو میسنجر کے اندر مکمل کریں اور صرف کیش آن ڈلیوری (COD) یا تصدیق شدہ آرڈر پر اعتماد کریں۔"
-                    : "Safety Tip: Keep all bargaining and orders inside Saudavo Messenger for Cash on Delivery protection. Never share personal phone numbers unnecessarily."}
+                    ? "حفاظتی ہدایت: تمام بات چیت سوداو میسنجر کے اندر مکمل کریں۔ ذاتی فون نمبر، ای میل یا واٹس ایپ لنک شیئر کرنے کی اجازت نہیں ہے۔"
+                    : "Privacy Shield Active: Phone numbers, emails, and external WhatsApp links are blocked to keep both buyers and sellers safe inside Saudavo."}
                 </div>
 
-                {/* Seller Custom Offer Composer */}
+                {/* Seller Custom Offer Composer (Product or Service) */}
                 {showOfferForm && activeConversation.roleView === "SELLER" && (
                   <form
                     onSubmit={handleSendCustomOffer}
                     className="grid grid-cols-1 gap-2.5 border-b border-border-subtle bg-surface-muted/60 p-4 sm:grid-cols-4"
                   >
-                    <select
-                      value={offerProductId}
-                      onChange={(e) => {
-                        const nextId = e.target.value;
-                        setOfferProductId(nextId);
-                        const prod = sellerProducts.find((p) => p.id === nextId);
-                        if (prod) {
-                          setOfferUnitRupees(
-                            Math.max(1, Math.round(prod.basePricePaisa / 100))
-                          );
+                    {sellerProducts.length > 0 && sellerServices.length > 0 && (
+                      <select
+                        value={offerKind}
+                        onChange={(e) =>
+                          setOfferKind(
+                            e.target.value === "SERVICE" ? "SERVICE" : "PRODUCT"
+                          )
                         }
-                      }}
-                      className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs sm:col-span-2"
-                    >
-                      {sellerProducts.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title} (Stock: {p.stockQuantity})
-                        </option>
-                      ))}
-                    </select>
+                        className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs font-semibold sm:col-span-4"
+                      >
+                        <option value="PRODUCT">Product Custom Deal</option>
+                        <option value="SERVICE">Service Custom Quote</option>
+                      </select>
+                    )}
+                    {offerKind === "SERVICE" && sellerServices.length > 0 ? (
+                      <select
+                        value={offerServiceId}
+                        onChange={(e) => {
+                          const nextId = e.target.value;
+                          setOfferServiceId(nextId);
+                          const svc = sellerServices.find((s) => s.id === nextId);
+                          const firstPrice = svc?.packages[0]?.pricePaisa;
+                          if (firstPrice) {
+                            setOfferUnitRupees(
+                              Math.max(1, Math.round(firstPrice / 100))
+                            );
+                          }
+                        }}
+                        className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs sm:col-span-2"
+                      >
+                        {sellerServices.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.title} ({s.serviceMode})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={offerProductId}
+                        onChange={(e) => {
+                          const nextId = e.target.value;
+                          setOfferProductId(nextId);
+                          const prod = sellerProducts.find((p) => p.id === nextId);
+                          if (prod) {
+                            setOfferUnitRupees(
+                              Math.max(1, Math.round(prod.basePricePaisa / 100))
+                            );
+                          }
+                        }}
+                        className="rounded-xl border border-border-subtle bg-surface-card px-3 py-2 text-xs sm:col-span-2"
+                      >
+                        {sellerProducts.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title} (Stock: {p.stockQuantity})
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <input
                       type="number"
                       min={1}
@@ -932,65 +1076,115 @@ export default function MessagesPage() {
 
                 {/* Composer */}
                 <div className="border-t border-border-subtle p-3">
-                  {hasPhoneHint && (
-                    <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-800">
-                      {locale === "ur"
-                        ? "رازداری کی یاددہانی: سوداو میسنجر میں ذاتی فون نمبر شیئر کرنا ضروری نہیں — یہیں محفوظ آفر اور آرڈر کریں۔"
-                        : "Privacy reminder: You don't need to share personal phone numbers. Agree on a price and complete COD orders right inside Saudavo."}
-                    </p>
+                  {activeConversation.blockedByBuyer ||
+                  activeConversation.blockedBySeller ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-center text-xs font-semibold text-red-700">
+                      {activeConversation.blockedByMe
+                        ? locale === "ur"
+                          ? "آپ نے یہ چیٹ بلاک کی ہوئی ہے۔ دوبارہ بات کرنے کے لیے اوپر Unblock دبائیں۔"
+                          : "You blocked this conversation. Tap Unblock above to resume chatting."
+                        : locale === "ur"
+                          ? "دوسرے صارف کی جانب سے یہ چیٹ عارضی طور پر بلاک ہے۔"
+                          : "This conversation has been paused by the other participant."}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        {(activeConversation.roleView === "BUYER"
+                          ? locale === "ur"
+                            ? [
+                                "السلام علیکم، کیا یہ دستیاب ہے؟",
+                                "ڈلیوری کتنے دن میں ہوگی؟",
+                                "فائنل قیمت کیا ہوگی؟"
+                              ]
+                            : [
+                                "Assalam-o-Alaikum, is this available?",
+                                "How fast can you deliver in Mianwali?",
+                                "Please share best custom price"
+                              ]
+                          : locale === "ur"
+                            ? [
+                                "وعلیکم السلام، جی بالکل دستیاب ہے!",
+                                "میں آپ کو کسٹم COD آفر بھیج رہا ہوں",
+                                "آج یا کل ڈلیوری ہو جائے گی"
+                              ]
+                            : [
+                                "Wa-Alaikum-Assalam, yes it is available!",
+                                "Sending you a custom COD offer now",
+                                "Ready for fast local delivery"
+                              ]
+                        ).map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() => setMessageText(chip)}
+                            className="rounded-full border border-border-subtle bg-surface-muted px-2.5 py-1 text-[11px] font-medium text-ink-secondary transition hover:border-brand-primary hover:text-brand-primary"
+                          >
+                            {chip}
+                          </button>
+                        ))}
+                      </div>
+                      {detectedLeak && (
+                        <p className="mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-700">
+                          {formatContactLeakMessage(detectedLeak.kind)}
+                        </p>
+                      )}
+                      <form onSubmit={handleSendText} className="flex items-center gap-2">
+                        <label className="cursor-pointer rounded-xl border border-border-subtle bg-surface-muted px-3 py-2 text-xs font-semibold text-ink-primary hover:border-brand-primary">
+                          {uploadingPhoto ? "..." : locale === "ur" ? "تصویر" : "Photo"}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={uploadingPhoto}
+                            onChange={(e) => void handleUploadChatPhoto(e)}
+                            className="sr-only"
+                          />
+                        </label>
+                        {features.messenger_voice_notes_enabled && (
+                          <button
+                            type="button"
+                            disabled={uploadingVoice}
+                            onClick={() => void handleToggleVoiceRecord()}
+                            className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
+                              recordingVoice
+                                ? "animate-pulse bg-red-600 text-white"
+                                : "border border-border-subtle bg-brand-primary-soft text-brand-primary hover:border-brand-primary"
+                            }`}
+                          >
+                            {uploadingVoice
+                              ? "..."
+                              : recordingVoice
+                                ? locale === "ur"
+                                  ? "بھیجیں (Stop)"
+                                  : "Stop & Send"
+                                : locale === "ur"
+                                  ? "وائس"
+                                  : "Voice"}
+                          </button>
+                        )}
+                        <input
+                          type="text"
+                          value={messageText}
+                          onChange={(e) => setMessageText(e.target.value)}
+                          placeholder={
+                            locale === "ur"
+                              ? "پیغام لکھیں یا بھاؤ تاؤ کریں..."
+                              : "Type your message or ask about delivery..."
+                          }
+                          className="flex-1 rounded-xl border border-border-subtle px-3.5 py-2 text-sm focus:border-brand-primary focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          disabled={
+                            sendingMsg || !messageText.trim() || Boolean(detectedLeak)
+                          }
+                          className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-bold text-white hover:bg-brand-primary-hover disabled:opacity-50"
+                        >
+                          {locale === "ur" ? "بھیجیں" : "Send"}
+                        </button>
+                      </form>
+                    </>
                   )}
-                  <form onSubmit={handleSendText} className="flex items-center gap-2">
-                    <label className="cursor-pointer rounded-xl border border-border-subtle bg-surface-muted px-3 py-2 text-xs font-semibold text-ink-primary hover:border-brand-primary">
-                      {uploadingPhoto ? "..." : locale === "ur" ? "تصویر" : "Photo"}
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        disabled={uploadingPhoto}
-                        onChange={(e) => void handleUploadChatPhoto(e)}
-                        className="sr-only"
-                      />
-                    </label>
-                    {features.messenger_voice_notes_enabled && (
-                      <button
-                        type="button"
-                        disabled={uploadingVoice}
-                        onClick={() => void handleToggleVoiceRecord()}
-                        className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
-                          recordingVoice
-                            ? "animate-pulse bg-red-600 text-white"
-                            : "border border-border-subtle bg-brand-primary-soft text-brand-primary hover:border-brand-primary"
-                        }`}
-                      >
-                        {uploadingVoice
-                          ? "..."
-                          : recordingVoice
-                            ? locale === "ur"
-                              ? "بھیجیں (Stop)"
-                              : "Stop & Send"
-                            : locale === "ur"
-                              ? "وائس"
-                              : "Voice"}
-                      </button>
-                    )}
-                    <input
-                      type="text"
-                      value={messageText}
-                      onChange={(e) => setMessageText(e.target.value)}
-                      placeholder={
-                        locale === "ur"
-                          ? "پیغام لکھیں یا بھاؤ تاؤ کریں..."
-                          : "Type your message or ask about delivery..."
-                      }
-                      className="flex-1 rounded-xl border border-border-subtle px-3.5 py-2 text-sm focus:border-brand-primary focus:outline-none"
-                    />
-                    <button
-                      type="submit"
-                      disabled={sendingMsg || !messageText.trim()}
-                      className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-bold text-white hover:bg-brand-primary-hover disabled:opacity-50"
-                    >
-                      {locale === "ur" ? "بھیجیں" : "Send"}
-                    </button>
-                  </form>
                 </div>
               </>
             ) : (

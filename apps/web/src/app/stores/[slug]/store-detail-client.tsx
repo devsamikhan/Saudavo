@@ -14,13 +14,16 @@ import {
 import {
   ApiClientError,
   fetchPublicStoreCatalog,
-  fetchStoreReviews
+  fetchStoreReviews,
+  followStore,
+  unfollowStore
 } from "../../../lib/api-client";
 import { formatPkrFromPaisa } from "../../../lib/money";
 
 export function StoreDetailClient() {
   const params = useParams<{ slug: string }>();
-  const { locale, t, isWishlisted, toggleWishlist } = useAppContext();
+  const { locale, t, user, isWishlisted, toggleWishlist, showToast } =
+    useAppContext();
 
   const [store, setStore] = useState<PublicStoreDto | null>(null);
   const [ratingAvg, setRatingAvg] = useState<number | null>(null);
@@ -29,6 +32,9 @@ export function StoreDetailClient() {
   const [services, setServices] = useState<PublicSearchItem[]>([]);
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
   const [catalogTab, setCatalogTab] = useState<"ALL" | "PRODUCTS" | "SERVICES">("ALL");
+  const [followBusy, setFollowBusy] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -43,6 +49,8 @@ export function StoreDetailClient() {
         ]);
         if (!active) return;
         setStore(catalogRes.data.store);
+        setIsFollowing(Boolean(catalogRes.data.store.isFollowing));
+        setFollowerCount(catalogRes.data.store.followerCount ?? 0);
         setRatingAvg(catalogRes.data.ratingAvg);
         setReviewCount(catalogRes.data.reviewCount);
         setProducts(catalogRes.data.products);
@@ -81,8 +89,36 @@ export function StoreDetailClient() {
 
   const districtName =
     locale === "ur" ? store.districtNameUr : store.districtNameEn;
-  const isPrivacyProtected =
-    !store.publicContactPhone && !store.publicBusinessAddress;
+  const isPrivacyProtected = !store.publicBusinessAddress;
+
+  const handleToggleFollow = async () => {
+    if (!user) {
+      showToast(
+        locale === "ur"
+          ? "اسٹور فالو کرنے کے لیے پہلے سائن ان کریں۔"
+          : "Sign in to follow stores and get new listing alerts.",
+        "accent"
+      );
+      return;
+    }
+    setFollowBusy(true);
+    try {
+      const res = isFollowing
+        ? await unfollowStore(store.id)
+        : await followStore(store.id);
+      setIsFollowing(res.data.isFollowing);
+      setFollowerCount(res.data.followerCount);
+    } catch (err: unknown) {
+      showToast(
+        err instanceof ApiClientError
+          ? err.message
+          : "Unable to update store follow.",
+        "accent"
+      );
+    } finally {
+      setFollowBusy(false);
+    }
+  };
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
@@ -128,6 +164,35 @@ export function StoreDetailClient() {
 
         <div className="space-y-4 p-6 sm:px-8">
           <div className="flex flex-wrap gap-2">
+            {store.completedOrdersCount > 0 && (
+              <span className="rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-bold text-brand-primary">
+                {locale === "ur"
+                  ? `${store.completedOrdersCount} مکمل آرڈرز`
+                  : `${store.completedOrdersCount} Completed Orders`}
+              </span>
+            )}
+            {store.avgResponseMinutes !== null && (
+              <span className="rounded-full bg-brand-primary-soft px-3 py-1 text-xs font-bold text-brand-primary">
+                {locale === "ur"
+                  ? `اوسط جواب: ~${store.avgResponseMinutes} منٹ`
+                  : `Replies in ~${store.avgResponseMinutes}m`}
+              </span>
+            )}
+            {store.responseRatePercent !== null && (
+              <span className="rounded-full border border-border-subtle bg-surface-muted px-3 py-1 text-xs font-semibold text-ink-primary">
+                {locale === "ur"
+                  ? `جواب کی شرح: ${store.responseRatePercent}%`
+                  : `Response rate: ${store.responseRatePercent}%`}
+              </span>
+            )}
+            <span className="rounded-full border border-border-subtle bg-surface-muted px-3 py-1 text-xs font-semibold text-ink-primary">
+              {locale === "ur"
+                ? `${followerCount} فالورز`
+                : `${followerCount} Followers`}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             {store.serviceAreas.map((sa) => (
               <span
                 key={sa.id}
@@ -142,14 +207,9 @@ export function StoreDetailClient() {
             </span>
           </div>
 
-          {(store.publicContactPhone || store.publicBusinessAddress) && (
+          {store.publicBusinessAddress && (
             <div className="rounded-2xl bg-surface-muted p-4 text-xs text-ink-secondary space-y-1">
-              {store.publicContactPhone && (
-                <p>Public Phone: {store.publicContactPhone}</p>
-              )}
-              {store.publicBusinessAddress && (
-                <p dir="auto">Business Address: {store.publicBusinessAddress}</p>
-              )}
+              <p dir="auto">Business Address: {store.publicBusinessAddress}</p>
             </div>
           )}
 
@@ -166,6 +226,24 @@ export function StoreDetailClient() {
             >
               {locale === "ur" ? "اسٹور سے چیٹ کریں" : "Message Store"}
             </Link>
+            <button
+              type="button"
+              disabled={followBusy}
+              onClick={() => void handleToggleFollow()}
+              className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
+                isFollowing
+                  ? "border border-brand-primary bg-brand-primary-soft text-brand-primary"
+                  : "border border-border-subtle bg-surface-card text-ink-primary hover:border-brand-primary"
+              }`}
+            >
+              {isFollowing
+                ? locale === "ur"
+                  ? "✓ فالو کیا ہوا ہے"
+                  : "✓ Following"
+                : locale === "ur"
+                  ? "+ اسٹور فالو کریں"
+                  : "+ Follow Store"}
+            </button>
             <ReportListingButton targetType="STORE" targetId={store.id} />
           </div>
         </div>
@@ -380,6 +458,13 @@ export function StoreDetailClient() {
                   <p dir="auto" className="mt-2 text-sm text-ink-secondary">
                     {rev.comment}
                   </p>
+                )}
+                {rev.photoReadUrl && (
+                  <img
+                    src={rev.photoReadUrl}
+                    alt="Verified customer photo review"
+                    className="mt-2.5 h-32 w-32 rounded-xl border border-border-subtle object-cover"
+                  />
                 )}
               </div>
             ))}

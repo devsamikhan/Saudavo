@@ -167,7 +167,7 @@ const DEFAULT_FEATURE_FLAGS = [
     descriptionUr:
       "خریدار اپنی ضرورت اور بجٹ پوسٹ کریں اور مقامی تصدیق شدہ دکاندار فوراً سوداو میسنجر میں آفر بھیجیں۔",
     category: "GROWTH",
-    isEnabled: false,
+    isEnabled: true,
     sortOrder: 30
   },
   {
@@ -179,7 +179,7 @@ const DEFAULT_FEATURE_FLAGS = [
     descriptionUr:
       "خریدار اور دکاندار سوداو میسنجر کے اندر نجی طور پر مختصر اردو/مقامی وائس پیغامات بھیج سکیں۔",
     category: "COMMUNICATION",
-    isEnabled: false,
+    isEnabled: true,
     sortOrder: 40
   },
   {

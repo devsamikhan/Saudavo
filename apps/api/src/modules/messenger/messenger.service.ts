@@ -8,6 +8,9 @@ import {
   ConversationSummaryDtoSchema,
   type OrderCreatedSummary,
   OrderCreatedSummarySchema,
+  type ReportConversationRequest,
+  type ReportDto,
+  ReportDtoSchema,
   type SendChatMessageRequest,
   type SendCustomOfferRequest,
   type StartConversationRequest
@@ -15,7 +18,9 @@ import {
 import { DomainException } from "../../common/errors/domain.exception";
 import { IdempotencyService } from "../../common/idempotency/idempotency.service";
 import { bigIntToSafeNumber } from "../../common/money.util";
+import { assertFieldsHaveNoContactLeak } from "../../common/privacy/contact-guard.util";
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { loadStoreTrustMetrics } from "../../common/trust/store-trust.util";
 import { CustomerService } from "../customer/customer.service";
 import { FeatureFlagsService } from "../features/feature-flags.service";
 import { FinanceService } from "../finance/finance.service";
@@ -51,6 +56,9 @@ export class MessengerService {
       "shopping_messenger_enabled",
       "Saudavo Shopping Messenger"
     );
+    assertFieldsHaveNoContactLeak([
+      { label: "Message", value: dto.initialMessage }
+    ]);
     const store = await this.prisma.store.findFirst({
       where: {
         id: dto.storeId,
@@ -246,10 +254,19 @@ export class MessengerService {
       const storeVerifiedPro = await this.subscriptionsService.isStoreProVerified(
         row.storeId
       );
+      const trustMetrics = await loadStoreTrustMetrics(this.prisma, row.storeId);
       const buyerCodStats =
         roleView === "SELLER"
           ? await this.loadSingleBuyerCodStats(row.buyerId)
           : null;
+      const blockedByBuyer = Boolean(
+        (row as { blockedByBuyerAt?: Date | null }).blockedByBuyerAt
+      );
+      const blockedBySeller = Boolean(
+        (row as { blockedBySellerAt?: Date | null }).blockedBySellerAt
+      );
+      const blockedByMe =
+        roleView === "BUYER" ? blockedByBuyer : blockedBySeller;
 
       const lastMsg = row.messages[0];
       const lastMessagePreview = lastMsg
@@ -272,6 +289,11 @@ export class MessengerService {
           storeDisplayName: row.store.displayName,
           storeDistrictNameEn: row.store.district.nameEn,
           storeVerifiedPro,
+          blockedByBuyer,
+          blockedBySeller,
+          blockedByMe,
+          storeCompletedOrdersCount: trustMetrics.completedOrdersCount,
+          storeAvgResponseMinutes: trustMetrics.avgResponseMinutes,
           status: row.status,
           unreadCount,
           lastMessagePreview,
@@ -361,7 +383,9 @@ export class MessengerService {
       "shopping_messenger_enabled",
       "Saudavo Shopping Messenger"
     );
+    assertFieldsHaveNoContactLeak([{ label: "Message", value: dto.body }]);
     const access = await this.requireParticipantAccess(userId, conversationId);
+    this.assertConversationNotBlocked(access.conversation);
 
     let attachedMimeType: string | null = null;
     if (dto.mediaAssetId) {
@@ -495,7 +519,9 @@ export class MessengerService {
     dto: SendCustomOfferRequest,
     requestId: string
   ): Promise<{ data: ChatMessageDto; meta: { requestId: string } }> {
+    assertFieldsHaveNoContactLeak([{ label: "Offer note", value: dto.note }]);
     const access = await this.requireParticipantAccess(userId, conversationId);
+    this.assertConversationNotBlocked(access.conversation);
     if (access.role !== "SELLER") {
       throw new DomainException(
         "FORBIDDEN",
@@ -504,41 +530,75 @@ export class MessengerService {
       );
     }
 
-    const product = await this.prisma.product.findFirst({
-      where: {
-        id: dto.productId,
-        storeId: access.conversation.storeId,
-        status: "ACTIVE",
-        deletedAt: null
+    let targetProductId: string | null = null;
+    let targetServiceListingId: string | null = null;
+    let offerTitle = "";
+    let offerQuantity = dto.quantity;
+
+    if (dto.productId) {
+      const product = await this.prisma.product.findFirst({
+        where: {
+          id: dto.productId,
+          storeId: access.conversation.storeId,
+          status: "ACTIVE",
+          deletedAt: null
+        }
+      });
+      if (!product) {
+        throw new DomainException(
+          "NOT_FOUND",
+          HttpStatus.NOT_FOUND,
+          "Active product not found in your store."
+        );
       }
-    });
-    if (!product) {
-      throw new DomainException(
-        "NOT_FOUND",
-        HttpStatus.NOT_FOUND,
-        "Active product not found in your store."
-      );
-    }
-    if (product.stockQuantity < dto.quantity) {
-      throw new DomainException(
-        "CONFLICT",
-        HttpStatus.CONFLICT,
-        `Insufficient stock (${String(product.stockQuantity)} left) for this offer.`
-      );
-    }
-    if (dto.fulfilmentMode === "SELLER_DELIVERY" && !product.deliveryEnabled) {
-      throw new DomainException(
-        "VALIDATION_ERROR",
-        HttpStatus.BAD_REQUEST,
-        "This product does not support seller delivery."
-      );
-    }
-    if (dto.fulfilmentMode === "CUSTOMER_PICKUP" && !product.pickupEnabled) {
-      throw new DomainException(
-        "VALIDATION_ERROR",
-        HttpStatus.BAD_REQUEST,
-        "This product does not support customer pickup."
-      );
+      if (product.stockQuantity < dto.quantity) {
+        throw new DomainException(
+          "CONFLICT",
+          HttpStatus.CONFLICT,
+          `Insufficient stock (${String(product.stockQuantity)} left) for this offer.`
+        );
+      }
+      if (dto.fulfilmentMode === "SELLER_DELIVERY" && !product.deliveryEnabled) {
+        throw new DomainException(
+          "VALIDATION_ERROR",
+          HttpStatus.BAD_REQUEST,
+          "This product does not support seller delivery."
+        );
+      }
+      if (dto.fulfilmentMode === "CUSTOMER_PICKUP" && !product.pickupEnabled) {
+        throw new DomainException(
+          "VALIDATION_ERROR",
+          HttpStatus.BAD_REQUEST,
+          "This product does not support customer pickup."
+        );
+      }
+      targetProductId = product.id;
+      offerTitle = product.title;
+    } else if (dto.serviceListingId) {
+      const svc = await this.prisma.serviceListing.findFirst({
+        where: {
+          id: dto.serviceListingId,
+          storeId: access.conversation.storeId,
+          status: "ACTIVE",
+          deletedAt: null
+        },
+        include: {
+          packages: {
+            where: { isActive: true, deletedAt: null },
+            orderBy: { pricePaisa: "asc" }
+          }
+        }
+      });
+      if (!svc || svc.packages.length === 0) {
+        throw new DomainException(
+          "NOT_FOUND",
+          HttpStatus.NOT_FOUND,
+          "Active service listing with an active package not found in your store."
+        );
+      }
+      targetServiceListingId = svc.id;
+      offerTitle = svc.title;
+      offerQuantity = 1;
     }
 
     const now = new Date();
@@ -550,10 +610,11 @@ export class MessengerService {
           senderId: userId,
           senderRole: "SELLER",
           messageType: "CUSTOM_OFFER",
-          body: dto.note?.trim() || `Custom COD deal for ${product.title}`,
-          productId: product.id,
-          offerTitle: product.title,
-          offerQuantity: dto.quantity,
+          body: dto.note?.trim() || `Custom COD deal for ${offerTitle}`,
+          productId: targetProductId,
+          serviceListingId: targetServiceListingId,
+          offerTitle,
+          offerQuantity,
           offerUnitPricePaisa: BigInt(dto.unitPricePaisa),
           offerDeliveryFeePaisa: BigInt(dto.deliveryFeePaisa),
           offerFulfilmentMode: dto.fulfilmentMode,
@@ -583,7 +644,7 @@ export class MessengerService {
           payloadJson: {
             conversationId,
             storeName: access.conversation.store.displayName,
-            offerTitle: product.title
+            offerTitle
           }
         },
         tx
@@ -610,6 +671,9 @@ export class MessengerService {
       "shopping_messenger_enabled",
       "Saudavo Shopping Messenger"
     );
+    assertFieldsHaveNoContactLeak([
+      { label: "Order note", value: dto.customerNote }
+    ]);
     const summary = await this.idempotencyService.execute<OrderCreatedSummary>({
       userId,
       endpoint: `POST /api/v1/messenger/conversations/${conversationId}/offers/${messageId}/accept`,
@@ -622,6 +686,7 @@ export class MessengerService {
           conversationId,
           tx
         );
+        this.assertConversationNotBlocked(access.conversation);
         if (access.role !== "BUYER") {
           throw new DomainException(
             "FORBIDDEN",
@@ -639,7 +704,7 @@ export class MessengerService {
         });
         if (
           !offerMsg ||
-          !offerMsg.productId ||
+          (!offerMsg.productId && !offerMsg.serviceListingId) ||
           offerMsg.offerQuantity === null ||
           offerMsg.offerUnitPricePaisa === null ||
           offerMsg.offerDeliveryFeePaisa === null ||
@@ -689,15 +754,68 @@ export class MessengerService {
           );
         }
 
+        const isServiceOffer = Boolean(
+          offerMsg.serviceListingId && !offerMsg.productId
+        );
+        const orderType: "PHYSICAL" | "SERVICE" = isServiceOffer
+          ? "SERVICE"
+          : "PHYSICAL";
+
+        let matchedServiceListing: {
+          id: string;
+          title: string;
+          serviceMode: string;
+          packages: Array<{
+            id: string;
+            tierName: string;
+            deliveryEstimateDays: number;
+            maxRevisions: number;
+          }>;
+        } | null = null;
+
+        if (isServiceOffer && offerMsg.serviceListingId) {
+          matchedServiceListing = await tx.serviceListing.findFirst({
+            where: {
+              id: offerMsg.serviceListingId,
+              storeId: store.id,
+              status: "ACTIVE",
+              deletedAt: null
+            },
+            include: {
+              packages: {
+                where: { isActive: true, deletedAt: null },
+                orderBy: { pricePaisa: "asc" },
+                take: 1
+              }
+            }
+          });
+          if (
+            !matchedServiceListing ||
+            matchedServiceListing.packages.length === 0
+          ) {
+            throw new DomainException(
+              "CONFLICT",
+              HttpStatus.CONFLICT,
+              "This service listing is no longer active."
+            );
+          }
+        }
+
+        const needsAddress = isServiceOffer
+          ? matchedServiceListing?.serviceMode === "ON_SITE" ||
+            (matchedServiceListing?.serviceMode === "HYBRID" &&
+              offerMsg.offerFulfilmentMode === "SELLER_DELIVERY")
+          : offerMsg.offerFulfilmentMode === "SELLER_DELIVERY";
+
         let address:
           | Awaited<ReturnType<CustomerService["requireOwnedAddress"]>>
           | undefined;
-        if (offerMsg.offerFulfilmentMode === "SELLER_DELIVERY") {
+        if (needsAddress) {
           if (!dto.addressId) {
             throw new DomainException(
               "VALIDATION_ERROR",
               HttpStatus.BAD_REQUEST,
-              "Select a Mianwali delivery address to accept a delivery offer."
+              "Select a Mianwali delivery address to accept a delivery or on-site offer."
             );
           }
           address = await this.customerService.requireOwnedAddress(
@@ -707,42 +825,46 @@ export class MessengerService {
           const serviceArea = store.serviceAreas.find(
             (sa) =>
               sa.areaZoneId === address!.areaZoneId &&
-              sa.deliverySupported === true
+              (isServiceOffer || sa.deliverySupported === true)
           );
           if (address.districtId !== store.districtId || !serviceArea) {
             throw new DomainException(
               "VALIDATION_ERROR",
               HttpStatus.BAD_REQUEST,
-              "Selected address is outside this store's Mianwali delivery coverage."
+              "Selected address is outside this store's Mianwali coverage area."
             );
           }
         }
 
-        const dec = await tx.product.updateMany({
-          where: {
-            id: offerMsg.productId,
-            deletedAt: null,
-            status: "ACTIVE",
-            stockQuantity: { gte: offerMsg.offerQuantity }
-          },
-          data: {
-            stockQuantity: { decrement: offerMsg.offerQuantity }
+        if (!isServiceOffer && offerMsg.productId) {
+          const dec = await tx.product.updateMany({
+            where: {
+              id: offerMsg.productId,
+              deletedAt: null,
+              status: "ACTIVE",
+              stockQuantity: { gte: offerMsg.offerQuantity }
+            },
+            data: {
+              stockQuantity: { decrement: offerMsg.offerQuantity }
+            }
+          });
+          if (dec.count === 0) {
+            throw new DomainException(
+              "CONFLICT",
+              HttpStatus.CONFLICT,
+              "Insufficient stock to fulfill this custom offer."
+            );
           }
-        });
-        if (dec.count === 0) {
-          throw new DomainException(
-            "CONFLICT",
-            HttpStatus.CONFLICT,
-            "Insufficient stock to fulfill this custom offer."
-          );
         }
 
         const unitPrice = offerMsg.offerUnitPricePaisa;
-        const subtotalPaisa = unitPrice * BigInt(offerMsg.offerQuantity);
+        const subtotalPaisa = isServiceOffer
+          ? unitPrice
+          : unitPrice * BigInt(offerMsg.offerQuantity);
         const deliveryFeePaisa = offerMsg.offerDeliveryFeePaisa;
 
         const rule = await this.financeService.resolveApplicableRule(
-          "PHYSICAL",
+          orderType,
           tx
         );
         const financials = this.financeService.calculateOrderFinancials({
@@ -753,6 +875,9 @@ export class MessengerService {
           rateBps: rule.rateBps
         });
 
+        const isRemoteService =
+          isServiceOffer && matchedServiceListing?.serviceMode === "REMOTE";
+        const paymentMethod = isRemoteService ? "MANUAL_OFFLINE" : "COD";
         const orderNumber = generateOrderNumber(store.district.code);
         const order = await tx.order.create({
           data: {
@@ -760,9 +885,9 @@ export class MessengerService {
             customerId: userId,
             storeId: store.id,
             districtId: store.districtId,
-            orderType: "PHYSICAL",
+            orderType,
             status: "CONFIRMED",
-            paymentMethod: "COD",
+            paymentMethod,
             codCollectionStatus: "PENDING_COLLECTION",
             currency: "PKR",
             subtotalPaisa,
@@ -777,47 +902,82 @@ export class MessengerService {
           }
         });
 
-        await tx.orderItem.create({
-          data: {
-            orderId: order.id,
-            productId: offerMsg.productId,
-            productVariantId: null,
-            titleSnapshot: offerMsg.offerTitle ?? "Custom Offer Item",
-            variantTitleSnapshot: "Agreed Messenger Deal",
-            skuSnapshot: null,
-            unitPricePaisa: unitPrice,
-            quantity: offerMsg.offerQuantity,
-            lineTotalPaisa: subtotalPaisa,
-            currency: "PKR"
-          }
-        });
-
-        await tx.delivery.create({
-          data: {
-            orderId: order.id,
-            fulfilmentMode: offerMsg.offerFulfilmentMode,
-            deliveryStatus: "NOT_STARTED",
-            areaZoneId: address?.areaZoneId ?? null,
-            ...(address
-              ? {
-                  shippingAddressSnapshotJson: {
-                    recipientName: address.recipientName,
-                    recipientPhone: address.recipientPhone,
-                    streetAddress: address.streetAddress,
-                    landmark: address.landmark,
-                    districtName: address.district.nameEn,
-                    areaZoneName: address.areaZone?.nameEn ?? null
+        if (isServiceOffer && matchedServiceListing) {
+          const basePkg = matchedServiceListing.packages[0]!;
+          await tx.serviceOrderDetails.create({
+            data: {
+              orderId: order.id,
+              serviceListingId: matchedServiceListing.id,
+              servicePackageId: basePkg.id,
+              serviceModeSnapshot: matchedServiceListing.serviceMode,
+              serviceTitleSnapshot:
+                offerMsg.offerTitle ?? matchedServiceListing.title,
+              packageNameSnapshot: "Custom Messenger Quote",
+              packagePricePaisa: subtotalPaisa,
+              deliveryEstimateDaysSnapshot: basePkg.deliveryEstimateDays,
+              maxRevisionsSnapshot: basePkg.maxRevisions,
+              areaZoneId: address?.areaZoneId ?? null,
+              ...(address
+                ? {
+                    serviceAddressSnapshotJson: {
+                      recipientName: address.recipientName,
+                      recipientPhone: address.recipientPhone,
+                      streetAddress: address.streetAddress,
+                      landmark: address.landmark,
+                      districtName: address.district.nameEn,
+                      areaZoneName: address.areaZone?.nameEn ?? null
+                    }
                   }
-                }
-              : {})
-          }
-        });
+                : {}),
+              customerRequirements:
+                dto.customerNote?.trim() || offerMsg.body || "Custom service quote accepted in Messenger."
+            }
+          });
+        } else if (offerMsg.productId) {
+          await tx.orderItem.create({
+            data: {
+              orderId: order.id,
+              productId: offerMsg.productId,
+              productVariantId: null,
+              titleSnapshot: offerMsg.offerTitle ?? "Custom Offer Item",
+              variantTitleSnapshot: "Agreed Messenger Deal",
+              skuSnapshot: null,
+              unitPricePaisa: unitPrice,
+              quantity: offerMsg.offerQuantity,
+              lineTotalPaisa: subtotalPaisa,
+              currency: "PKR"
+            }
+          });
+        }
+
+        if (!isRemoteService) {
+          await tx.delivery.create({
+            data: {
+              orderId: order.id,
+              fulfilmentMode: offerMsg.offerFulfilmentMode,
+              deliveryStatus: "NOT_STARTED",
+              areaZoneId: address?.areaZoneId ?? null,
+              ...(address
+                ? {
+                    shippingAddressSnapshotJson: {
+                      recipientName: address.recipientName,
+                      recipientPhone: address.recipientPhone,
+                      streetAddress: address.streetAddress,
+                      landmark: address.landmark,
+                      districtName: address.district.nameEn,
+                      areaZoneName: address.areaZone?.nameEn ?? null
+                    }
+                  }
+                : {})
+            }
+          });
+        }
 
         await tx.payment.create({
           data: {
             orderId: order.id,
-            providerCode: "COD_MANUAL",
-            paymentMethod: "COD",
+            providerCode: isRemoteService ? "MANUAL_OFFLINE" : "COD_MANUAL",
+            paymentMethod,
             status: "PENDING",
             amountPaisa: financials.totalPaisa,
             currency: "PKR"
@@ -888,7 +1048,7 @@ export class MessengerService {
               orderId: order.id,
               orderNumber: order.orderNumber,
               storeId: order.storeId,
-              orderType: "PHYSICAL"
+              orderType
             }
           },
           tx
@@ -902,7 +1062,7 @@ export class MessengerService {
             payloadJson: {
               orderId: order.id,
               orderNumber: order.orderNumber,
-              orderType: "PHYSICAL"
+              orderType
             }
           },
           tx
@@ -911,7 +1071,7 @@ export class MessengerService {
         return OrderCreatedSummarySchema.parse({
           orderId: order.id,
           orderNumber: order.orderNumber,
-          orderType: "PHYSICAL",
+          orderType,
           storeId: order.storeId,
           status: order.status,
           paymentMethod: order.paymentMethod,
@@ -936,7 +1096,8 @@ export class MessengerService {
     messageId: string,
     requestId: string
   ): Promise<{ data: ChatMessageDto; meta: { requestId: string } }> {
-    await this.requireParticipantAccess(userId, conversationId);
+    const access = await this.requireParticipantAccess(userId, conversationId);
+    this.assertConversationNotBlocked(access.conversation);
 
     const existing = await this.prisma.chatMessage.findFirst({
       where: {
@@ -974,6 +1135,87 @@ export class MessengerService {
       data: this.toMessageDto(updated),
       meta: { requestId }
     };
+  }
+
+  async setConversationBlocked(
+    userId: string,
+    conversationId: string,
+    blocked: boolean,
+    reason: string | undefined,
+    requestId: string
+  ): Promise<{ data: ConversationSummaryDto; meta: { requestId: string } }> {
+    const access = await this.requireParticipantAccess(userId, conversationId);
+    const now = new Date();
+    const trimmedReason = reason?.trim() || null;
+
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data:
+        access.role === "BUYER"
+          ? {
+              blockedByBuyerAt: blocked ? now : null,
+              blockReason: blocked ? trimmedReason : null
+            }
+          : {
+              blockedBySellerAt: blocked ? now : null,
+              blockReason: blocked ? trimmedReason : null
+            }
+    });
+
+    const summary = await this.buildConversationSummary(conversationId, userId);
+    return { data: summary, meta: { requestId } };
+  }
+
+  async reportConversation(
+    userId: string,
+    conversationId: string,
+    dto: ReportConversationRequest,
+    requestId: string
+  ): Promise<{ data: ReportDto; meta: { requestId: string } }> {
+    await this.requireParticipantAccess(userId, conversationId);
+    assertFieldsHaveNoContactLeak([
+      { label: "Report details", value: dto.details }
+    ]);
+
+    const created = await this.prisma.report.create({
+      data: {
+        reporterId: userId,
+        targetType: "CONVERSATION",
+        targetId: conversationId,
+        reasonCode: dto.reasonCode,
+        details: dto.details,
+        status: "OPEN"
+      }
+    });
+
+    return {
+      data: ReportDtoSchema.parse({
+        id: created.id,
+        reporterId: created.reporterId,
+        targetType: created.targetType,
+        targetId: created.targetId,
+        reasonCode: created.reasonCode,
+        details: created.details,
+        status: created.status,
+        resolutionNote: created.resolutionNote,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString()
+      }),
+      meta: { requestId }
+    };
+  }
+
+  private assertConversationNotBlocked(conversation: {
+    blockedByBuyerAt?: Date | null;
+    blockedBySellerAt?: Date | null;
+  }): void {
+    if (conversation.blockedByBuyerAt || conversation.blockedBySellerAt) {
+      throw new DomainException(
+        "FORBIDDEN",
+        HttpStatus.FORBIDDEN,
+        "This conversation is currently blocked by a participant."
+      );
+    }
   }
 
   private async buildConversationSummary(
@@ -1014,8 +1256,16 @@ export class MessengerService {
     const storeVerifiedPro = await this.subscriptionsService.isStoreProVerified(
       row.storeId
     );
+    const trustMetrics = await loadStoreTrustMetrics(this.prisma, row.storeId);
     const buyerCodStats =
       roleView === "SELLER" ? await this.loadSingleBuyerCodStats(row.buyerId) : null;
+    const blockedByBuyer = Boolean(
+      (row as { blockedByBuyerAt?: Date | null }).blockedByBuyerAt
+    );
+    const blockedBySeller = Boolean(
+      (row as { blockedBySellerAt?: Date | null }).blockedBySellerAt
+    );
+    const blockedByMe = roleView === "BUYER" ? blockedByBuyer : blockedBySeller;
     const lastMsg = row.messages[0];
 
     return ConversationSummaryDtoSchema.parse({
@@ -1029,6 +1279,11 @@ export class MessengerService {
       storeDisplayName: row.store.displayName,
       storeDistrictNameEn: row.store.district.nameEn,
       storeVerifiedPro,
+      blockedByBuyer,
+      blockedBySeller,
+      blockedByMe,
+      storeCompletedOrdersCount: trustMetrics.completedOrdersCount,
+      storeAvgResponseMinutes: trustMetrics.avgResponseMinutes,
       status: row.status,
       unreadCount,
       lastMessagePreview: lastMsg
@@ -1228,6 +1483,7 @@ export class MessengerService {
     refs: { productId?: string; serviceListingId?: string },
     _requestId: string
   ): Promise<ConversationSummaryDto> {
+    assertFieldsHaveNoContactLeak([{ label: "Message", value: initialBody }]);
     const store = await this.prisma.store.findUnique({
       where: { id: storeId },
       include: { district: true }
@@ -1279,6 +1535,7 @@ export class MessengerService {
     });
 
     const storeVerifiedPro = await this.subscriptionsService.isStoreProVerified(store.id);
+    const trustMetrics = await loadStoreTrustMetrics(this.prisma, store.id);
     return ConversationSummaryDtoSchema.parse({
       id: conv.id,
       roleView: "SELLER",
@@ -1289,6 +1546,11 @@ export class MessengerService {
       storeDisplayName: store.displayName,
       storeDistrictNameEn: store.district.nameEn,
       storeVerifiedPro,
+      blockedByBuyer: false,
+      blockedBySeller: false,
+      blockedByMe: false,
+      storeCompletedOrdersCount: trustMetrics.completedOrdersCount,
+      storeAvgResponseMinutes: trustMetrics.avgResponseMinutes,
       status: conv.status,
       unreadCount: 0,
       lastMessagePreview: initialBody,

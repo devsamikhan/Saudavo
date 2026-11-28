@@ -16,6 +16,9 @@ import {
   type ChatMessageDto,
   type ConversationSummaryDto,
   type OrderCreatedSummary,
+  type ReportConversationRequest,
+  ReportConversationRequestSchema,
+  type ReportDto,
   type SendChatMessageRequest,
   SendChatMessageRequestSchema,
   type SendCustomOfferRequest,
@@ -147,6 +150,55 @@ export class MessengerController {
       this.requireUserId(auth),
       conversationId,
       messageId,
+      getRequestId(req)
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post("conversations/:id/block")
+  async blockConversation(
+    @CurrentUser() auth: AuthContext | undefined,
+    @Param("id", new ParseUUIDPipe()) conversationId: string,
+    @Body() body: { reason?: string } | undefined,
+    @Req() req: AppRequest
+  ): Promise<{ data: ConversationSummaryDto; meta: { requestId: string } }> {
+    return this.messengerService.setConversationBlocked(
+      this.requireUserId(auth),
+      conversationId,
+      true,
+      body?.reason,
+      getRequestId(req)
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post("conversations/:id/unblock")
+  async unblockConversation(
+    @CurrentUser() auth: AuthContext | undefined,
+    @Param("id", new ParseUUIDPipe()) conversationId: string,
+    @Req() req: AppRequest
+  ): Promise<{ data: ConversationSummaryDto; meta: { requestId: string } }> {
+    return this.messengerService.setConversationBlocked(
+      this.requireUserId(auth),
+      conversationId,
+      false,
+      undefined,
+      getRequestId(req)
+    );
+  }
+
+  @Post("conversations/:id/report")
+  async reportConversation(
+    @CurrentUser() auth: AuthContext | undefined,
+    @Param("id", new ParseUUIDPipe()) conversationId: string,
+    @Body(new ZodValidationPipe(ReportConversationRequestSchema))
+    body: ReportConversationRequest,
+    @Req() req: AppRequest
+  ): Promise<{ data: ReportDto; meta: { requestId: string } }> {
+    return this.messengerService.reportConversation(
+      this.requireUserId(auth),
+      conversationId,
+      body,
       getRequestId(req)
     );
   }

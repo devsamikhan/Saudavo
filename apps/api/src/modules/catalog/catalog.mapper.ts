@@ -123,7 +123,8 @@ export function toProductDto(product: ProductWithVariants): ProductDto {
 }
 
 export function toPublicProductDetailDto(
-  product: PublicProductWithRelations
+  product: PublicProductWithRelations,
+  storeExtras?: Parameters<typeof toPublicStoreDto>[1]
 ): PublicProductDetailDto {
   return PublicProductDetailDtoSchema.parse({
     id: product.id,
@@ -156,7 +157,7 @@ export function toPublicProductDetailDto(
       altText: image.altText
     })),
     category: toCategoryDto(product.category),
-    store: toPublicStoreDto(product.store),
+    store: toPublicStoreDto(product.store, storeExtras),
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString()
   });
@@ -192,7 +193,8 @@ export function toServiceListingDto(
 }
 
 export function toPublicServiceDetailDto(
-  service: PublicServiceWithRelations
+  service: PublicServiceWithRelations,
+  storeExtras?: Parameters<typeof toPublicStoreDto>[1]
 ): PublicServiceDetailDto {
   return PublicServiceDetailDtoSchema.parse({
     id: service.id,
@@ -215,7 +217,7 @@ export function toPublicServiceDetailDto(
       isActive: pkg.isActive
     })),
     category: toCategoryDto(service.category),
-    store: toPublicStoreDto(service.store),
+    store: toPublicStoreDto(service.store, storeExtras),
     createdAt: service.createdAt.toISOString(),
     updatedAt: service.updatedAt.toISOString()
   });

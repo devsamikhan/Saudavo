@@ -86,6 +86,7 @@ export type ServiceOrderStatus = z.infer<typeof ServiceOrderStatusSchema>;
 
 export const ApiErrorCodeSchema = z.enum([
   "VALIDATION_ERROR",
+  "PRIVACY_CONTACT_SHIELD",
   "UNAUTHORIZED",
   "FORBIDDEN",
   "CSRF_INVALID",

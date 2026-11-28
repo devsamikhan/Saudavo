@@ -366,7 +366,11 @@ export class ModerationService {
 
       const ownerStore = await tx.store.findUnique({
         where: { id: target.storeId },
-        select: { sellerProfile: { select: { userId: true } } }
+        select: {
+          displayName: true,
+          slug: true,
+          sellerProfile: { select: { userId: true } }
+        }
       });
       if (ownerStore?.sellerProfile.userId) {
         await this.notificationsService.notify(
@@ -381,6 +385,30 @@ export class ModerationService {
           },
           tx
         );
+
+        const followers = await tx.storeFollower.findMany({
+          where: { storeId: target.storeId },
+          select: { userId: true },
+          take: 200
+        });
+        for (const f of followers) {
+          if (f.userId === ownerStore.sellerProfile.userId) continue;
+          await this.notificationsService.notify(
+            {
+              userId: f.userId,
+              eventType: "NEW_LISTING_FROM_FOLLOWED_STORE",
+              titleKey: "notification.followedStoreNewListing",
+              payloadJson: {
+                listingId: target.id,
+                listingType: target.listingType,
+                storeId: target.storeId,
+                storeSlug: ownerStore.slug,
+                storeName: ownerStore.displayName
+              }
+            },
+            tx
+          );
+        }
       }
     });
 

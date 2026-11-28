@@ -34,6 +34,7 @@ import {
   postOrderMessage,
   requestServiceRevision
 } from "../../lib/api-client";
+import { uploadImageAssetToS3 } from "../../lib/media-upload";
 import { formatPkrFromPaisa } from "../../lib/money";
 
 function getLiveTrackingData(order: OrderDetailDto, t: UiDictionary) {
@@ -108,6 +109,8 @@ export default function OrdersPage() {
   const [reviewOrderId, setReviewOrderId] = useState<string | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
+  const [reviewMediaAssetId, setReviewMediaAssetId] = useState<string | null>(null);
+  const [uploadingReviewPhoto, setUploadingReviewPhoto] = useState(false);
 
   const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
   const [disputeType, setDisputeType] =
@@ -214,11 +217,13 @@ export default function OrdersPage() {
       const trimmedComment = reviewComment.trim();
       await createOrderReview(orderId, {
         rating: reviewRating,
-        ...(trimmedComment.length > 0 ? { comment: trimmedComment } : {})
+        ...(trimmedComment.length > 0 ? { comment: trimmedComment } : {}),
+        ...(reviewMediaAssetId ? { mediaAssetId: reviewMediaAssetId } : {})
       });
       setReviewOrderId(null);
       setReviewComment("");
       setReviewRating(5);
+      setReviewMediaAssetId(null);
       setStatusNotice("Verified review submitted.");
       await loadOrders();
     } catch (err: unknown) {
@@ -692,12 +697,56 @@ export default function OrdersPage() {
                       placeholder="Share your experience (optional, min 3 chars if filled)..."
                       className="w-full rounded-lg border border-border-subtle bg-surface-card px-3 py-1.5 text-xs"
                     />
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white"
-                    >
-                      Submit Verified Review
-                    </button>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="cursor-pointer rounded-lg border border-border-subtle bg-surface-card px-3 py-1.5 text-xs font-semibold text-ink-primary hover:border-brand-primary">
+                        {uploadingReviewPhoto
+                          ? locale === "ur"
+                            ? "اپ لوڈ ہو رہی ہے..."
+                            : "Uploading..."
+                          : reviewMediaAssetId
+                            ? locale === "ur"
+                              ? "✓ تصویر منسلک ہو گئی"
+                              : "✓ Photo Attached"
+                            : locale === "ur"
+                              ? "+ تصویر شامل کریں (اختیاری)"
+                              : "+ Attach Photo (optional)"}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={uploadingReviewPhoto}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (!file) return;
+                            setUploadingReviewPhoto(true);
+                            setErrorMsg(null);
+                            try {
+                              const asset = await uploadImageAssetToS3(
+                                file,
+                                "CHAT_ATTACHMENT"
+                              );
+                              setReviewMediaAssetId(asset.id);
+                            } catch (err: unknown) {
+                              setErrorMsg(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Unable to upload review photo."
+                              );
+                            } finally {
+                              setUploadingReviewPhoto(false);
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={uploadingReviewPhoto}
+                        className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        Submit Verified Review
+                      </button>
+                    </div>
                   </form>
                 )}
 

@@ -9,6 +9,7 @@ import {
   type UpdateStoreRequest
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";
+import { assertFieldsHaveNoContactLeak } from "../../common/privacy/contact-guard.util";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
 import {
@@ -79,6 +80,15 @@ export class SellerService {
       );
     }
 
+    assertFieldsHaveNoContactLeak([
+      { label: "Store name", value: dto.store.displayName },
+      { label: "Store description", value: dto.store.description ?? null },
+      {
+        label: "Store address note",
+        value: dto.store.publicBusinessAddress ?? null
+      }
+    ]);
+
     const created = await this.prisma.$transaction(async (tx) => {
       const sellerProfile = await tx.sellerProfile.create({
         data: {
@@ -95,10 +105,8 @@ export class SellerService {
           slug: dto.store.slug,
           displayName: dto.store.displayName,
           description: dto.store.description ?? null,
-          showPublicPhone: dto.store.showPublicPhone,
-          publicContactPhone: dto.store.showPublicPhone
-            ? (dto.store.publicContactPhone ?? null)
-            : null,
+          showPublicPhone: false,
+          publicContactPhone: null,
           showPublicAddress: dto.store.showPublicAddress,
           publicBusinessAddress: dto.store.showPublicAddress
             ? (dto.store.publicBusinessAddress ?? null)
@@ -266,7 +274,12 @@ export class SellerService {
       }
     }
 
-    const nextShowPhone = dto.showPublicPhone ?? store.showPublicPhone;
+    assertFieldsHaveNoContactLeak([
+      { label: "Store name", value: dto.displayName },
+      { label: "Store description", value: dto.description },
+      { label: "Store address note", value: dto.publicBusinessAddress }
+    ]);
+
     const nextShowAddress = dto.showPublicAddress ?? store.showPublicAddress;
     const nextStatus =
       dto.submitForReview &&
@@ -306,12 +319,8 @@ export class SellerService {
           ...(dto.requireCleanCodHistory !== undefined
             ? { requireCleanCodHistory: dto.requireCleanCodHistory }
             : {}),
-          showPublicPhone: nextShowPhone,
-          publicContactPhone: nextShowPhone
-            ? dto.publicContactPhone !== undefined
-              ? dto.publicContactPhone
-              : store.publicContactPhone
-            : null,
+          showPublicPhone: false,
+          publicContactPhone: null,
           showPublicAddress: nextShowAddress,
           publicBusinessAddress: nextShowAddress
             ? dto.publicBusinessAddress !== undefined

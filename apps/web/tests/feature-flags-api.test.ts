@@ -13,11 +13,11 @@ describe("feature flags & differentiators api helpers", () => {
     vi.restoreAllMocks();
   });
 
-  it("keeps Monthly Subscriptions and 5 new differentiators OFF in defaults", () => {
+  it("enables Messenger, Demand Board, and Urdu Voice Notes while keeping Subscriptions OFF in defaults", () => {
     expect(DEFAULT_FEATURE_FLAGS_MAP.shopping_messenger_enabled).toBe(true);
     expect(DEFAULT_FEATURE_FLAGS_MAP.seller_subscriptions_enabled).toBe(false);
-    expect(DEFAULT_FEATURE_FLAGS_MAP.buyer_requests_board_enabled).toBe(false);
-    expect(DEFAULT_FEATURE_FLAGS_MAP.messenger_voice_notes_enabled).toBe(false);
+    expect(DEFAULT_FEATURE_FLAGS_MAP.buyer_requests_board_enabled).toBe(true);
+    expect(DEFAULT_FEATURE_FLAGS_MAP.messenger_voice_notes_enabled).toBe(true);
     expect(DEFAULT_FEATURE_FLAGS_MAP.handover_pin_enabled).toBe(false);
     expect(DEFAULT_FEATURE_FLAGS_MAP.flash_deals_coupons_enabled).toBe(false);
     expect(DEFAULT_FEATURE_FLAGS_MAP.cod_refusal_shield_enabled).toBe(false);

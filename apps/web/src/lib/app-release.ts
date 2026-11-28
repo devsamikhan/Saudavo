@@ -1,5 +1,5 @@
-export const LATEST_ANDROID_VERSION_CODE = 3;
-export const LATEST_ANDROID_VERSION_NAME = "1.0.2";
+export const LATEST_ANDROID_VERSION_CODE = 4;
+export const LATEST_ANDROID_VERSION_NAME = "1.0.3";
 
 function compareSemver(a: string, b: string): number {
   const pa = a.split(".").map((n) => Number.parseInt(n, 10) || 0);

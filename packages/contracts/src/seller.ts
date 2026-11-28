@@ -124,7 +124,12 @@ export const PublicStoreDtoSchema = z.object({
   currency: CurrencyCodeSchema,
   publicContactPhone: z.string().nullable(),
   publicBusinessAddress: z.string().nullable(),
-  serviceAreas: z.array(StoreServiceAreaDtoSchema)
+  serviceAreas: z.array(StoreServiceAreaDtoSchema),
+  completedOrdersCount: z.number().int().nonnegative().default(0),
+  avgResponseMinutes: z.number().int().nonnegative().nullable().default(null),
+  responseRatePercent: z.number().int().min(0).max(100).nullable().default(null),
+  followerCount: z.number().int().nonnegative().default(0),
+  isFollowing: z.boolean().optional()
 });
 export type PublicStoreDto = z.infer<typeof PublicStoreDtoSchema>;
 

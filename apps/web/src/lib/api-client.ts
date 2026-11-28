@@ -60,6 +60,7 @@ import {
   type RegisterRequest,
   type RejectDecisionRequest,
   type RejectListingRequest,
+  type ReportConversationRequest,
   type ReportDto,
   type RequestMediaUploadUrlRequest,
   type RequestServiceRevisionRequest,
@@ -953,6 +954,65 @@ export function declineChatCustomOffer(
       body: {}
     }
   );
+}
+
+export function blockConversation(
+  conversationId: string,
+  reason?: string
+): Promise<{ data: ConversationSummaryDto }> {
+  return apiRequest(
+    `/messenger/conversations/${encodeURIComponent(conversationId)}/block`,
+    {
+      method: "POST",
+      body: { ...(reason?.trim() ? { reason: reason.trim() } : {}) }
+    }
+  );
+}
+
+export function unblockConversation(
+  conversationId: string
+): Promise<{ data: ConversationSummaryDto }> {
+  return apiRequest(
+    `/messenger/conversations/${encodeURIComponent(conversationId)}/unblock`,
+    {
+      method: "POST",
+      body: {}
+    }
+  );
+}
+
+export function reportConversation(
+  conversationId: string,
+  body: ReportConversationRequest
+): Promise<{ data: ReportDto }> {
+  return apiRequest(
+    `/messenger/conversations/${encodeURIComponent(conversationId)}/report`,
+    {
+      method: "POST",
+      body
+    }
+  );
+}
+
+export function followStore(storeId: string): Promise<{
+  data: { storeId: string; isFollowing: true; followerCount: number };
+}> {
+  return apiRequest(`/stores/${encodeURIComponent(storeId)}/follow`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function unfollowStore(storeId: string): Promise<{
+  data: { storeId: string; isFollowing: false; followerCount: number };
+}> {
+  return apiRequest(`/stores/${encodeURIComponent(storeId)}/follow`, {
+    method: "DELETE"
+  });
+}
+
+export function fetchFollowedStores(): Promise<{ data: PublicStoreDto[] }> {
+  return apiRequest("/stores/following");
 }
 
 // ---------- Platform Feature Flags (1-Click Admin Control) ----------

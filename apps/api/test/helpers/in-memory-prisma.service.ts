@@ -498,6 +498,7 @@ export interface FakeReviewRecord {
   customerId: string;
   rating: number;
   comment: string | null;
+  mediaAssetId?: string | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -550,11 +551,21 @@ export interface FakeConversationRecord {
   productId: string | null;
   serviceListingId: string | null;
   status: string;
+  blockedByBuyerAt?: Date | null;
+  blockedBySellerAt?: Date | null;
+  blockReason?: string | null;
   lastMessageAt: Date;
   buyerLastReadAt: Date | null;
   sellerLastReadAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface FakeStoreFollowerRecord {
+  id: string;
+  userId: string;
+  storeId: string;
+  createdAt: Date;
 }
 
 export interface FakeChatMessageRecord {
@@ -727,6 +738,7 @@ export class InMemoryPrismaService {
   readonly platformFeatureFlags: FakePlatformFeatureFlagRecord[] = [];
   readonly buyerRequests: FakeBuyerRequestRecord[] = [];
   readonly storePromoDeals: FakeStorePromoDealRecord[] = [];
+  readonly storeFollowers: FakeStoreFollowerRecord[] = [];
 
   constructor() {
     this.seedDefaultSubscriptionPlans();
@@ -2811,6 +2823,20 @@ export class InMemoryPrismaService {
         codCollectionStatus: item.codCollectionStatus,
         _count: { _all: item.count }
       }));
+    },
+
+    count: async (args?: {
+      where?: { storeId?: string; status?: string };
+    }): Promise<number> => {
+      return this.orders.filter((o) => {
+        if (args?.where?.storeId !== undefined && o.storeId !== args.where.storeId) {
+          return false;
+        }
+        if (args?.where?.status !== undefined && o.status !== args.where.status) {
+          return false;
+        }
+        return true;
+      }).length;
     }
   };
 
@@ -3349,6 +3375,10 @@ export class InMemoryPrismaService {
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .map((r) => ({
           ...r,
+          mediaAssetId: r.mediaAssetId ?? null,
+          mediaAsset: r.mediaAssetId
+            ? (this.mediaAssets.find((a) => a.id === r.mediaAssetId) ?? null)
+            : null,
           customer: this.users.find((u) => u.id === r.customerId)!
         }));
     },
@@ -3360,12 +3390,16 @@ export class InMemoryPrismaService {
       const created: FakeReviewRecord = {
         id: randomUUID(),
         ...args.data,
+        mediaAssetId: args.data.mediaAssetId ?? null,
         createdAt: now,
         updatedAt: now
       };
       this.reviews.push(created);
       return {
         ...created,
+        mediaAsset: created.mediaAssetId
+          ? (this.mediaAssets.find((a) => a.id === created.mediaAssetId) ?? null)
+          : null,
         customer: this.users.find((u) => u.id === created.customerId)!
       };
     },
@@ -3699,6 +3733,7 @@ export class InMemoryPrismaService {
 
     findMany: async (args: {
       where: {
+        storeId?: string;
         OR?: Array<{
           buyerId?: string;
           store?: { sellerProfile: { userId: string } };
@@ -3707,6 +3742,9 @@ export class InMemoryPrismaService {
     }) => {
       return this.conversations
         .filter((c) => {
+          if (args.where.storeId !== undefined && c.storeId !== args.where.storeId) {
+            return false;
+          }
           if (!args.where.OR) return true;
           return args.where.OR.some((clause) => {
             if (clause.buyerId !== undefined && c.buyerId === clause.buyerId) return true;
@@ -3754,6 +3792,73 @@ export class InMemoryPrismaService {
       const target = this.conversations.find((c) => c.id === args.where.id)!;
       Object.assign(target, args.data, { updatedAt: new Date() });
       return this.hydrateConversation(target);
+    }
+  };
+
+  readonly storeFollower = {
+    count: async (args: { where: { storeId?: string } }): Promise<number> => {
+      return this.storeFollowers.filter(
+        (f) => args.where.storeId === undefined || f.storeId === args.where.storeId
+      ).length;
+    },
+
+    findUnique: async (args: {
+      where: { userId_storeId: { userId: string; storeId: string } };
+    }) => {
+      return (
+        this.storeFollowers.find(
+          (f) =>
+            f.userId === args.where.userId_storeId.userId &&
+            f.storeId === args.where.userId_storeId.storeId
+        ) ?? null
+      );
+    },
+
+    findMany: async (args: { where: { userId?: string; storeId?: string } }) => {
+      return this.storeFollowers
+        .filter(
+          (f) =>
+            (args.where.userId === undefined || f.userId === args.where.userId) &&
+            (args.where.storeId === undefined || f.storeId === args.where.storeId)
+        )
+        .map((f) => ({
+          ...f,
+          store: this.hydrateStore(this.stores.find((s) => s.id === f.storeId)!)
+        }));
+    },
+
+    upsert: async (args: {
+      where: { userId_storeId: { userId: string; storeId: string } };
+      create: { userId: string; storeId: string };
+    }) => {
+      const existing = this.storeFollowers.find(
+        (f) =>
+          f.userId === args.where.userId_storeId.userId &&
+          f.storeId === args.where.userId_storeId.storeId
+      );
+      if (existing) return existing;
+      const created: FakeStoreFollowerRecord = {
+        id: randomUUID(),
+        userId: args.create.userId,
+        storeId: args.create.storeId,
+        createdAt: new Date()
+      };
+      this.storeFollowers.push(created);
+      return created;
+    },
+
+    deleteMany: async (args: { where: { userId?: string; storeId?: string } }) => {
+      const before = this.storeFollowers.length;
+      const keep = this.storeFollowers.filter(
+        (f) =>
+          !(
+            (args.where.userId === undefined || f.userId === args.where.userId) &&
+            (args.where.storeId === undefined || f.storeId === args.where.storeId)
+          )
+      );
+      this.storeFollowers.length = 0;
+      this.storeFollowers.push(...keep);
+      return { count: before - keep.length };
     }
   };
 

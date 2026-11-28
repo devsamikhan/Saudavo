@@ -33,8 +33,8 @@ describe("GET /api/app-version", () => {
       apkDownloadUrl: string;
     };
     expect(body.webBuildId).toBe("dpl_test_auto_update_123");
-    expect(body.androidVersionCode).toBeGreaterThanOrEqual(3);
-    expect(body.androidVersionName).toBe("1.0.2");
+    expect(body.androidVersionCode).toBeGreaterThanOrEqual(4);
+    expect(body.androidVersionName).toBe("1.0.3");
     expect(body.apkDownloadUrl).toMatch(/\/api\/download-apk$/);
   });
 });

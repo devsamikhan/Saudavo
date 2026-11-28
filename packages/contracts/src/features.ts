@@ -55,8 +55,8 @@ export type UpdateFeatureFlagRequest = z.infer<
 export const DEFAULT_FEATURE_FLAGS_MAP: FeatureFlagsMap = {
   shopping_messenger_enabled: true,
   seller_subscriptions_enabled: false,
-  buyer_requests_board_enabled: false,
-  messenger_voice_notes_enabled: false,
+  buyer_requests_board_enabled: true,
+  messenger_voice_notes_enabled: true,
   handover_pin_enabled: false,
   flash_deals_coupons_enabled: false,
   cod_refusal_shield_enabled: false

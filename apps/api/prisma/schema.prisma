@@ -59,6 +59,7 @@ model User {
   reviewedRenewals        SubscriptionRenewalRequest[] @relation("RenewalReviewer")
   updatedFeatureFlags     PlatformFeatureFlag[]        @relation("FeatureFlagUpdater")
   buyerRequests           BuyerRequest[]               @relation("BuyerRequests")
+  followedStores          StoreFollower[]
 
   @@index([status], map: "idx_users_status")
   @@map("users")
@@ -246,6 +247,7 @@ model Store {
   subscription         StoreSubscription?
   subscriptionRenewals SubscriptionRenewalRequest[]
   promoDeals           StorePromoDeal[]
+  followers            StoreFollower[]
 
   @@index([districtId, status], map: "idx_stores_district_status")
   @@map("stores")
@@ -332,6 +334,7 @@ model MediaAsset {
   storeBanners  Store[]        @relation("StoreBannerAsset")
   productImages ProductImage[]
   chatMessages  ChatMessage[]
+  reviews       Review[]
 
   @@map("media_assets")
 }
@@ -778,21 +781,23 @@ model SellerSettlementRecord {
 // ============================================================================
 
 model Review {
-  id          String   @id @default(uuid()) @db.Uuid
-  orderId     String   @map("order_id") @db.Uuid
-  orderItemId String?  @map("order_item_id") @db.Uuid
-  storeId     String   @map("store_id") @db.Uuid
-  customerId  String   @map("customer_id") @db.Uuid
-  rating      Int      @db.SmallInt
-  comment     String?
-  status      String   @default("PUBLISHED") @db.VarChar(20)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String   @id @default(uuid()) @db.Uuid
+  orderId      String   @map("order_id") @db.Uuid
+  orderItemId  String?  @map("order_item_id") @db.Uuid
+  storeId      String   @map("store_id") @db.Uuid
+  customerId   String   @map("customer_id") @db.Uuid
+  rating       Int      @db.SmallInt
+  comment      String?
+  mediaAssetId String?  @map("media_asset_id") @db.Uuid
+  status       String   @default("PUBLISHED") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  order     Order      @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  orderItem OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
-  store     Store      @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  customer  User       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderItem  OrderItem?  @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  store      Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  customer   User        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  mediaAsset MediaAsset? @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
 
   @@map("reviews")
 }
@@ -909,13 +914,16 @@ model AdminAuditLog {
 // ============================================================================
 
 model Conversation {
-  id               String    @id @default(uuid()) @db.Uuid
-  buyerId          String    @map("buyer_id") @db.Uuid
-  storeId          String    @map("store_id") @db.Uuid
-  productId        String?   @map("product_id") @db.Uuid
-  serviceListingId String?   @map("service_listing_id") @db.Uuid
-  status           String    @default("OPEN") @db.VarChar(20)
-  lastMessageAt    DateTime  @default(now()) @map("last_message_at") @db.Timestamptz(6)
+  id                String    @id @default(uuid()) @db.Uuid
+  buyerId           String    @map("buyer_id") @db.Uuid
+  storeId           String    @map("store_id") @db.Uuid
+  productId         String?   @map("product_id") @db.Uuid
+  serviceListingId  String?   @map("service_listing_id") @db.Uuid
+  status            String    @default("OPEN") @db.VarChar(20)
+  blockedByBuyerAt  DateTime? @map("blocked_by_buyer_at") @db.Timestamptz(6)
+  blockedBySellerAt DateTime? @map("blocked_by_seller_at") @db.Timestamptz(6)
+  blockReason       String?   @map("block_reason")
+  lastMessageAt     DateTime  @default(now()) @map("last_message_at") @db.Timestamptz(6)
   buyerLastReadAt  DateTime? @map("buyer_last_read_at") @db.Timestamptz(6)
   sellerLastReadAt DateTime? @map("seller_last_read_at") @db.Timestamptz(6)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1096,4 +1104,18 @@ model StorePromoDeal {
   @@unique([storeId, code], map: "uq_store_promo_code")
   @@index([isActive, endsAt], map: "idx_store_promo_active_ends")
   @@map("store_promo_deals")
+}
+
+model StoreFollower {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  storeId   String   @map("store_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId], map: "uq_store_followers_user_store")
+  @@index([storeId], map: "idx_store_followers_store")
+  @@map("store_followers")
 }

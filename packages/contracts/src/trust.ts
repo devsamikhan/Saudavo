@@ -4,7 +4,8 @@ import { CurrencyCodeSchema } from "./enums";
 export const CreateReviewRequestSchema = z.object({
   orderItemId: z.string().uuid().optional(),
   rating: z.number().int().min(1).max(5),
-  comment: z.string().trim().min(3).max(2000).optional()
+  comment: z.string().trim().min(3).max(2000).optional(),
+  mediaAssetId: z.string().uuid().optional()
 });
 export type CreateReviewRequest = z.infer<typeof CreateReviewRequestSchema>;
 
@@ -15,6 +16,8 @@ export const ReviewDtoSchema = z.object({
   storeId: z.string().uuid(),
   rating: z.number().int().min(1).max(5),
   comment: z.string().nullable(),
+  mediaAssetId: z.string().uuid().nullable().default(null),
+  photoReadUrl: z.string().nullable().default(null),
   status: z.enum(["PUBLISHED", "HIDDEN"]),
   reviewerDisplayName: z.string(),
   createdAt: z.string().datetime()
@@ -26,7 +29,8 @@ export const ReportTargetTypeSchema = z.enum([
   "SERVICE",
   "STORE",
   "REVIEW",
-  "ORDER_MESSAGE"
+  "ORDER_MESSAGE",
+  "CONVERSATION"
 ]);
 export type ReportTargetType = z.infer<typeof ReportTargetTypeSchema>;
 

@@ -1,10 +1,11 @@
 import { Module } from "@nestjs/common";
 import { FinanceModule } from "../finance/finance.module";
+import { MediaModule } from "../media/media.module";
 import { TrustController } from "./trust.controller";
 import { TrustService } from "./trust.service";
 
 @Module({
-  imports: [FinanceModule],
+  imports: [FinanceModule, MediaModule],
   controllers: [TrustController],
   providers: [TrustService],
   exports: [TrustService]

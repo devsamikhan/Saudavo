@@ -280,6 +280,30 @@ export function ProductDetailClient() {
               : product.store.districtNameEn}
           </Link>
 
+          <div className="flex flex-wrap gap-2">
+            {product.store.completedOrdersCount > 0 && (
+              <span className="rounded-full bg-brand-primary-soft px-2.5 py-0.5 text-[11px] font-bold text-brand-primary">
+                {locale === "ur"
+                  ? `${product.store.completedOrdersCount} مکمل آرڈرز`
+                  : `${product.store.completedOrdersCount} Orders`}
+              </span>
+            )}
+            {product.store.avgResponseMinutes !== null && (
+              <span className="rounded-full bg-brand-primary-soft px-2.5 py-0.5 text-[11px] font-bold text-brand-primary">
+                {locale === "ur"
+                  ? `جواب ~${product.store.avgResponseMinutes} منٹ`
+                  : `Replies in ~${product.store.avgResponseMinutes}m`}
+              </span>
+            )}
+            {product.store.followerCount > 0 && (
+              <span className="rounded-full border border-border-subtle bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-ink-secondary">
+                {locale === "ur"
+                  ? `${product.store.followerCount} فالورز`
+                  : `${product.store.followerCount} Followers`}
+              </span>
+            )}
+          </div>
+
           <p className="text-3xl font-bold text-brand-primary">
             {formatPkrFromPaisa(displayPrice, locale)}
           </p>

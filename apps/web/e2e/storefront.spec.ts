@@ -1149,7 +1149,7 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
         return;
       }
 
-      if (url.includes("/seller/products")) {
+      if (url.includes("/seller/products") || url.includes("/seller/services")) {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -1440,6 +1440,11 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
                 storeDisplayName: "Zainab Embroidery",
                 storeDistrictNameEn: "Mianwali",
                 storeVerifiedPro: true,
+                blockedByBuyer: false,
+                blockedBySeller: false,
+                blockedByMe: false,
+                storeCompletedOrdersCount: 5,
+                storeAvgResponseMinutes: 12,
                 status: "OPEN",
                 unreadCount: 1,
                 lastMessagePreview: "Offer: Embroidered Shawl",
@@ -1459,6 +1464,14 @@ test.describe("Saudavo Storefront EN LTR / UR RTL & Auth E2E", () => {
     await page.goto("/messages");
     await expect(page.getByText("Saudavo Shopping Messenger")).toBeVisible();
     await expect(page.getByText("Embroidered Shawl × 1")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Block" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Report" })).toBeVisible();
+    await page.getByPlaceholder(/Type your message/i).fill("03001234567");
+    await expect(
+      page.getByText(/Phone numbers cannot be shared/i).first()
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
+    await page.getByPlaceholder(/Type your message/i).fill("");
     await page.getByRole("button", { name: "Accept & Place COD Order" }).click();
     await expect(page.getByText("MWL-20261126-CHAT1")).toBeVisible();
 

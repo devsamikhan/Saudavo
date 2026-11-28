@@ -5,6 +5,10 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -25,6 +29,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -41,6 +46,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
@@ -49,10 +55,14 @@ public class MainActivity extends Activity {
   private static final String DOWNLOAD_FALLBACK_URL = "https://saudavo-web.vercel.app/download";
   private static final String PREFS_NAME = "saudavo_prefs";
   private static final String KEY_LAST_WEB_BUILD_ID = "last_web_build_id";
+  private static final String ALERT_CHANNEL_ID = "saudavo_alerts";
+  private static final String EXTRA_TARGET_PATH = "saudavo_target_path";
   private static final long UPDATE_CHECK_COOLDOWN_MS = 15_000L;
   private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
   private static final int AUDIO_PERMISSION_REQUEST_CODE = 1002;
+  private static final int NOTIF_PERMISSION_REQUEST_CODE = 1003;
 
+  private final AtomicInteger notificationSeq = new AtomicInteger(100);
   private WebView webView;
   private ProgressBar progressBar;
   private ValueCallback<Uri[]> filePathCallback;
@@ -63,10 +73,11 @@ public class MainActivity extends Activity {
   private long activeDownloadId = -1L;
   private BroadcastReceiver downloadCompleteReceiver;
 
-  @SuppressLint("SetJavaScriptEnabled")
+  @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    ensureNotificationChannel();
 
     FrameLayout root = new FrameLayout(this);
     root.setLayoutParams(new FrameLayout.LayoutParams(
@@ -108,6 +119,8 @@ public class MainActivity extends Activity {
     settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
     settings.setUseWideViewPort(true);
     settings.setLoadWithOverviewMode(true);
+
+    webView.addJavascriptInterface(new SaudavoAndroidBridge(), "SaudavoAndroid");
 
     CookieManager cookieManager = CookieManager.getInstance();
     cookieManager.setAcceptCookie(true);
@@ -197,12 +210,110 @@ public class MainActivity extends Activity {
       }
     });
 
-    if (savedInstanceState != null) {
+    String initialUrl = resolveUrlFromIntent(getIntent());
+    if (savedInstanceState != null && initialUrl == null) {
       webView.restoreState(savedInstanceState);
     } else {
-      webView.loadUrl(START_URL);
+      webView.loadUrl(initialUrl != null ? initialUrl : START_URL);
     }
     checkForLiveUpdates();
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    String targetUrl = resolveUrlFromIntent(intent);
+    if (targetUrl != null && webView != null) {
+      webView.loadUrl(targetUrl);
+    }
+  }
+
+  private String resolveUrlFromIntent(Intent intent) {
+    if (intent == null) return null;
+    String rawPath = intent.getStringExtra(EXTRA_TARGET_PATH);
+    if (rawPath == null) return null;
+    String trimmed = rawPath.trim();
+    if (!trimmed.startsWith("/")) return null;
+    return "https://saudavo-web.vercel.app" + trimmed;
+  }
+
+  private void ensureNotificationChannel() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+      if (nm != null && nm.getNotificationChannel(ALERT_CHANNEL_ID) == null) {
+        NotificationChannel ch = new NotificationChannel(
+            ALERT_CHANNEL_ID,
+            "Saudavo Messages & Orders",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        ch.setDescription("Live message, custom offer, and order updates from Saudavo.");
+        nm.createNotificationChannel(ch);
+      }
+    }
+  }
+
+  private final class SaudavoAndroidBridge {
+    @JavascriptInterface
+    public void requestNotificationPermission() {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        runOnUiThread(() -> {
+          if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+              != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                new String[] { Manifest.permission.POST_NOTIFICATIONS },
+                NOTIF_PERMISSION_REQUEST_CODE
+            );
+          }
+        });
+      }
+    }
+
+    @JavascriptInterface
+    public void notify(String title, String body, String targetPath) {
+      runOnUiThread(() -> showNativeNotification(title, body, targetPath));
+    }
+  }
+
+  @SuppressWarnings("deprecation")
+  private void showNativeNotification(String title, String body, String targetPath) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED) {
+      return;
+    }
+    NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+    if (nm == null) return;
+    ensureNotificationChannel();
+
+    Intent launchIntent = new Intent(this, MainActivity.class);
+    launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    if (targetPath != null && targetPath.trim().startsWith("/")) {
+      launchIntent.putExtra(EXTRA_TARGET_PATH, targetPath.trim());
+    }
+    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      flags |= PendingIntent.FLAG_IMMUTABLE;
+    }
+    PendingIntent pendingIntent = PendingIntent.getActivity(
+        this,
+        notificationSeq.get(),
+        launchIntent,
+        flags
+    );
+
+    Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+        ? new Notification.Builder(this, ALERT_CHANNEL_ID)
+        : new Notification.Builder(this);
+
+    builder
+        .setSmallIcon(R.mipmap.ic_launcher)
+        .setContentTitle(title != null && !title.trim().isEmpty() ? title : "Saudavo")
+        .setContentText(body != null ? body : "")
+        .setAutoCancel(true)
+        .setContentIntent(pendingIntent);
+
+    nm.notify(notificationSeq.incrementAndGet(), builder.build());
   }
 
   @Override

@@ -21,7 +21,9 @@ import {
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";
 import { bigIntToSafeNumber } from "../../common/money.util";
+import { assertFieldsHaveNoContactLeak } from "../../common/privacy/contact-guard.util";
 import { PrismaService } from "../../common/prisma/prisma.service";
+import { loadStoreTrustMetrics } from "../../common/trust/store-trust.util";
 import { S3PresignerService } from "../media/s3-presigner.service";
 import { OutboxService } from "../outbox/outbox.service";
 import {
@@ -97,6 +99,10 @@ export class CatalogService {
     const store = await this.sellerService.requireApprovedOwnStore(userId);
     await this.subscriptionsService.assertCanCreateListing(store.id, "PRODUCT");
     await this.requireValidCategory(dto.categoryId, "PRODUCT");
+    assertFieldsHaveNoContactLeak([
+      { label: "Product title", value: dto.title },
+      { label: "Product description", value: dto.description }
+    ]);
 
     const baseSlug = dto.slug ?? slugifyTitle(dto.title);
     const uniqueSlug = await this.resolveUniqueActiveSlug("PRODUCT", baseSlug);
@@ -210,6 +216,10 @@ export class CatalogService {
     if (dto.categoryId !== undefined) {
       await this.requireValidCategory(dto.categoryId, "PRODUCT");
     }
+    assertFieldsHaveNoContactLeak([
+      { label: "Product title", value: dto.title },
+      { label: "Product description", value: dto.description }
+    ]);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.variants !== undefined) {
@@ -326,6 +336,11 @@ export class CatalogService {
     const store = await this.sellerService.requireApprovedOwnStore(userId);
     await this.subscriptionsService.assertCanCreateListing(store.id, "SERVICE");
     await this.requireValidCategory(dto.categoryId, "SERVICE");
+    assertFieldsHaveNoContactLeak([
+      { label: "Service title", value: dto.title },
+      { label: "Service description", value: dto.description },
+      { label: "Requirements prompt", value: dto.requirementsPrompt }
+    ]);
 
     const baseSlug = dto.slug ?? slugifyTitle(dto.title);
     const uniqueSlug = await this.resolveUniqueActiveSlug("SERVICE", baseSlug);
@@ -399,6 +414,11 @@ export class CatalogService {
     if (dto.categoryId !== undefined) {
       await this.requireValidCategory(dto.categoryId, "SERVICE");
     }
+    assertFieldsHaveNoContactLeak([
+      { label: "Service title", value: dto.title },
+      { label: "Service description", value: dto.description },
+      { label: "Requirements prompt", value: dto.requirementsPrompt }
+    ]);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.packages !== undefined) {
@@ -482,7 +502,8 @@ export class CatalogService {
 
   async getPublicStoreBySlug(
     slug: string,
-    requestId: string
+    requestId: string,
+    viewerUserId?: string
   ): Promise<{ data: PublicStoreDto; meta: { requestId: string } }> {
     const store = await this.prisma.store.findFirst({
       where: {
@@ -502,15 +523,18 @@ export class CatalogService {
       );
     }
 
+    const extras = await this.loadStorePublicExtras(store.id, viewerUserId);
+
     return {
-      data: toPublicStoreDto(store),
+      data: toPublicStoreDto(store, extras),
       meta: { requestId }
     };
   }
 
   async getPublicStoreCatalogBySlug(
     slug: string,
-    requestId: string
+    requestId: string,
+    viewerUserId?: string
   ): Promise<StoreCatalogResponse> {
     const store = await this.prisma.store.findFirst({
       where: {
@@ -620,9 +644,11 @@ export class CatalogService {
       });
     }
 
+    const storeExtras = await this.loadStorePublicExtras(store.id, viewerUserId);
+
     return StoreCatalogResponseSchema.parse({
       data: {
-        store: toPublicStoreDto(store),
+        store: toPublicStoreDto(store, storeExtras),
         ratingAvg: ratingSummary.ratingAvg,
         reviewCount: ratingSummary.reviewCount,
         products: mappedProducts,
@@ -634,7 +660,8 @@ export class CatalogService {
 
   async getPublicProductBySlug(
     slug: string,
-    requestId: string
+    requestId: string,
+    viewerUserId?: string
   ): Promise<{ data: PublicProductDetailDto; meta: { requestId: string } }> {
     const product = await this.prisma.product.findFirst({
       where: {
@@ -658,8 +685,13 @@ export class CatalogService {
       );
     }
 
+    const storeExtras = await this.loadStorePublicExtras(
+      product.store.id,
+      viewerUserId
+    );
+
     return {
-      data: toPublicProductDetailDto(product),
+      data: toPublicProductDetailDto(product, storeExtras),
       meta: { requestId }
     };
   }
@@ -728,7 +760,8 @@ export class CatalogService {
 
   async getPublicServiceBySlug(
     slug: string,
-    requestId: string
+    requestId: string,
+    viewerUserId?: string
   ): Promise<{ data: PublicServiceDetailDto; meta: { requestId: string } }> {
     const service = await this.prisma.serviceListing.findFirst({
       where: {
@@ -752,9 +785,122 @@ export class CatalogService {
       );
     }
 
+    const storeExtras = await this.loadStorePublicExtras(
+      service.store.id,
+      viewerUserId
+    );
+
     return {
-      data: toPublicServiceDetailDto(service),
+      data: toPublicServiceDetailDto(service, storeExtras),
       meta: { requestId }
+    };
+  }
+
+  async followStore(
+    userId: string,
+    storeId: string,
+    requestId: string
+  ): Promise<{
+    data: { storeId: string; isFollowing: true; followerCount: number };
+    meta: { requestId: string };
+  }> {
+    const store = await this.prisma.store.findFirst({
+      where: {
+        id: storeId,
+        status: "ACTIVE",
+        deletedAt: null,
+        sellerProfile: { verificationStatus: "APPROVED" }
+      }
+    });
+    if (!store) {
+      throw new DomainException(
+        "NOT_FOUND",
+        HttpStatus.NOT_FOUND,
+        "Active store not found."
+      );
+    }
+
+    await this.prisma.storeFollower.upsert({
+      where: { userId_storeId: { userId, storeId: store.id } },
+      update: {},
+      create: { userId, storeId: store.id }
+    });
+
+    const followerCount = await this.prisma.storeFollower.count({
+      where: { storeId: store.id }
+    });
+
+    return {
+      data: { storeId: store.id, isFollowing: true, followerCount },
+      meta: { requestId }
+    };
+  }
+
+  async unfollowStore(
+    userId: string,
+    storeId: string,
+    requestId: string
+  ): Promise<{
+    data: { storeId: string; isFollowing: false; followerCount: number };
+    meta: { requestId: string };
+  }> {
+    await this.prisma.storeFollower.deleteMany({
+      where: { userId, storeId }
+    });
+    const followerCount = await this.prisma.storeFollower.count({
+      where: { storeId }
+    });
+    return {
+      data: { storeId, isFollowing: false, followerCount },
+      meta: { requestId }
+    };
+  }
+
+  async listFollowedStores(
+    userId: string,
+    requestId: string
+  ): Promise<{ data: PublicStoreDto[]; meta: { requestId: string } }> {
+    const follows = await this.prisma.storeFollower.findMany({
+      where: { userId },
+      include: {
+        store: {
+          include: STORE_WITH_RELATIONS_INCLUDE
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    const activeFollows = follows.filter(
+      (f) => f.store.status === "ACTIVE" && f.store.deletedAt === null
+    );
+    const stores = await Promise.all(
+      activeFollows.map(async (f) => {
+        const extras = await this.loadStorePublicExtras(f.store.id, userId);
+        return toPublicStoreDto(f.store, { ...extras, isFollowing: true });
+      })
+    );
+
+    return {
+      data: stores,
+      meta: { requestId }
+    };
+  }
+
+  private async loadStorePublicExtras(
+    storeId: string,
+    viewerUserId?: string
+  ) {
+    const [trustMetrics, followRow] = await Promise.all([
+      loadStoreTrustMetrics(this.prisma, storeId),
+      viewerUserId
+        ? this.prisma.storeFollower.findUnique({
+            where: { userId_storeId: { userId: viewerUserId, storeId } }
+          })
+        : Promise.resolve(null)
+    ]);
+    return {
+      ...trustMetrics,
+      ...(viewerUserId ? { isFollowing: Boolean(followRow) } : {})
     };
   }
 

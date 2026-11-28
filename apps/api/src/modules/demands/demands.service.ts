@@ -8,6 +8,7 @@ import {
 } from "@saudavo/contracts";
 import { DomainException } from "../../common/errors/domain.exception";
 import { bigIntToSafeNumber } from "../../common/money.util";
+import { assertFieldsHaveNoContactLeak } from "../../common/privacy/contact-guard.util";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { FeatureFlagsService } from "../features/feature-flags.service";
 import { MessengerService } from "../messenger/messenger.service";
@@ -64,6 +65,10 @@ export class DemandsService {
       "buyer_requests_board_enabled",
       "Mujhy Chahiye Demand Board"
     );
+    assertFieldsHaveNoContactLeak([
+      { label: "Request title", value: dto.title },
+      { label: "Request description", value: dto.description }
+    ]);
 
     const district = await this.prisma.district.findFirst({
       where: { id: dto.districtId, isActive: true }
@@ -127,6 +132,9 @@ export class DemandsService {
       "buyer_requests_board_enabled",
       "Mujhy Chahiye Demand Board"
     );
+    assertFieldsHaveNoContactLeak([
+      { label: "Reply message", value: dto.message }
+    ]);
     await this.featureFlags.assertEnabled(
       "shopping_messenger_enabled",
       "Saudavo Shopping Messenger"

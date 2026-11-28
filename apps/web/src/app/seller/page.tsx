@@ -150,8 +150,6 @@ export default function SellerStudioPage() {
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editDeliveryFeeRupees, setEditDeliveryFeeRupees] = useState(0);
-  const [editShowPublicPhone, setEditShowPublicPhone] = useState(false);
-  const [editPublicPhone, setEditPublicPhone] = useState("");
   const [editShowPublicAddress, setEditShowPublicAddress] = useState(false);
   const [editPublicAddress, setEditPublicAddress] = useState("");
   const [editRequireCleanCod, setEditRequireCleanCod] = useState(false);
@@ -235,8 +233,6 @@ export default function SellerStudioPage() {
           setEditDeliveryFeeRupees(
             paisaToWholeRupees(storeRes.data.defaultDeliveryFeePaisa)
           );
-          setEditShowPublicPhone(storeRes.data.showPublicPhone);
-          setEditPublicPhone(storeRes.data.publicContactPhone ?? "");
           setEditShowPublicAddress(storeRes.data.showPublicAddress);
           setEditPublicAddress(storeRes.data.publicBusinessAddress ?? "");
           setEditRequireCleanCod(storeRes.data.requireCleanCodHistory);
@@ -441,11 +437,8 @@ export default function SellerStudioPage() {
         ...(features.cod_refusal_shield_enabled
           ? { requireCleanCodHistory: editRequireCleanCod }
           : {}),
-        showPublicPhone: editShowPublicPhone,
-        publicContactPhone:
-          editShowPublicPhone && editPublicPhone.trim()
-            ? editPublicPhone.trim()
-            : null,
+        showPublicPhone: false,
+        publicContactPhone: null,
         showPublicAddress: editShowPublicAddress,
         publicBusinessAddress:
           editShowPublicAddress && editPublicAddress.trim()
@@ -1278,23 +1271,11 @@ export default function SellerStudioPage() {
                     placeholder="Store bio / description..."
                     className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm sm:col-span-2"
                   />
-                  <label className="flex items-center gap-2 text-xs text-ink-primary">
-                    <input
-                      type="checkbox"
-                      checked={editShowPublicPhone}
-                      onChange={(e) => setEditShowPublicPhone(e.target.checked)}
-                    />
-                    Show public business phone (off by default for privacy)
-                  </label>
-                  {editShowPublicPhone && (
-                    <input
-                      type="text"
-                      value={editPublicPhone}
-                      onChange={(e) => setEditPublicPhone(e.target.value)}
-                      placeholder="03001234567"
-                      className="rounded-xl border border-border-subtle px-3.5 py-2 text-sm"
-                    />
-                  )}
+                  <div className="rounded-xl border border-brand-primary/20 bg-brand-primary-soft/50 px-3.5 py-2.5 text-xs text-brand-primary sm:col-span-2">
+                    {locale === "ur"
+                      ? "رازداری تحفظ: خریدار اور سیلر کی تمام بات چیت سوداو میسنجر کے اندر ہوتی ہے، ذاتی فون نمبر عوامی طور پر ظاہر نہیں کیا جاتا۔"
+                      : "Privacy Shield Active: Customer inquiries stay inside Saudavo Messenger — phone numbers and emails are never displayed publicly."}
+                  </div>
                   <label className="flex items-center gap-2 text-xs text-ink-primary">
                     <input
                       type="checkbox"

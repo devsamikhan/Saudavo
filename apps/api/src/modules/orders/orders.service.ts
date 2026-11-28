@@ -23,6 +23,7 @@ import type { AuthContext } from "../../common/auth/auth.types";
 import { DomainException } from "../../common/errors/domain.exception";
 import { IdempotencyService } from "../../common/idempotency/idempotency.service";
 import { bigIntToSafeNumber } from "../../common/money.util";
+import { assertFieldsHaveNoContactLeak } from "../../common/privacy/contact-guard.util";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { ClientMetadata } from "../auth/auth.service";
@@ -1934,6 +1935,7 @@ export class OrdersService {
     requestId: string
   ): Promise<{ data: OrderMessageDto; meta: { requestId: string } }> {
     const access = await this.resolveOrderMessageAccess(auth, orderId);
+    assertFieldsHaveNoContactLeak([{ label: "Order message", value: dto.body }]);
 
     const isTerminal =
       access.orderStatus === "COMPLETED" || access.orderStatus === "CANCELLED";

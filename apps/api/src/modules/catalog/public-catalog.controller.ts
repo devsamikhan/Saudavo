@@ -16,7 +16,8 @@ import {
   type SearchResponse,
   type StoreCatalogResponse
 } from "@saudavo/contracts";
-import { Public } from "../../common/auth/decorators";
+import type { AuthContext } from "../../common/auth/auth.types";
+import { CurrentUser, Public } from "../../common/auth/decorators";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { RateLimit } from "../../common/rate-limit/rate-limit.guard";
 import { type AppRequest, getRequestId } from "../../common/request-context";
@@ -42,28 +43,40 @@ export class PublicCatalogController {
   @Get("stores/:slug")
   async getStore(
     @Param("slug") slug: string,
+    @CurrentUser() auth: AuthContext | undefined,
     @Req() req: AppRequest
   ): Promise<{ data: PublicStoreDto; meta: { requestId: string } }> {
-    return this.catalogService.getPublicStoreBySlug(slug, getRequestId(req));
+    return this.catalogService.getPublicStoreBySlug(
+      slug,
+      getRequestId(req),
+      auth?.userId
+    );
   }
 
   @Get("stores/:slug/listings")
   async getStoreListings(
     @Param("slug") slug: string,
+    @CurrentUser() auth: AuthContext | undefined,
     @Req() req: AppRequest
   ): Promise<StoreCatalogResponse> {
     return this.catalogService.getPublicStoreCatalogBySlug(
       slug,
-      getRequestId(req)
+      getRequestId(req),
+      auth?.userId
     );
   }
 
   @Get("products/:slug")
   async getProduct(
     @Param("slug") slug: string,
+    @CurrentUser() auth: AuthContext | undefined,
     @Req() req: AppRequest
   ): Promise<{ data: PublicProductDetailDto; meta: { requestId: string } }> {
-    return this.catalogService.getPublicProductBySlug(slug, getRequestId(req));
+    return this.catalogService.getPublicProductBySlug(
+      slug,
+      getRequestId(req),
+      auth?.userId
+    );
   }
 
   @Get("products/:slug/images/:mediaAssetId/signed-url")
@@ -85,9 +98,14 @@ export class PublicCatalogController {
   @Get("services/:slug")
   async getService(
     @Param("slug") slug: string,
+    @CurrentUser() auth: AuthContext | undefined,
     @Req() req: AppRequest
   ): Promise<{ data: PublicServiceDetailDto; meta: { requestId: string } }> {
-    return this.catalogService.getPublicServiceBySlug(slug, getRequestId(req));
+    return this.catalogService.getPublicServiceBySlug(
+      slug,
+      getRequestId(req),
+      auth?.userId
+    );
   }
 
   @RateLimit({ limit: 60, windowMs: 60_000, keyPrefix: "catalog_search" })

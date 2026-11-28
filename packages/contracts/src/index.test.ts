@@ -9,6 +9,7 @@ import {
   CreatePhysicalOrderRequestSchema,
   CreateProductRequestSchema,
   CreateServiceListingRequestSchema,
+  detectContactLeak,
   HealthResponseSchema,
   normalizeEmail,
   normalizePakistanPhoneE164,
@@ -16,6 +17,7 @@ import {
   RejectDecisionRequestSchema,
   RoleCodeSchema,
   SellerOnboardingRequestSchema,
+  SendCustomOfferRequestSchema,
   slugifyTitle
 } from "./index";
 
@@ -166,5 +168,31 @@ describe("@saudavo/contracts", () => {
     expect(
       CreateOrderMessageRequestSchema.safeParse({ body: "   " }).success
     ).toBe(false);
+  });
+
+  it("detects phone, email, IBAN, and external chat leaks while allowing normal prices and addresses", () => {
+    expect(detectContactLeak("Call me at 03001234567 please")?.kind).toBe("PHONE");
+    expect(detectContactLeak("WhatsApp +92 321 7654321")?.kind).toBe("PHONE");
+    expect(detectContactLeak("Email: seller.khan@gmail.com")?.kind).toBe("EMAIL");
+    expect(detectContactLeak("https://wa.me/923001234567")?.kind).toBe(
+      "EXTERNAL_LINK"
+    );
+    expect(detectContactLeak("Send to PK36SCBL0000001123456702")?.kind).toBe(
+      "BANK_IBAN"
+    );
+    expect(
+      detectContactLeak(
+        "Handmade Phulkari Shawl Rs. 3,500 — 2 pieces delivered in 3 days inside Mianwali."
+      )
+    ).toBeNull();
+    expect(detectContactLeak("https://saudavo-web.vercel.app/stores/loom")).toBeNull();
+
+    expect(
+      SendCustomOfferRequestSchema.safeParse({
+        serviceListingId: "0193a8b2-4100-7000-8000-000000000009",
+        unitPricePaisa: 150_000,
+        fulfilmentMode: "CUSTOMER_PICKUP"
+      }).success
+    ).toBe(true);
   });
 });

@@ -17,3 +17,4 @@ export * from "./messenger";
 export * from "./features";
 export * from "./demands";
 export * from "./deals";
+export * from "./privacy";

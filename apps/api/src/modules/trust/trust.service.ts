@@ -21,6 +21,7 @@ import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import type { ClientMetadata } from "../auth/auth.service";
 import { FinanceService } from "../finance/finance.service";
+import { S3PresignerService } from "../media/s3-presigner.service";
 import { OutboxService } from "../outbox/outbox.service";
 
 const STAFF_ROLE_SET = new Set<RoleCode>(STAFF_ROLES);
@@ -31,7 +32,8 @@ export class TrustService {
     private readonly prisma: PrismaService,
     private readonly financeService: FinanceService,
     private readonly auditService: AuditService,
-    private readonly outboxService: OutboxService
+    private readonly outboxService: OutboxService,
+    private readonly s3Presigner: S3PresignerService
   ) {}
 
   async createReview(
@@ -110,6 +112,26 @@ export class TrustService {
       );
     }
 
+    let validatedMediaAssetId: string | null = null;
+    if (dto.mediaAssetId) {
+      const asset = await this.prisma.mediaAsset.findFirst({
+        where: {
+          id: dto.mediaAssetId,
+          ownerUserId: userId,
+          status: "READY",
+          exifStripped: true
+        }
+      });
+      if (!asset || !asset.mimeType.startsWith("image/")) {
+        throw new DomainException(
+          "VALIDATION_ERROR",
+          HttpStatus.BAD_REQUEST,
+          "Review photo must be a READY EXIF-stripped image you uploaded."
+        );
+      }
+      validatedMediaAssetId = asset.id;
+    }
+
     const created = await this.prisma.review.create({
       data: {
         orderId: order.id,
@@ -118,12 +140,25 @@ export class TrustService {
         customerId: userId,
         rating: dto.rating,
         comment: dto.comment ?? null,
+        mediaAssetId: validatedMediaAssetId,
         status: "PUBLISHED"
       },
       include: {
-        customer: true
+        customer: true,
+        mediaAsset: true
       }
     });
+
+    const photoReadUrl =
+      created.mediaAsset &&
+      created.mediaAsset.status === "READY" &&
+      this.s3Presigner.shouldInspectRemoteObject()
+        ? this.s3Presigner.createPresignedUrl({
+            method: "GET",
+            objectKey: created.mediaAsset.objectKey,
+            expiresInSeconds: 600
+          })
+        : null;
 
     return {
       data: ReviewDtoSchema.parse({
@@ -133,6 +168,8 @@ export class TrustService {
         storeId: created.storeId,
         rating: created.rating,
         comment: created.comment,
+        mediaAssetId: created.mediaAssetId ?? null,
+        photoReadUrl,
         status: created.status,
         reviewerDisplayName: created.customer.displayName,
         createdAt: created.createdAt.toISOString()
@@ -163,24 +200,37 @@ export class TrustService {
 
     const reviews = await this.prisma.review.findMany({
       where: { storeId: store.id, status: "PUBLISHED" },
-      include: { customer: true },
+      include: { customer: true, mediaAsset: true },
       orderBy: { createdAt: "desc" }
     });
 
+    const canSignPhotos = this.s3Presigner.shouldInspectRemoteObject();
+
     return {
-      data: reviews.map((r) =>
-        ReviewDtoSchema.parse({
+      data: reviews.map((r) => {
+        const asset = (r as { mediaAsset?: { status: string; objectKey: string } | null }).mediaAsset;
+        const photoReadUrl =
+          asset && asset.status === "READY" && canSignPhotos
+            ? this.s3Presigner.createPresignedUrl({
+                method: "GET",
+                objectKey: asset.objectKey,
+                expiresInSeconds: 600
+              })
+            : null;
+        return ReviewDtoSchema.parse({
           id: r.id,
           orderId: r.orderId,
           orderItemId: r.orderItemId,
           storeId: r.storeId,
           rating: r.rating,
           comment: r.comment,
+          mediaAssetId: r.mediaAssetId ?? null,
+          photoReadUrl,
           status: r.status,
           reviewerDisplayName: r.customer.displayName,
           createdAt: r.createdAt.toISOString()
-        })
-      ),
+        });
+      }),
       meta: { requestId }
     };
   }
